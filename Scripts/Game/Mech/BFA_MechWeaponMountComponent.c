@@ -848,12 +848,49 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 			mount.m_pAnimController.SetFloatVariable(mount.m_iAnimVarA, targetLocal[0]);
 			mount.m_pAnimController.SetFloatVariable(mount.m_iAnimVarB, targetLocal[1]);
 			mount.m_pAnimController.SetFloatVariable(mount.m_iAnimVarC, targetLocal[2]);
+
+			if (m_bDebugAim)
+				DebugIkArm(mount, yaw, pitch, aimWorld, targetLocal);
 			return;
 		}
 
 		// ENTITY_ROTATION: rigid gun.
 		mount.m_pEntity.SetLocalTransform(finalMat);
 		mount.m_pEntity.Update();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Once a second: where the IK arm was told to reach, and where its hand (J3) really points.
+	protected void DebugIkArm(BFA_MechWeaponMountDefinition mount, float yaw, float pitch, vector aimWorld, vector targetLocal)
+	{
+		float now = 0;
+		if (GetOwner() && GetOwner().GetWorld())
+			now = GetOwner().GetWorld().GetWorldTime() * 0.001;
+		if (now < mount.m_fDiagNextTime)
+			return;
+		mount.m_fDiagNextTime = now + 1.0;
+
+		string hand = "no skeleton";
+		Animation anim = mount.m_pEntity.GetAnimation();
+		if (anim)
+		{
+			TNodeId j3 = anim.GetBoneIndex("J3");
+			vector bone[4];
+			if (j3 != -1 && anim.GetBoneMatrix(j3, bone))
+			{
+				vector handFwd = mount.m_pEntity.VectorToParent(bone[2]);
+				vector handPos = mount.m_pEntity.CoordToParent(bone[3]);
+				if (handFwd.LengthSq() > 0.000001)
+					handFwd.Normalize();
+				float off = Math.Acos(Math.Clamp(vector.Dot(handFwd, aimWorld), -1, 1)) * Math.RAD2DEG;
+				hand = string.Format("handPos=%1 handFwd=%2 offByDeg=%3", handPos, handFwd, off);
+			}
+			else
+				hand = "bone J3 not found";
+		}
+
+		BFA_MechLog.Log(string.Format("[BFA IK DIAG] %1 yaw=%2 pitch=%3 aim=%4 targetLocal=%5 %6", mount.m_sMountId, yaw, pitch, aimWorld, targetLocal, hand));
+		Print(string.Format("[BFA IK DIAG] %1 yaw=%2 pitch=%3 aim=%4 targetLocal=%5 %6", mount.m_sMountId, yaw, pitch, aimWorld, targetLocal, hand));
 	}
 
 	//------------------------------------------------------------------------------------------------

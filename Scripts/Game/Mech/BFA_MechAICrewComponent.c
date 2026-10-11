@@ -12,6 +12,7 @@ class BFA_MechAIStationState
 	float m_fTargetTime;      // seconds the current target has been held
 	float m_fBurstTimer;      // >0 = firing, <0 = pausing between bursts
 	int m_iFiringGroup;       // group currently held down, 0 = none
+	ref array<int> m_aAllFiring = {};   // Fire All Groups: every group held down right now
 	float m_fRescanTimer;
 }
 
@@ -120,6 +121,9 @@ class BFA_MechAICrewComponent : ScriptGameComponent
 
 	[Attribute("true", UIWidgets.CheckBox, "Prefer non-primary groups (e.g. rockets) against vehicles.", category: "AI Gunners")]
 	protected bool m_bHeavyWeaponsVsVehicles;
+
+	[Attribute("false", UIWidgets.CheckBox, "BOSS: fire EVERY attack group at once (cannon arm, missile arm, pods ...) instead of picking one group per target.", category: "AI Gunners")]
+	protected bool m_bFireAllGroups;
 
 	// ---- Runtime ---------------------------------------------------------------------------
 	protected BFA_MechCoreComponent m_pCore;
@@ -919,6 +923,19 @@ class BFA_MechAICrewComponent : ScriptGameComponent
 			{
 				m_pRouter.ServerSetFireHeld(state.m_sStationId, group, true);
 				state.m_iFiringGroup = group;
+
+				if (m_bFireAllGroups)
+				{
+					array<int> groups = {};
+					m_pCore.GetUsableWeaponGroups(state.m_sStationId, groups);
+					foreach (int other : groups)
+					{
+						if (other == group || !GroupHasOffensiveWeapons(state.m_sStationId, other))
+							continue;
+						m_pRouter.ServerSetFireHeld(state.m_sStationId, other, true);
+						state.m_aAllFiring.Insert(other);
+					}
+				}
 				state.m_fBurstTimer = Math.Max(m_fBurstTime, 0.1);
 			}
 		}
@@ -934,6 +951,13 @@ class BFA_MechAICrewComponent : ScriptGameComponent
 	{
 		if (state.m_iFiringGroup > 0 && m_pRouter)
 			m_pRouter.ServerSetFireHeld(state.m_sStationId, state.m_iFiringGroup, false);
+
+		if (m_pRouter)
+		{
+			foreach (int other : state.m_aAllFiring)
+				m_pRouter.ServerSetFireHeld(state.m_sStationId, other, false);
+		}
+		state.m_aAllFiring.Clear();
 
 		state.m_iFiringGroup = 0;
 	}

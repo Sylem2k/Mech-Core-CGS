@@ -17,6 +17,7 @@ Vehicle {
   }
   BFA_MechAICrewComponent "{6A940CCC05D4BE56}" {
    m_bSpreadTargets 1
+   m_bFireAllGroups 1
   }
   BFA_MechAimComponent "{6A940CCC05D4BE58}" {
    m_fReticleAimDistance 1000
@@ -218,6 +219,7 @@ Vehicle {
   BFA_MechWeaponComponent "{6A940CCC05D26C7B}" {
   }
   BFA_MechWeaponMountComponent "{6A940CCC05D26C7A}" {
+   m_bDebugAim 1
    m_aMounts {
     BFA_MechWeaponMountDefinition "{6A98C0A1B2C3D403}" {
      m_sMountId "Arm_Left_Pod_System"
