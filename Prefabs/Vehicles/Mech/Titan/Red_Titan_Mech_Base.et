@@ -535,8 +535,10 @@ Vehicle {
   CGS_MechBrainComponent "{6A940CCC05D26C63}" {
    m_eMode HUNT
    m_sPilotPrefab "{C56A957843F590E5}Prefabs/Characters/Factions/OPFOR/USSR_Army/KLMK/REDFOR_BRAIN.et"
-   m_fPatrolRadius 25
+   m_fPatrolRadius 1
+   m_fPatrolPause 1
    m_fHuntRadius 1500
+   m_fRehomeDistance 1
   }
   CGS_MechHeatComponent "{892B18727CA0F81A}" {
    m_fMaxHeat 200000
