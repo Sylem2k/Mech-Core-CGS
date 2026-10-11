@@ -27,8 +27,8 @@ GenericEntity {
    m_fRocketSpeed 120
    m_fRange 1500
    m_iSalvoCount 12
-   m_iSalvoIntervalMs 90
-   m_iRefireMs 3000
+   m_iSalvoIntervalMs 360
+   m_iRefireMs 12000
    m_fSpreadDeg 3
    m_fDirectHitDamage 500
    m_fSplashDamage 200
