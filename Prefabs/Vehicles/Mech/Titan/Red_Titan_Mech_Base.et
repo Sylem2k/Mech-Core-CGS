@@ -118,6 +118,18 @@ Vehicle {
   }
   BFA_MechHardpointComponent "{6A940CCC05D4BE7F}" {
    m_aHardpoints {
+    BFA_MechHardpointDefinition "{6A98C0A1B2C3D401}" {
+     m_sName "ARM_LEFT_POD"
+     m_iClass 2
+     m_sAimMountId "Arm_Left_Pod_System"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 5
+     m_Point PointInfo "{6A98C0A1B2C3D402}" {
+      Offset -50.5365 52.4448 34.2899
+     }
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 2
+    }
     BFA_MechHardpointDefinition "{6A940CCC05D4BE60}" {
      m_sName "CMD_GUN_L"
      m_iClass 1
@@ -310,6 +322,13 @@ Vehicle {
      m_sWeaponModuleId "POINT_DEFENSE"
      m_sPrefab "{13EAD5AB3E4F2AA8}Prefabs/Vehicles/Mech/Mech_Parts/Point_Defense_Module.et"
     }
+    BFA_MechModuleDefinition "{6A98C0A1B2C3D405}" {
+     m_iId 5
+     m_sLabel "Titan Missile Pod"
+     m_iClass 2
+     m_sWeaponModuleId "TITAN_MISSILE"
+     m_sPrefab "{06D959742FAB2146}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Pod_System.et"
+    }
    }
   }
   BFA_MechMovementComponent "{6A940CCC05D27383}" {
@@ -366,6 +385,19 @@ Vehicle {
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
      m_fWeaponScale 4
+    }
+    BFA_MechWeaponMountDefinition "{6A98C0A1B2C3D403}" {
+     m_sMountId "Arm_Left_Pod_System"
+     m_sSlotName "Arm_Left_Pod_System"
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 2
+     m_fYawMin -20
+     m_fYawMax 20
+     m_fPitchMin -10
+     m_fPitchMax 25
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 2
     }
     BFA_MechWeaponMountDefinition "{6A940CCC05D26C72}" {
      m_sMountId "SHOULDER_POD_L"

@@ -38,21 +38,21 @@ GenericEntity {
    m_aTubeGrids {
     CGS_TubeGrid "{6A97251E919D4A01}" {
      m_FirstTube PointInfo "{6A97251E919D4A02}" {
-      Offset 9.3229 26.2364 5.4168
+      Offset 3.7 22.45 6
      }
      m_iColumns 2
      m_iRows 12
-     m_fColumnSpacing 0.5
-     m_fRowSpacing 0.5
+     m_fColumnSpacing -1.7
+     m_fRowSpacing 1.7
     }
     CGS_TubeGrid "{6A97251E919D4A03}" {
      m_FirstTube PointInfo "{6A97251E919D4A04}" {
-      Offset -5.0607 21.9105 0
+      Offset -3.6 22.45 6
      }
      m_iColumns 2
      m_iRows 12
-     m_fColumnSpacing 0.5
-     m_fRowSpacing 0.5
+     m_fColumnSpacing -1.75
+     m_fRowSpacing 1.7
     }
    }
    m_bRandomTubeOrder 1
