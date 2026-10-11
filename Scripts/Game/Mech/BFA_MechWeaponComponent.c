@@ -1207,6 +1207,40 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 			AddTracerVisual(start, end, weapon.m_fTracerSpeed, weapon.m_fTracerLength, weapon.m_fTracerThickness);
 
 		Rpc(RpcDo_TracerShot, start, end, weapon.m_fTracerSpeed, weapon.m_fTracerLength, weapon.m_fTracerThickness);
+
+		// Fire sound: taken from the weapon part's module Effects > Sound (same place module weapons use).
+		BFA_MechWeaponModuleComponent soundModule;
+		if (weapon.m_pWeaponEntity)
+			soundModule = BFA_MechWeaponModuleComponent.Cast(weapon.m_pWeaponEntity.FindComponent(BFA_MechWeaponModuleComponent));
+		if (soundModule && soundModule.GetFX())
+		{
+			BFA_MechWeaponFX fx = soundModule.GetFX();
+			if (!fx.m_sSoundProject.IsEmpty() && !fx.m_sFireSoundEvent.IsEmpty())
+			{
+				string soundProject = fx.m_sSoundProject;
+				if (!System.IsConsoleApp())
+					PlayShotSound(soundProject, fx.m_sFireSoundEvent, start);
+				Rpc(RpcDo_ShotSound, soundProject, fx.m_sFireSoundEvent, start);
+			}
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	[RplRpc(RplChannel.Unreliable, RplRcver.Broadcast)]
+	protected void RpcDo_ShotSound(string soundProject, string eventName, vector position)
+	{
+		if (System.IsConsoleApp())
+			return;
+		PlayShotSound(soundProject, eventName, position);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void PlayShotSound(string soundProject, string eventName, vector position)
+	{
+		vector mat[4];
+		Math3D.MatrixIdentity4(mat);
+		mat[3] = position;
+		BFA_MechWeaponModuleComponent.BFA_MechPlaySound(soundProject, eventName, mat);
 	}
 
 	//------------------------------------------------------------------------------------------------

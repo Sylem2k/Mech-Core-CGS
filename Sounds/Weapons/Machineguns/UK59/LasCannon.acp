@@ -127,7 +127,7 @@ AudioClass {
    "Pitch variance" 3
    Samples {
     AudioBankSampleClass Sample {
-     Filename "{A810F7CF1FD11DBD}Sounds/Mech/las_cannon.wav"
+     Filename "{A810F7CF1FD11DBD}Sounds/Weapons/Machineguns/UK59/las_cannon.wav"
     }
    }
   }
