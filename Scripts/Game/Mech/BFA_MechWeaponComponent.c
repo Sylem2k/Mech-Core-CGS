@@ -533,6 +533,7 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 					spawnParams.Transform[2] = mat[2];
 					spawnParams.Transform[3] = mat[3];
 					visual.m_pEntity = GetGame().SpawnEntityPrefabLocal(resource, GetOwner().GetWorld(), spawnParams);
+					MakeVisualOnly(visual.m_pEntity);
 				}
 			}
 
@@ -783,6 +784,29 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		BFA_MechWeaponModuleComponent module = FindLocalModule(hardpointIndex);
 		if (module)
 			module.ClientOnModuleEvent(eventType, value);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! A flying projectile model is only a picture: no collision, never hit by traces. Otherwise a
+	//! rocket model with physics (e.g. a vanilla weapon prefab) is hit by the next rocket's flight
+	//! trace and every rocket explodes in the tube.
+	protected static void MakeVisualOnly(IEntity entity)
+	{
+		if (!entity)
+			return;
+
+		entity.ClearFlags(EntityFlags.TRACEABLE, true);
+
+		Physics physics = entity.GetPhysics();
+		if (physics)
+			physics.Destroy();
+
+		IEntity child = entity.GetChildren();
+		while (child)
+		{
+			MakeVisualOnly(child);
+			child = child.GetSibling();
+		}
 	}
 
 	//------------------------------------------------------------------------------------------------
