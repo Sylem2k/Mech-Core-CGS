@@ -246,6 +246,7 @@ Vehicle {
      m_iAimDriver ANIM_IK_TARGET
      m_fIkReach 56
      m_sIkPivotBone "J1"
+     m_bIkTargetFromRest 1
     }
     BFA_MechWeaponMountDefinition "{6A98D1A0B1C2E306}" {
      m_sMountId "ARM_L"
@@ -261,6 +262,7 @@ Vehicle {
      m_iAimDriver ANIM_IK_TARGET
      m_fIkReach 49
      m_sIkPivotBone "J1"
+     m_bIkTargetFromRest 1
     }
    }
    m_bDebugAim 1

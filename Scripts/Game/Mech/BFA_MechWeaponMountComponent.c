@@ -63,6 +63,12 @@ class BFA_MechWeaponMountDefinition
 	[Attribute("", UIWidgets.EditBox, "ANIM_IK_TARGET: bone the arm swings from (e.g. J1). The aim line starts at this bone instead of the arm's origin - set it when the shoulder is not at the model origin. Empty = arm origin.", category: "Aim Driver")]
 	string m_sIkPivotBone;
 
+	[Attribute("false", UIWidgets.CheckBox, "ANIM_IK_TARGET: the IK graph moves the hand target FROM the hand's rest position (TargetX/Y/Z = offset), not to an absolute point. Turn on when the arm stretches straight past the target.", category: "Aim Driver")]
+	bool m_bIkTargetFromRest;
+
+	[Attribute("J3", UIWidgets.EditBox, "ANIM_IK_TARGET: the hand bone at the end of the IK chain (used with Target From Rest).", category: "Aim Driver")]
+	string m_sIkEndBone;
+
 	[Attribute("", UIWidgets.EditBox, "FOLLOW ARM: Mount Id of an IK arm (e.g. ARM_L). This weapon rides on that arm: it moves with the arm and still aims on top of it. Empty = fixed to the body.", category: "Follow Arm")]
 	string m_sFollowArmMount;
 
@@ -82,6 +88,8 @@ class BFA_MechWeaponMountDefinition
 	bool m_bAnimBindFailed;
 	bool m_bIkPivotFromBone;
 	vector m_vIkPivotModel;            // pivot bone position in the arm's model space (bind pose)
+	vector m_vIkEndRest;               // hand bone rest position in the arm's model space
+	bool m_bIkEndRestKnown;
 
 	// Follow-arm runtime.
 	bool m_bFollowReady;
@@ -91,8 +99,6 @@ class BFA_MechWeaponMountDefinition
 	vector m_mFollowBoneRest[4];       // bone in mech model space when the rest pose was captured
 	float m_fAimYaw;
 	float m_fAimPitch;
-	vector m_vLastAimPoint;            // world point this mount was last told to aim at
-	bool m_bHasAimPoint;
 	vector m_mBaseLocalTransform[4];
 	vector m_mSlotLocalTransform[4];   // slot pose as placed in the SlotManager (before hardpoint offset)
 	bool m_bResolved;
@@ -562,8 +568,6 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		// Never allow aiming to move the physical mount position.
 		finalMat[3] = base[3];
 
-		mount.m_vLastAimPoint = aimPointWorld;
-		mount.m_bHasAimPoint = true;
 		mount.m_fAimYaw = yaw;
 		mount.m_fAimPitch = pitch;
 		ApplyAimDriver(mount, yaw, pitch, finalMat);
@@ -814,6 +818,27 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		mount.m_bAnimBound = true;
 
 		// Shoulder pivot from a bone (read once from the bind pose: the chain root never moves).
+		// Hand rest position (IK variables are still 0 here, so the arm is in its rest pose).
+		mount.m_bIkEndRestKnown = false;
+		if (mount.m_bIkTargetFromRest)
+		{
+			Animation restAnim = mount.m_pEntity.GetAnimation();
+			if (restAnim)
+			{
+				TNodeId endId = restAnim.GetBoneIndex(mount.m_sIkEndBone);
+				vector endMat[4];
+				if (endId != -1 && restAnim.GetBoneMatrix(endId, endMat))
+				{
+					mount.m_vIkEndRest = endMat[3];
+					mount.m_bIkEndRestKnown = true;
+				}
+			}
+			if (mount.m_bIkEndRestKnown)
+				Print(string.Format("[BFA MOUNT] %1: IK target is an offset from hand bone %2 at rest %3", mount.m_sMountId, mount.m_sIkEndBone, mount.m_vIkEndRest));
+			else
+				Print(string.Format("[BFA MOUNT] %1: hand bone '%2' not found - IK target sent as absolute", mount.m_sMountId, mount.m_sIkEndBone), LogLevel.WARNING);
+		}
+
 		mount.m_bIkPivotFromBone = false;
 		if (!mount.m_sIkPivotBone.IsEmpty())
 		{
@@ -877,6 +902,8 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 
 			vector targetWorld = pivotWorld + aimWorld * Math.Max(mount.m_fIkReach, 0.1);
 			vector targetLocal = mount.m_pEntity.CoordToLocal(targetWorld);
+			if (mount.m_bIkEndRestKnown)
+				targetLocal = targetLocal - mount.m_vIkEndRest;
 
 			mount.m_pAnimController.SetFloatVariable(mount.m_iAnimVarA, targetLocal[0]);
 			mount.m_pAnimController.SetFloatVariable(mount.m_iAnimVarB, targetLocal[1]);
@@ -919,7 +946,10 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 					handFwd.Normalize();
 				float off = Math.Acos(Math.Clamp(vector.Dot(handFwd, aimWorld), -1, 1)) * Math.RAD2DEG;
 				vector mech = GetOwner().CoordToLocal(handPos);
-				vector targetMech = GetOwner().CoordToLocal(mount.m_pEntity.CoordToParent(targetLocal));
+				vector targetAbs = targetLocal;
+				if (mount.m_bIkEndRestKnown)
+					targetAbs = targetLocal + mount.m_vIkEndRest;
+				vector targetMech = GetOwner().CoordToLocal(mount.m_pEntity.CoordToParent(targetAbs));
 				hand = string.Format("handInMech=%1 targetInMech=%2 handFwdInMech=%3 offByDeg=%4", mech, targetMech, GetOwner().VectorToLocal(handFwd), off);
 			}
 			else
@@ -1021,26 +1051,6 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		if (occupant)
 			Trace("occ" + mount.m_sMountId, string.Format("mount %1: station %2 is occupied by %3, so the driver does not aim it", mount.m_sMountId, mount.m_sControlStation, occupant));
 		return occupant == null;
-	}
-
-	//------------------------------------------------------------------------------------------------
-	//! The point the mount holding this entity was last told to aim at (the station's crosshair /
-	//! AI target). Weapons on IK arms use it: an IK hand bone moves but does not turn, so its axis
-	//! alone cannot be trusted as the firing direction.
-	bool GetAimPointForEntity(IEntity weaponEntity, out vector aimPoint)
-	{
-		if (!m_aMounts || !weaponEntity)
-			return false;
-
-		foreach (BFA_MechWeaponMountDefinition mount : m_aMounts)
-		{
-			if (mount && mount.m_bHasAimPoint && mount.m_pEntity == weaponEntity)
-			{
-				aimPoint = mount.m_vLastAimPoint;
-				return true;
-			}
-		}
-		return false;
 	}
 
 	//------------------------------------------------------------------------------------------------
