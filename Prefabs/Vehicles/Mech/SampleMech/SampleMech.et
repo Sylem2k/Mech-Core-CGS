@@ -262,6 +262,7 @@ Vehicle {
     Description "Example: one pilot drives and fires. Las arm with swappable weapons (Las / autocannon / rockets). AI can drive and fight."
     Icon "{A489F552FB7489C3}UI/Textures/Editor/EditableEntities/Characters/EditableEntity_Character_Custom.edds"
     IconSetName "US"
+    m_Image "{C21913C554102942}Common/Models/Data/CGS_Sample_Mech.edds"
     m_sFaction "US"
     m_aAuthoredLabels {
      CONTENT_MODDED ENTITYTYPE_VEHICLE
@@ -431,7 +432,6 @@ Vehicle {
   Hierarchy "{6A8740653CE8FB52}" {
   }
  }
- coords 77.325 6.495 41.222
- angles 0 4.512 0
+ coords 100.508 7.122 164.795
  m_eVehicleType VEHICLE
 }

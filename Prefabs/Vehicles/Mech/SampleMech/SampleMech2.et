@@ -442,6 +442,7 @@ Vehicle {
     Description "Example: DRIVER + GUNNER, twin Las arms, rocket secondaries, loadout swaps. AI can crew it."
     Icon "{A489F552FB7489C3}UI/Textures/Editor/EditableEntities/Characters/EditableEntity_Character_Custom.edds"
     IconSetName "US"
+    m_Image "{C21913C554102942}Common/Models/Data/CGS_Sample_Mech.edds"
     m_sFaction "US"
     m_aAuthoredLabels {
      CONTENT_MODDED ENTITYTYPE_VEHICLE
@@ -615,6 +616,6 @@ Vehicle {
   Hierarchy "{6A8E5AA753C7D49E}" {
   }
  }
- coords 72.744 6.044 32.925
+ coords 112.319 6.489 169.366
  m_eVehicleType VEHICLE
 }

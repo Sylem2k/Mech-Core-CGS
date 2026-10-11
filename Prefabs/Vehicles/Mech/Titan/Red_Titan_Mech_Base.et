@@ -903,6 +903,7 @@ Vehicle {
     Name "CGS Titan (Red)"
     Description "AI boss titan - core weapons: 8 autocannons, S-13 rocket pods, Sen missile racks, point defense"
     Icon "{A489F552FB7489C3}UI/Textures/Editor/EditableEntities/Characters/EditableEntity_Character_Custom.edds"
+    m_Image "{B28EE1C74D36915D}Common/Models/Data/CGS_Red_Chaos_Titan.edds"
     m_aAuthoredLabels {
      CONTENT_MODDED ENTITYTYPE_VEHICLE
     }
@@ -1065,6 +1066,10 @@ Vehicle {
      Offset -0.2317 -9.7885 -4.3073
      Prefab "{438868CB49A24973}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Left_Missle_Arm.et"
     }
+    EntitySlotInfo Arm_Left_Pod_System {
+     Offset -50.5365 52.4448 34.2899
+     Prefab "{06D959742FAB2146}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Pod_System.et"
+    }
    }
   }
   ActionsManagerComponent "{6A940CCC05D2D81A}" {
@@ -1102,6 +1107,6 @@ Vehicle {
   Hierarchy "{6A940CCC05D2D879}" {
   }
  }
- coords 72.432 34.23 195.995
+ coords 73.338 12.809 203.346
  m_eVehicleType VEHICLE
 }

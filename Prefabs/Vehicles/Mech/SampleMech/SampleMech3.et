@@ -607,6 +607,7 @@ Vehicle {
     Description "BFA MechCore three-person walker: DRIVER, GUNNER (arms) and COMMANDER (shoulders + anti-missile)"
     Icon "{A489F552FB7489C3}UI/Textures/Editor/EditableEntities/Characters/EditableEntity_Character_Custom.edds"
     IconSetName "US"
+    m_Image "{C21913C554102942}Common/Models/Data/CGS_Sample_Mech.edds"
     m_sFaction "US"
     m_aAuthoredLabels {
      CONTENT_MODDED ENTITYTYPE_VEHICLE
@@ -788,6 +789,6 @@ Vehicle {
   Hierarchy "{6A8F4AB350911FAE}" {
   }
  }
- coords 203.417 10.794 73.944
+ coords 106.24 6.691 165.967
  m_eVehicleType VEHICLE
 }
