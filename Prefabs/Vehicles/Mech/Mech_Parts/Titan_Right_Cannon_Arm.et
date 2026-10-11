@@ -17,15 +17,43 @@ GenericEntity {
    m_MuzzlePoint PointInfo "{6A9623BA6FF2FC2D}" {
     PivotID "J3"
    }
+   m_aBarrelPoints {
+    PointInfo "{6A98E2B0C1D2F301}" {
+     PivotID "Cannon_1"
+    }
+    PointInfo "{6A98E2B0C1D2F302}" {
+     PivotID "Cannon_2"
+    }
+    PointInfo "{6A98E2B0C1D2F303}" {
+     PivotID "Cannon_3"
+    }
+    PointInfo "{6A98E2B0C1D2F304}" {
+     PivotID "Cannon_4"
+    }
+    PointInfo "{6A98E2B0C1D2F305}" {
+     PivotID "Cannon_5"
+    }
+    PointInfo "{6A98E2B0C1D2F306}" {
+     PivotID "Cannon_6"
+    }
+    PointInfo "{6A98E2B0C1D2F307}" {
+     PivotID "Cannon_7"
+    }
+    PointInfo "{6A98E2B0C1D2F308}" {
+     PivotID "Cannon_8"
+    }
+   }
    m_fShotsPerMinute 12
    m_iMagazineSize 6
    m_fReloadTime 8
    m_fRange 2500
-   m_fDirectDamage 1500
-   m_fSplashDamage 400
-   m_fSplashRadius 10
+   m_fDirectDamage 500
+   m_fSplashDamage 150
+   m_fSplashRadius 8
    m_fSpread 0.1
    m_fShellSpeed 700
+   m_iShellsPerRound 8
+   m_iShellIntervalMs 80
    m_bDebug 1
   }
   MeshObject "{6A9623BA6FF2FC36}" {
