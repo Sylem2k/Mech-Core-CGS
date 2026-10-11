@@ -14,14 +14,15 @@ GenericEntity {
     m_sMuzzleParticle "{25B1DC5E3A244EFB}Particles/Weapon/RPG_22_muzzle_front.ptc"
     m_sSoundProject "{D7FD0CE25E74A7A8}Sounds/Weapons/Machineguns/UK59/Cannon_shot.acp"
     m_sFireSoundEvent "SOUND_SHOT"
-    m_sProjectilePrefab "{8B55F8686833B12B}Prefabs/Weapons/Core/FragGrenade_Base.et"
+    m_sProjectilePrefab "{8A820ADCE8D05357}Prefabs/Weapons/Core/UGL_Base.et"
+    m_sTrailParticle "{DEC251C9AC594341}Particles/Logistics/Explosion/Trails/Smoke_Trail_Medium.ptc"
    }
    m_fHeatPerShot 25
    m_MuzzlePoint PointInfo "{6A9623BA6FF2FC2D}" {
     PivotID "J3"
    }
-   m_fShotsPerMinute 12
    m_bFireAtAimPoint 1
+   m_fShotsPerMinute 12
    m_aBarrelPoints {
     PointInfo "{6A98E2B0C1D2F301}" {
      PivotID "Cannon_1"
