@@ -12,6 +12,11 @@ GenericEntity {
    m_bSupportsPulseFire 1
    m_FX BFA_MechWeaponFX "{6A97251E919D46F4}" {
     m_sMuzzleParticle "{25B1DC5E3A244EFB}Particles/Weapon/RPG_22_muzzle_front.ptc"
+    m_sSoundProject "{4623A5BCFEA997F1}Sounds/Weapons/AircraftWeapons/RocketPods/Weapons_RocketPods_Generic_Shot.acp"
+    m_sProjectilePrefab "{FA8556A46D3A6FDA}Prefabs/Weapons/AircraftWeapons/RocketPods/Pod_UB1657.et"
+    m_sTrailParticle "{DAEA514B4F15B5C4}Particles/Weapon/Trail_M229.ptc"
+    m_bImpactOnMiss 0
+    m_fProjectileScale 3
    }
    m_fHeatPerShot 4
    m_eDamageKind EXPLOSIVE
@@ -29,15 +34,11 @@ GenericEntity {
    m_fSplashRadius 8
    m_fTrailLength 6
    m_fTrailThickness 0.4
-   m_bHoming 1
-   m_bLockTargets 1
-   m_fTurnRate 70
-   m_fArmingDistance 20
-   m_fLoftAngle 0
    m_bDebug 1
    m_aTubeGrids {
     CGS_TubeGrid "{6A97251E919D4A01}" {
      m_FirstTube PointInfo "{6A97251E919D4A02}" {
+      Offset 9.3229 26.2364 5.4168
      }
      m_iColumns 2
      m_iRows 12
@@ -46,6 +47,7 @@ GenericEntity {
     }
     CGS_TubeGrid "{6A97251E919D4A03}" {
      m_FirstTube PointInfo "{6A97251E919D4A04}" {
+      Offset -5.0607 21.9105 0
      }
      m_iColumns 2
      m_iRows 12
@@ -54,6 +56,11 @@ GenericEntity {
     }
    }
    m_bRandomTubeOrder 1
+   m_bHoming 1
+   m_bLockTargets 1
+   m_fTurnRate 70
+   m_fArmingDistance 20
+   m_fLoftAngle 0
   }
   MeshObject "{6A97251E919D46FC}" {
    Object "{C0F5D7EB78714EAA}Common/Models/Titan/Titan_Pod_System.xob"

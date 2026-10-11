@@ -16,16 +16,6 @@ GenericEntity : "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech
 Vehicle SampleMech3 : "{D2B4F8A1C7E93456}Prefabs/Vehicles/Mech/SampleMech/SampleMech2.et" {
  coords 112.319 6.489 169.366
 }
-$grp Vehicle : "{E8BB8884F5622576}Prefabs/Vehicles/Mech/SampleMech/SampleMech3.et" {
- SampleMech1 {
-  components {
-   CGS_MechHeatComponent "{311AC77ED536C20D}" {
-    m_fCoolingPerSecond 25
-   }
-  }
-  coords 203.417 10.794 73.944
- }
- SampleMech4 {
-  coords 106.24 6.691 165.967
- }
+Vehicle SampleMech4 : "{E8BB8884F5622576}Prefabs/Vehicles/Mech/SampleMech/SampleMech3.et" {
+ coords 106.24 6.691 165.967
 }
