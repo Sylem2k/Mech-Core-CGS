@@ -111,6 +111,24 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 
 	static const string DRIVER_STATION = "DRIVER";
 
+	protected ref map<string, float> m_mTraceNext = new map<string, float>();
+
+	//------------------------------------------------------------------------------------------------
+	//! Debug Aim: print a message at most once every 2 s per key.
+	protected void Trace(string key, string message)
+	{
+		if (!m_bDebugAim)
+			return;
+		float now = 0;
+		if (GetOwner() && GetOwner().GetWorld())
+			now = GetOwner().GetWorld().GetWorldTime() * 0.001;
+		float next;
+		if (m_mTraceNext.Find(key, next) && now < next)
+			return;
+		m_mTraceNext.Set(key, now + 2.0);
+		Print("[BFA AIM TRACE] " + message);
+	}
+
 	protected SlotManagerComponent m_pSlotManager;
 	protected int m_iResolveAttempts;
 	protected bool m_bHasFollowers;
@@ -432,10 +450,16 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 	protected void ApplyMountAimPoint(BFA_MechWeaponMountDefinition mount, vector aimPointWorld)
 	{
 		if (!ResolveMount(mount))
+		{
+			Trace("res" + mount.m_sMountId, string.Format("mount %1: slot '%2' not resolved (no entity in that slot)", mount.m_sMountId, mount.m_sSlotName));
 			return;
+		}
 
 		if (!mount.m_pParent)
+		{
+			Trace("par" + mount.m_sMountId, string.Format("mount %1: slot entity has no parent", mount.m_sMountId));
 			return;
+		}
 
 		// Rest pose right now (moves with the arm when this weapon rides on one).
 		vector base[4];
@@ -833,7 +857,10 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		if (mount.m_iAimDriver == BFA_EMechMountAimDriver.ANIM_IK_TARGET)
 		{
 			if (!BindAnimDriver(mount))
+			{
+				Trace("bind" + mount.m_sMountId, string.Format("mount %1: IK arm has no AnimationControllerComponent / bind failed (entity %2)", mount.m_sMountId, mount.m_pEntity));
 				return;
+			}
 
 			// Hand target = shoulder pivot + clamped aim line * reach, expressed in the arm
 			// entity's own space (same convention the leg IK uses).
@@ -930,7 +957,13 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 
 		foreach (BFA_MechWeaponMountDefinition mount : m_aMounts)
 		{
-			if (!mount || !StationAimsMount(stationId, mount))
+			if (!mount)
+				continue;
+
+			bool aims = StationAimsMount(stationId, mount);
+			if (mount.m_iAimDriver != BFA_EMechMountAimDriver.ENTITY_ROTATION)
+				Trace("sd" + stationId + mount.m_sMountId, string.Format("station %1 aim direction -> mount %2 (station %3): %4", stationId, mount.m_sMountId, mount.m_sControlStation, aims));
+			if (!aims)
 				continue;
 
 			ApplyMountAimDirection(mount, mechLocalAimDirection);
@@ -947,7 +980,13 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 
 		foreach (BFA_MechWeaponMountDefinition mount : m_aMounts)
 		{
-			if (!mount || !StationAimsMount(stationId, mount))
+			if (!mount)
+				continue;
+
+			bool aims = StationAimsMount(stationId, mount);
+			if (mount.m_iAimDriver != BFA_EMechMountAimDriver.ENTITY_ROTATION)
+				Trace("st" + stationId + mount.m_sMountId, string.Format("station %1 aim point -> mount %2 (station %3): %4", stationId, mount.m_sMountId, mount.m_sControlStation, aims));
+			if (!aims)
 				continue;
 
 			ApplyMountAimPoint(mount, aimPointWorld);
@@ -970,7 +1009,10 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		if (!core)
 			return false;
 
-		return core.GetStationOccupant(mount.m_sControlStation) == null;
+		IEntity occupant = core.GetStationOccupant(mount.m_sControlStation);
+		if (occupant)
+			Trace("occ" + mount.m_sMountId, string.Format("mount %1: station %2 is occupied by %3, so the driver does not aim it", mount.m_sMountId, mount.m_sControlStation, occupant));
+		return occupant == null;
 	}
 
 	//------------------------------------------------------------------------------------------------
