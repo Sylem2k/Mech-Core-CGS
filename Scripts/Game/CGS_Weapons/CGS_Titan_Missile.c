@@ -24,8 +24,47 @@ class CGS_TitanMissileInFlight : BFA_MechRocketInFlight
 	vector m_vTargetPoint;    // world aim point when nothing is locked
 }
 
+//------------------------------------------------------------------------------------------------
+//! A block of launch tubes laid out in rows and columns (one face of a rocket pod).
+//! Place First Tube on the top-left tube mouth; the rest are worked out from the spacing.
+[BaseContainerProps()]
+class CGS_TubeGrid
+{
+	[Attribute(desc: "FIRST TUBE: place it on the TOP-LEFT tube mouth of this block with the gizmo. Blue (Z) axis points out of the tube, red (X) to the right, green (Y) up.")]
+	ref PointInfo m_FirstTube;
+
+	[Attribute("2", UIWidgets.Auto, "Tubes across (columns) in this block.")]
+	int m_iColumns;
+
+	[Attribute("12", UIWidgets.Auto, "Tubes down (rows) in this block.")]
+	int m_iRows;
+
+	[Attribute("0.5", UIWidgets.Auto, "Distance from one column to the next, to the RIGHT along the point's red axis (model units, before the weapon's scale).")]
+	float m_fColumnSpacing;
+
+	[Attribute("0.5", UIWidgets.Auto, "Distance from one row to the next, DOWN along the point's green axis.")]
+	float m_fRowSpacing;
+
+	[Attribute("0", UIWidgets.Auto, "Staggered tubes: every second row is shifted right by this much (0 = straight grid).")]
+	float m_fOddRowShift;
+
+	int GetTubeCount()
+	{
+		return Math.Max(m_iColumns, 0) * Math.Max(m_iRows, 0);
+	}
+}
+
 class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 {
+	// ---- Tubes -----------------------------------------------------------------------------
+	[Attribute(desc: "TUBE GRIDS (rocket pods): one entry per block of tubes. Each missile leaves a different tube, so a salvo comes out all over the pod. Empty = uses Muzzle Point / Barrel Points like any weapon.", category: "Tubes")]
+	protected ref array<ref CGS_TubeGrid> m_aTubeGrids;
+
+	[Attribute("true", UIWidgets.CheckBox, "Random tube order (every tube fires once before any repeats). Off = tube by tube, top to bottom.", category: "Tubes")]
+	protected bool m_bRandomTubeOrder;
+
+	protected ref array<int> m_aTubeBag = {};  // tubes left in this cycle (global tube numbers)
+
 	// ---- Homing ----------------------------------------------------------------------------
 	[Attribute("true", UIWidgets.CheckBox, "Missiles steer onto the target. Off = straight like the rocket launcher.", category: "Homing")]
 	protected bool m_bHoming;
@@ -59,7 +98,9 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 	override protected void LaunchRocket(IEntity instigator)
 	{
 		vector direction;
-		vector start = GetMuzzle(direction);
+		vector start;
+		if (!GetTubeMuzzle(start, direction))
+			start = GetMuzzle(direction);
 		vector aimDirection = direction;
 
 		// What is the crosshair on? (Straight line from the muzzle along the aim.)
@@ -103,6 +144,85 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 			Print(string.Format("[CGS TITAN MISSILE] LAUNCH %1 lock=%2 point=%3 rounds=%4", m_sHardpointName, missile.m_pTarget, lockPoint, m_iRoundsInMagazine));
 
 		StartFlightTick();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! World start and direction of the next tube. False = no tube grids set.
+	protected bool GetTubeMuzzle(out vector start, out vector direction)
+	{
+		if (!m_aTubeGrids || m_aTubeGrids.IsEmpty())
+			return false;
+
+		int total = 0;
+		foreach (CGS_TubeGrid grid : m_aTubeGrids)
+		{
+			if (grid && grid.m_FirstTube)
+				total += grid.GetTubeCount();
+		}
+		if (total <= 0)
+			return false;
+
+		// Refill the bag when a cycle is done (or the setup changed).
+		if (m_aTubeBag.IsEmpty())
+		{
+			for (int n = 0; n < total; n++)
+				m_aTubeBag.Insert(n);
+		}
+
+		int pick = 0;
+		if (m_bRandomTubeOrder)
+			pick = Math.RandomInt(0, m_aTubeBag.Count());
+		int tube = m_aTubeBag[pick];
+		if (m_bRandomTubeOrder)
+			m_aTubeBag.Remove(pick);        // order does not matter in a random bag
+		else
+			m_aTubeBag.RemoveOrdered(pick); // keep tube 0, 1, 2 ... order
+		if (tube >= total)
+			tube = 0;
+
+		// Which grid / row / column.
+		foreach (CGS_TubeGrid g : m_aTubeGrids)
+		{
+			if (!g || !g.m_FirstTube)
+				continue;
+
+			int count = g.GetTubeCount();
+			if (tube >= count)
+			{
+				tube -= count;
+				continue;
+			}
+
+			int columns = Math.Max(g.m_iColumns, 1);
+			int row = tube / columns;
+			int column = tube % columns;
+
+			IEntity weaponEntity = GetOwner();
+			vector weaponWorld[4];
+			weaponEntity.GetWorldTransform(weaponWorld);
+
+			g.m_FirstTube.Init(weaponEntity);
+			vector tubeModel[4];
+			g.m_FirstTube.GetModelTransform(tubeModel);
+
+			float across = column * g.m_fColumnSpacing;
+			if (row % 2 == 1)
+				across += g.m_fOddRowShift;
+
+			vector local = tubeModel[3] + tubeModel[0] * across - tubeModel[1] * (row * g.m_fRowSpacing);
+
+			vector axis = tubeModel[2];
+			direction = weaponWorld[0] * axis[0] + weaponWorld[1] * axis[1] + weaponWorld[2] * axis[2];
+			if (direction.LengthSq() < 0.000001)
+				direction = weaponWorld[2];
+			direction.Normalize();
+
+			start = weaponWorld[3] + weaponWorld[0] * local[0] + weaponWorld[1] * local[1] + weaponWorld[2] * local[2];
+			start = start + direction * Math.Max(m_fMuzzleClearance, 0.0);
+			return true;
+		}
+
+		return false;
 	}
 
 	//------------------------------------------------------------------------------------------------

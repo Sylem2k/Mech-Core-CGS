@@ -1,4 +1,3 @@
 MatPBRBasic {
  BCRMap "{44D90844B6DD185C}Common/Models/Titan/Data/ChaosTitanPodSystem_BCR.edds"
- NMOMap "{854379441D6C86A0}Common/Models/Titan/Data/ChaosTitanPodSystem_albedo.edds"
 }
