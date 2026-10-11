@@ -60,6 +60,9 @@ class BFA_MechWeaponMountDefinition
 	[Attribute("3.0", UIWidgets.Auto, "ANIM_IK_TARGET: how far from the shoulder pivot the hand target is placed along the aim line, in metres. Keep inside the arm's reach.", category: "Aim Driver")]
 	float m_fIkReach;
 
+	[Attribute("", UIWidgets.EditBox, "ANIM_IK_TARGET: bone the arm swings from (e.g. J1). The aim line starts at this bone instead of the arm's origin - set it when the shoulder is not at the model origin. Empty = arm origin.", category: "Aim Driver")]
+	string m_sIkPivotBone;
+
 	IEntity m_pEntity;
 	IEntity m_pParent;
 	float m_fDiagNextTime;
@@ -71,6 +74,8 @@ class BFA_MechWeaponMountDefinition
 	int m_iAnimVarC = -1;
 	bool m_bAnimBound;
 	bool m_bAnimBindFailed;
+	bool m_bIkPivotFromBone;
+	vector m_vIkPivotModel;            // pivot bone position in the arm's model space (bind pose)
 	vector m_mBaseLocalTransform[4];
 	vector m_mSlotLocalTransform[4];   // slot pose as placed in the SlotManager (before hardpoint offset)
 	bool m_bResolved;
@@ -514,6 +519,28 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 
 		mount.m_bAnimBound = true;
 
+		// Shoulder pivot from a bone (read once from the bind pose: the chain root never moves).
+		mount.m_bIkPivotFromBone = false;
+		if (!mount.m_sIkPivotBone.IsEmpty())
+		{
+			Animation anim = mount.m_pEntity.GetAnimation();
+			if (anim)
+			{
+				TNodeId boneId = anim.GetBoneIndex(mount.m_sIkPivotBone);
+				vector boneMat[4];
+				if (boneId != -1 && anim.GetBoneMatrix(boneId, boneMat))
+				{
+					mount.m_vIkPivotModel = boneMat[3];
+					mount.m_bIkPivotFromBone = true;
+				}
+			}
+
+			if (!mount.m_bIkPivotFromBone)
+				BFA_MechLog.Log(string.Format("[BFA MOUNT] %1: IK pivot bone '%2' not found - using the arm origin", mount.m_sMountId, mount.m_sIkPivotBone), LogLevel.WARNING);
+			else
+				BFA_MechLog.Log(string.Format("[BFA MOUNT] %1: IK pivot bone %2 at %3", mount.m_sMountId, mount.m_sIkPivotBone, mount.m_vIkPivotModel));
+		}
+
 		// Keep the arm entity active so its anim graph consumes the variables (same as the legs).
 		mount.m_pEntity.SetFlags(EntityFlags.ACTIVE);
 
@@ -545,6 +572,8 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 			// Hand target = shoulder pivot + clamped aim line * reach, expressed in the arm
 			// entity's own space (same convention the leg IK uses).
 			vector pivotWorld = mount.m_pParent.CoordToParent(mount.m_mBaseLocalTransform[3]);
+			if (mount.m_bIkPivotFromBone)
+				pivotWorld = mount.m_pEntity.CoordToParent(mount.m_vIkPivotModel);
 			vector aimWorld = mount.m_pParent.VectorToParent(finalMat[2]);
 			if (aimWorld.LengthSq() > 0.000001)
 				aimWorld.Normalize();
