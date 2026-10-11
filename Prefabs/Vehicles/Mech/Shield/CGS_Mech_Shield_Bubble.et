@@ -10,12 +10,6 @@ GenericEntity {
     }
    }
   }
-  RplComponent "{6A9623BDABECB937}" {
-   "Rpl State Override" Runtime
-   AutoHierarchy 1
-  }
-  Hierarchy "{6A9623BDB6F8D415}" {
-  }
  }
  coords 133.648 85.178 248.412
 }

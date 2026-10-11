@@ -107,9 +107,18 @@ class CGS_MechShieldComponent : ScriptComponent
 	protected vector m_aBubbleLocal[4]; // bubble transform in the mech's space (scale baked in)
 	protected bool m_bTickRunning;
 	protected bool m_bBubbleTried;
+	protected float m_fTickAccum;
 
 	// Every shielded mech in the world (for beam interception).
 	protected static ref array<IEntity> s_aShieldedMechs = {};
+
+	// One shared ticker for every shield. Removing a method from the call queue can cancel the
+	// same method on OTHER mechs, so instances never add/remove their own calls.
+	protected static ref array<CGS_MechShieldComponent> s_aAllShields = {};
+	protected static int s_iLastSharedTickMs;   // world time, for regen timing
+	protected static int s_iSharedHeartbeatMs;  // System tick count, to restart after a reload
+
+	protected float m_fFlashUntil;
 
 	static const int TICK_MS = 250;
 
@@ -286,21 +295,94 @@ class CGS_MechShieldComponent : ScriptComponent
 	//------------------------------------------------------------------------------------------------
 	protected void EnsureTick()
 	{
-		if (m_bTickRunning || !Replication.IsServer())
+		if (!Replication.IsServer())
 			return;
 
 		m_bTickRunning = true;
-		GetGame().GetCallqueue().CallLater(ServerTick, TICK_MS, true);
+		m_fTickAccum = 0;
 	}
 
 	//------------------------------------------------------------------------------------------------
 	protected void StopTick()
 	{
+		m_bTickRunning = false;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected static void EnsureSharedTick()
+	{
+		// Restart after a game / world reload (the call queue is new, the static list is not).
+		if (s_iSharedHeartbeatMs != 0 && System.GetTickCount() - s_iSharedHeartbeatMs < 1000)
+			return;
+
+		if (!GetGame())
+			return;
+		ScriptCallQueue queue = GetGame().GetCallqueue();
+		if (!queue)
+			return;
+
+		queue.Remove(SharedTick);
+		queue.CallLater(SharedTick, 0, true);
+		s_iLastSharedTickMs = 0;
+		s_iSharedHeartbeatMs = System.GetTickCount();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Every frame, every machine: create bubbles that are not there yet, keep bubbles on their
+	//! mechs, and (server) run regen every TICK_MS.
+	protected static void SharedTick()
+	{
+		s_iSharedHeartbeatMs = System.GetTickCount();
+		BaseWorld world = GetGame().GetWorld();
+		if (!world)
+			return;
+
+		int now = world.GetWorldTime();
+		int deltaMs = 0;
+		if (s_iLastSharedTickMs > 0 && now >= s_iLastSharedTickMs)
+			deltaMs = now - s_iLastSharedTickMs;
+		s_iLastSharedTickMs = now;
+
+		for (int i = s_aAllShields.Count() - 1; i >= 0; i--)
+		{
+			CGS_MechShieldComponent shield = s_aAllShields[i];
+			if (!shield || !shield.GetOwner())
+			{
+				s_aAllShields.Remove(i);
+				continue;
+			}
+			shield.InstanceTick(deltaMs);
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void InstanceTick(int deltaMs)
+	{
+		IEntity owner = GetOwner();
+
+		if (!m_bBubbleTried && !System.IsConsoleApp())
+		{
+			m_bBubbleTried = true;
+			CreateBubble();
+		}
+
+		FollowMech(owner);
+
+		if (m_fFlashUntil > 0 && GetTime() >= m_fFlashUntil)
+		{
+			m_fFlashUntil = 0;
+			UpdateBubbleVisibility(false);
+		}
+
 		if (!m_bTickRunning)
 			return;
 
-		m_bTickRunning = false;
-		GetGame().GetCallqueue().Remove(ServerTick);
+		m_fTickAccum += deltaMs;
+		while (m_fTickAccum >= TICK_MS && m_bTickRunning)
+		{
+			m_fTickAccum -= TICK_MS;
+			ServerTick();
+		}
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -463,10 +545,8 @@ class CGS_MechShieldComponent : ScriptComponent
 		m_aBubbleLocal[2] = Vector(0, 0, scale);
 		m_aBubbleLocal[3] = owner.CoordToLocal(GetCenterWorld()) - boundsCenter * scale;
 		FollowMech(owner);
-
-		// Follow every frame through the game's call queue: on multiplayer clients a vehicle's
+		// Following happens in the shared ticker (call queue): on multiplayer clients a vehicle's
 		// component frame events are not reliable, the call queue always runs.
-		GetGame().GetCallqueue().CallLater(FollowTick, 0, true);
 
 		if (m_pBubble.GetPhysics() || m_pBubble.FindComponent(RplComponent))
 			Print(string.Format("[CGS SHIELD] %1: bubble prefab %2 has physics or an RplComponent - use a prefab with only a MeshObject, or it will collide with the mech.", GetOwner(), m_sBubblePrefab), LogLevel.WARNING);
@@ -483,14 +563,7 @@ class CGS_MechShieldComponent : ScriptComponent
 			return;
 
 		UpdateBubbleVisibility(true);
-		GetGame().GetCallqueue().Remove(EndFlash);
-		GetGame().GetCallqueue().CallLater(EndFlash, (int)(Math.Max(m_fBubbleFlashTime, 0.05) * 1000), false);
-	}
-
-	//------------------------------------------------------------------------------------------------
-	protected void EndFlash()
-	{
-		UpdateBubbleVisibility(false);
+		m_fFlashUntil = GetTime() + Math.Max(m_fBubbleFlashTime, 0.05);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -523,28 +596,16 @@ class CGS_MechShieldComponent : ScriptComponent
 		if (!s_aShieldedMechs.Contains(owner))
 			s_aShieldedMechs.Insert(owner);
 
-		// Bubble on the first frame, after the mech has finished spawning its parts.
-		if (!System.IsConsoleApp())
-			SetEventMask(owner, EntityEvent.FRAME);
+		// Bubble is created by the shared ticker on the next frame (after the mech has spawned its
+		// parts) on every machine with a screen - clients included.
+		if (!s_aAllShields.Contains(this))
+			s_aAllShields.Insert(this);
+		EnsureSharedTick();
 
-		Print(string.Format("[CGS SHIELD] %1: shield %2 pts, radius %3 m", owner, m_fMaxShield, GetRadius()));
-	}
-
-	//------------------------------------------------------------------------------------------------
-	override void EOnFrame(IEntity owner, float timeSlice)
-	{
-		if (!m_bBubbleTried)
-		{
-			m_bBubbleTried = true;
-			ClearEventMask(owner, EntityEvent.FRAME);
-			CreateBubble();
-		}
-	}
-
-	//------------------------------------------------------------------------------------------------
-	protected void FollowTick()
-	{
-		FollowMech(GetOwner());
+		string machine = "server";
+		if (!Replication.IsServer())
+			machine = "client";
+		Print(string.Format("[CGS SHIELD] %1: shield %2 pts, radius %3 m (%4)", owner, m_fMaxShield, GetRadius(), machine));
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -564,15 +625,8 @@ class CGS_MechShieldComponent : ScriptComponent
 	//------------------------------------------------------------------------------------------------
 	override void OnDelete(IEntity owner)
 	{
-		ScriptCallQueue queue = GetGame().GetCallqueue();
-		if (queue)
-		{
-			queue.Remove(ServerTick);
-			queue.Remove(EndFlash);
-			queue.Remove(FollowTick);
-		}
-
 		s_aShieldedMechs.RemoveItem(owner);
+		s_aAllShields.RemoveItem(this);
 
 		if (m_pBubble)
 		{
