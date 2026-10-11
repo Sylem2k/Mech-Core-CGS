@@ -12,11 +12,13 @@ GenericEntity {
    m_bSupportsPulseFire 1
    m_FX BFA_MechWeaponFX "{6A9623BA6FF2FC24}" {
     m_sMuzzleParticle "{25B1DC5E3A244EFB}Particles/Weapon/RPG_22_muzzle_front.ptc"
+    m_sProjectilePrefab "{EFC76BFD1984F44D}Prefabs/Weapons/Core/Cannon_base.et"
    }
    m_fHeatPerShot 25
    m_MuzzlePoint PointInfo "{6A9623BA6FF2FC2D}" {
     PivotID "J3"
    }
+   m_fShotsPerMinute 12
    m_aBarrelPoints {
     PointInfo "{6A98E2B0C1D2F301}" {
      PivotID "Cannon_1"
@@ -43,7 +45,6 @@ GenericEntity {
      PivotID "Cannon_8"
     }
    }
-   m_fShotsPerMinute 12
    m_iMagazineSize 6
    m_fReloadTime 8
    m_fRange 2500
@@ -79,4 +80,5 @@ GenericEntity {
   Hierarchy "{6A9623BA6FF2FC00}" {
   }
  }
+ coords 149.724 64.795 188.045
 }
