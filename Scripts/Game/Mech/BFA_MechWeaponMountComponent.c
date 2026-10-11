@@ -63,6 +63,12 @@ class BFA_MechWeaponMountDefinition
 	[Attribute("", UIWidgets.EditBox, "ANIM_IK_TARGET: bone the arm swings from (e.g. J1). The aim line starts at this bone instead of the arm's origin - set it when the shoulder is not at the model origin. Empty = arm origin.", category: "Aim Driver")]
 	string m_sIkPivotBone;
 
+	[Attribute("", UIWidgets.EditBox, "FOLLOW ARM: Mount Id of an IK arm (e.g. ARM_L). This weapon rides on that arm: it moves with the arm and still aims on top of it. Empty = fixed to the body.", category: "Follow Arm")]
+	string m_sFollowArmMount;
+
+	[Attribute("", UIWidgets.EditBox, "Arm bone it rides on: J1 = upper arm, J2 = forearm, J3 = hand. Empty = the bone closest to the weapon (recommended).", category: "Follow Arm")]
+	string m_sFollowBone;
+
 	IEntity m_pEntity;
 	IEntity m_pParent;
 	float m_fDiagNextTime;
@@ -76,6 +82,15 @@ class BFA_MechWeaponMountDefinition
 	bool m_bAnimBindFailed;
 	bool m_bIkPivotFromBone;
 	vector m_vIkPivotModel;            // pivot bone position in the arm's model space (bind pose)
+
+	// Follow-arm runtime.
+	bool m_bFollowReady;
+	bool m_bFollowFailed;
+	int m_iFollowBone = -1;
+	IEntity m_pFollowArm;
+	vector m_mFollowBoneRest[4];       // bone in mech model space when the rest pose was captured
+	float m_fAimYaw;
+	float m_fAimPitch;
 	vector m_mBaseLocalTransform[4];
 	vector m_mSlotLocalTransform[4];   // slot pose as placed in the SlotManager (before hardpoint offset)
 	bool m_bResolved;
@@ -96,6 +111,12 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 
 	protected SlotManagerComponent m_pSlotManager;
 	protected int m_iResolveAttempts;
+	protected bool m_bHasFollowers;
+
+	// One shared follow ticker for every mech (removing a method from the call queue can cancel
+	// it on OTHER instances, so instances never add/remove their own).
+	protected static ref array<BFA_MechWeaponMountComponent> s_aFollowComps = {};
+	protected static int s_iFollowHeartbeatMs;
 
 	//------------------------------------------------------------------------------------------------
 	protected float WrapDegrees(float value)
@@ -183,6 +204,7 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 
 		if (allResolved)
 		{
+			StartFollowing();
 			ApplyAllCurrentStationAims();
 			return;
 		}
@@ -192,6 +214,7 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		if (m_iResolveAttempts >= 50)
 		{
 			BFA_MechLog.Log("[BFA MOUNT] One or more mounts failed to resolve.", LogLevel.WARNING);
+			StartFollowing(); // the mounts that did resolve still follow their arms
 			return;
 		}
 
@@ -390,11 +413,15 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		if (!mount.m_pParent)
 			return;
 
+		// Rest pose right now (moves with the arm when this weapon rides on one).
+		vector base[4];
+		GetLiveBase(mount, base);
+
 		// Convert the camera target into the mount parent's coordinate system.
 		vector aimPointParent = mount.m_pParent.CoordToLocal(aimPointWorld);
 
 		// Direction from the mount's original pivot position to the target.
-		vector targetDirectionParent = aimPointParent - mount.m_mBaseLocalTransform[3];
+		vector targetDirectionParent = aimPointParent - base[3];
 
 		if (targetDirectionParent.LengthSq() < 0.000001)
 			return;
@@ -402,9 +429,9 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		targetDirectionParent.Normalize();
 
 		// Original REST orientation of the weapon.
-		vector baseRight = mount.m_mBaseLocalTransform[0];
-		vector baseUp = mount.m_mBaseLocalTransform[1];
-		vector baseForward = mount.m_mBaseLocalTransform[2];
+		vector baseRight = base[0];
+		vector baseUp = base[1];
+		vector baseForward = base[2];
 
 		if (baseRight.LengthSq() < 0.000001)
 			return;
@@ -480,12 +507,227 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 
 		// Apply aim rotation on top of the original mount transform.
 		vector finalMat[4];
-		Math3D.MatrixMultiply4(mount.m_mBaseLocalTransform, deltaMat, finalMat);
+		Math3D.MatrixMultiply4(base, deltaMat, finalMat);
 
 		// Never allow aiming to move the physical mount position.
-		finalMat[3] = mount.m_mBaseLocalTransform[3];
+		finalMat[3] = base[3];
 
+		mount.m_fAimYaw = yaw;
+		mount.m_fAimPitch = pitch;
 		ApplyAimDriver(mount, yaw, pitch, finalMat);
+	}
+
+	//==================================================================================================
+	// FOLLOW ARM - weapons that ride on an IK arm
+	//==================================================================================================
+
+	//------------------------------------------------------------------------------------------------
+	//! The mount's rest pose in its parent's space right now. For a weapon riding on an arm this is
+	//! the rest pose carried along by the arm bone; otherwise the fixed rest pose.
+	protected void GetLiveBase(BFA_MechWeaponMountDefinition mount, out vector base[4])
+	{
+		for (int i = 0; i < 4; i++)
+			base[i] = mount.m_mBaseLocalTransform[i];
+
+		if (mount.m_sFollowArmMount.IsEmpty() || !PrepareFollow(mount))
+			return;
+
+		vector boneNow[4];
+		if (!GetArmBoneModel(mount, boneNow))
+			return;
+
+		// Rest pose expressed relative to the bone at capture time, carried by the bone now.
+		vector relative[4];
+		RelativeTransform(mount.m_mFollowBoneRest, mount.m_mBaseLocalTransform, relative);
+		Math3D.MatrixMultiply4(boneNow, relative, base);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Arm bone transform in the mech's model space (arm slot transform * bone model matrix).
+	protected bool GetArmBoneModel(BFA_MechWeaponMountDefinition mount, out vector boneMech[4])
+	{
+		if (!mount.m_pFollowArm || mount.m_iFollowBone == -1)
+			return false;
+
+		Animation anim = mount.m_pFollowArm.GetAnimation();
+		if (!anim)
+			return false;
+
+		vector boneArm[4];
+		if (!anim.GetBoneMatrix(mount.m_iFollowBone, boneArm))
+			return false;
+
+		vector armLocal[4];
+		mount.m_pFollowArm.GetLocalTransform(armLocal);
+		Math3D.MatrixMultiply4(armLocal, boneArm, boneMech);
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Finds the arm and bone, and captures the bone's rest pose once (before the arm is driven).
+	protected bool PrepareFollow(BFA_MechWeaponMountDefinition mount)
+	{
+		if (mount.m_bFollowReady)
+			return true;
+		if (mount.m_bFollowFailed)
+			return false;
+
+		BFA_MechWeaponMountDefinition arm = FindMount(mount.m_sFollowArmMount);
+		if (!arm || arm == mount)
+		{
+			mount.m_bFollowFailed = true;
+			BFA_MechLog.Log(string.Format("[BFA FOLLOW] %1: Follow Arm Mount '%2' not found", mount.m_sMountId, mount.m_sFollowArmMount), LogLevel.WARNING);
+			return false;
+		}
+
+		if (!ResolveMount(arm))
+			return false; // arm not spawned yet - try again later
+
+		Animation anim = arm.m_pEntity.GetAnimation();
+		if (!anim)
+		{
+			mount.m_bFollowFailed = true;
+			BFA_MechLog.Log(string.Format("[BFA FOLLOW] %1: arm '%2' has no skeleton", mount.m_sMountId, mount.m_sFollowArmMount), LogLevel.WARNING);
+			return false;
+		}
+
+		mount.m_pFollowArm = arm.m_pEntity;
+
+		string boneName = mount.m_sFollowBone;
+		if (boneName.IsEmpty())
+			boneName = PickClosestBone(mount, anim);
+
+		mount.m_iFollowBone = anim.GetBoneIndex(boneName);
+		if (mount.m_iFollowBone == -1)
+		{
+			mount.m_bFollowFailed = true;
+			BFA_MechLog.Log(string.Format("[BFA FOLLOW] %1: bone '%2' not found on arm '%3'", mount.m_sMountId, boneName, mount.m_sFollowArmMount), LogLevel.WARNING);
+			return false;
+		}
+
+		if (!GetArmBoneModel(mount, mount.m_mFollowBoneRest))
+			return false;
+
+		if (arm.m_bAnimBound)
+			BFA_MechLog.Log(string.Format("[BFA FOLLOW] %1: arm '%2' was already moving when the rest pose was captured - the weapon may sit offset", mount.m_sMountId, mount.m_sFollowArmMount), LogLevel.WARNING);
+
+		mount.m_bFollowReady = true;
+		BFA_MechLog.Log(string.Format("[BFA FOLLOW] %1 rides on %2 bone %3", mount.m_sMountId, mount.m_sFollowArmMount, boneName));
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! J1-J2 = upper arm, J2-J3 = forearm, J3 = hand: the segment nearest the weapon's rest spot.
+	protected string PickClosestBone(BFA_MechWeaponMountDefinition mount, Animation anim)
+	{
+		array<string> names = {"J1", "J2", "J3"};
+		array<vector> heads = {};
+		vector armLocal[4];
+		mount.m_pFollowArm.GetLocalTransform(armLocal);
+
+		foreach (string n : names)
+		{
+			TNodeId id = anim.GetBoneIndex(n);
+			vector m[4];
+			if (id == -1 || !anim.GetBoneMatrix(id, m))
+				return "J3";
+			vector mech[4];
+			Math3D.MatrixMultiply4(armLocal, m, mech);
+			heads.Insert(mech[3]);
+		}
+
+		vector p = mount.m_mBaseLocalTransform[3];
+		float best = SegmentDistance(p, heads[0], heads[1]);
+		string bestName = "J1";
+
+		float d = SegmentDistance(p, heads[1], heads[2]);
+		if (d < best)
+		{
+			best = d;
+			bestName = "J2";
+		}
+
+		d = vector.Distance(p, heads[2]);
+		if (d < best)
+			bestName = "J3";
+
+		return bestName;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected static float SegmentDistance(vector p, vector a, vector b)
+	{
+		vector ab = b - a;
+		float lenSq = ab.LengthSq();
+		if (lenSq < 0.000001)
+			return vector.Distance(p, a);
+		float t = Math.Clamp(vector.Dot(p - a, ab) / lenSq, 0, 1);
+		return vector.Distance(p, a + ab * t);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Every frame: weapons riding on arms are moved with the arm, keeping their current aim.
+	protected void FollowUpdate()
+	{
+		if (!m_aMounts)
+			return;
+
+		foreach (BFA_MechWeaponMountDefinition mount : m_aMounts)
+		{
+			if (!mount || mount.m_sFollowArmMount.IsEmpty() || !mount.m_bResolved || !mount.m_pEntity)
+				continue;
+
+			if (mount.m_iAimDriver != BFA_EMechMountAimDriver.ENTITY_ROTATION)
+				continue;
+
+			vector base[4];
+			GetLiveBase(mount, base);
+			if (!mount.m_bFollowReady)
+				continue;
+
+			vector deltaMat[4];
+			Math3D.AnglesToMatrix(Vector(mount.m_fAimYaw, mount.m_fAimPitch, 0), deltaMat);
+			deltaMat[3] = vector.Zero;
+
+			vector finalMat[4];
+			Math3D.MatrixMultiply4(base, deltaMat, finalMat);
+			finalMat[3] = base[3];
+
+			ApplyAimDriver(mount, mount.m_fAimYaw, mount.m_fAimPitch, finalMat);
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected static void EnsureFollowTick()
+	{
+		if (s_iFollowHeartbeatMs != 0 && System.GetTickCount() - s_iFollowHeartbeatMs < 1000)
+			return;
+
+		if (!GetGame())
+			return;
+		ScriptCallQueue queue = GetGame().GetCallqueue();
+		if (!queue)
+			return;
+
+		queue.Remove(StaticFollowTick);
+		queue.CallLater(StaticFollowTick, 0, true);
+		s_iFollowHeartbeatMs = System.GetTickCount();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected static void StaticFollowTick()
+	{
+		s_iFollowHeartbeatMs = System.GetTickCount();
+		for (int i = s_aFollowComps.Count() - 1; i >= 0; i--)
+		{
+			BFA_MechWeaponMountComponent comp = s_aFollowComps[i];
+			if (!comp || !comp.GetOwner())
+			{
+				s_aFollowComps.Remove(i);
+				continue;
+			}
+			comp.FollowUpdate();
+		}
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -713,6 +955,31 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Captures every follower's rest pose (arms still in their bind pose) and starts the ticker.
+	protected void StartFollowing()
+	{
+		m_bHasFollowers = false;
+		if (!m_aMounts)
+			return;
+
+		foreach (BFA_MechWeaponMountDefinition mount : m_aMounts)
+		{
+			if (mount && !mount.m_sFollowArmMount.IsEmpty())
+			{
+				m_bHasFollowers = true;
+				PrepareFollow(mount);
+			}
+		}
+
+		if (!m_bHasFollowers)
+			return;
+
+		if (!s_aFollowComps.Contains(this))
+			s_aFollowComps.Insert(this);
+		EnsureFollowTick();
+	}
+
+	//------------------------------------------------------------------------------------------------
 	override void OnPostInit(IEntity owner)
 	{
 		super.OnPostInit(owner);
@@ -738,6 +1005,8 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 			if (queue)
 				queue.Remove(ResolveAllDelayed);
 		}
+
+		s_aFollowComps.RemoveItem(this);
 
 		super.OnDelete(owner);
 	}

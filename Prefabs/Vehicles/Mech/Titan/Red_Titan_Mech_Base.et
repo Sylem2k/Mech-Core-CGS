@@ -404,6 +404,7 @@ Vehicle {
      m_fPitchMax 45
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_R"
      m_fWeaponScale 4
     }
     BFA_MechWeaponMountDefinition "{6A940CCC05D26C7C}" {
@@ -417,6 +418,7 @@ Vehicle {
      m_fPitchMax 45
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_R"
      m_fWeaponScale 4
     }
     BFA_MechWeaponMountDefinition "{6A98C0A1B2C3D403}" {
@@ -430,6 +432,7 @@ Vehicle {
      m_fPitchMax 25
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_L"
      m_fWeaponScale 2
     }
     BFA_MechWeaponMountDefinition "{6A98D1A0B1C2E305}" {
@@ -473,6 +476,7 @@ Vehicle {
      m_fPitchMax 45
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_L"
      m_fWeaponScale 3
     }
     BFA_MechWeaponMountDefinition "{6A940CCC05D26C70}" {
@@ -486,6 +490,7 @@ Vehicle {
      m_fPitchMax 45
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_L"
      m_fWeaponScale 3
     }
     BFA_MechWeaponMountDefinition "{6A940CCC05D26C76}" {
@@ -499,6 +504,7 @@ Vehicle {
      m_fPitchMax 45
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_L"
      m_fWeaponScale 3
     }
     BFA_MechWeaponMountDefinition "{6A940CCC05D26C75}" {
@@ -512,6 +518,7 @@ Vehicle {
      m_fPitchMax 45
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_L"
      m_fWeaponScale 3
     }
     BFA_MechWeaponMountDefinition "{6A940CCC05D26C6B}" {
@@ -525,6 +532,7 @@ Vehicle {
      m_fPitchMax 45
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_R"
      m_fWeaponScale 3
     }
     BFA_MechWeaponMountDefinition "{6A940CCC05D26C6A}" {
@@ -538,6 +546,7 @@ Vehicle {
      m_fPitchMax 45
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_R"
      m_fWeaponScale 3
     }
     BFA_MechWeaponMountDefinition "{6A940CCC05D26C69}" {
@@ -551,6 +560,7 @@ Vehicle {
      m_fPitchMax 45
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_R"
      m_fWeaponScale 4
     }
     BFA_MechWeaponMountDefinition "{6A940CCC05D26C68}" {
@@ -564,6 +574,7 @@ Vehicle {
      m_fPitchMax 45
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_R"
      m_fWeaponScale 4
     }
     BFA_MechWeaponMountDefinition "{6A940CCC05D26C6F}" {
@@ -577,6 +588,7 @@ Vehicle {
      m_fPitchMax 45
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_R"
      m_fWeaponScale 3
     }
     BFA_MechWeaponMountDefinition "{6A940CCC05D26C6E}" {
@@ -590,6 +602,7 @@ Vehicle {
      m_fPitchMax 45
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
+     m_sFollowArmMount "ARM_L"
      m_fWeaponScale 5
     }
    }
@@ -1156,16 +1169,12 @@ Vehicle {
      Prefab "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech_Autocannon.et"
     }
     EntitySlotInfo Arm_R1 {
-     Offset 4.9713 0.0028 -20.9342
+     Offset 38.1764 72.1806 5.5868
      Prefab "{BF5A995C0FD5EEAC}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Right_Cannon_Arm.et"
     }
     EntitySlotInfo Arm_L1 {
-     Offset -0.2317 -9.7885 -4.3073
+     Offset -39.44 58.0486 -4.3073
      Prefab "{438868CB49A24973}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Left_Missle_Arm.et"
-    }
-    EntitySlotInfo Arm_Left_Pod_System {
-     Offset -50.5365 52.4448 34.2899
-     Prefab "{06D959742FAB2146}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Pod_System.et"
     }
    }
   }
