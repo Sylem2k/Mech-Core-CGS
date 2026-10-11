@@ -15,6 +15,7 @@ GenericEntity {
    }
    m_fHeatPerShot 15
    m_eDamageKind EXPLOSIVE
+   m_bFireAtAimPoint 1
    m_MuzzlePoint PointInfo "{6A9623BA216540A1}" {
     PivotID "J3"
    }

@@ -20,6 +20,7 @@ GenericEntity {
    }
    m_fHeatPerShot 4
    m_eDamageKind EXPLOSIVE
+   m_bFireAtAimPoint 1
    m_bAutoMuzzleFromBounds 1
    m_iMagazineSize 48
    m_fReloadTime 10

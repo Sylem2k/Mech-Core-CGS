@@ -55,6 +55,12 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	[Attribute("false", UIWidgets.CheckBox, "Only without Muzzle Point / Barrel Points (a point fires along its own blue axis): the model's forward is -Z (fires the other way).", category: "Muzzle")]
 	protected bool m_bReverseMuzzleForward;
 
+	[Attribute("false", UIWidgets.CheckBox, "Shots leave the muzzle toward the point the crew is aiming at, instead of along the muzzle's own axis. Turn ON for weapons on IK arms (the hand bone moves with the arm but does not turn).", category: "Muzzle")]
+	protected bool m_bFireAtAimPoint;
+
+	[Attribute("100", UIWidgets.Auto, "Fire At Aim Point: largest correction in degrees from the muzzle's own direction. Beyond it the shot goes along the muzzle (no firing out of the back of the arm).", category: "Muzzle")]
+	protected float m_fMaxAimCorrection;
+
 	// ---- Simple fire (used only by weapons that override FireShot) -----------------------------
 	[Attribute("120", UIWidgets.Auto, "Shots per minute for the built-in trigger handling (weapons that only override FireShot).", category: "Fire")]
 	protected float m_fShotsPerMinute;
@@ -847,8 +853,38 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	//==================================================================================================
 
 	//------------------------------------------------------------------------------------------------
+	//! Fire At Aim Point: turn 'direction' toward where the crew aims (see m_bFireAtAimPoint).
+	protected void ApplyFireAtAimPoint(vector start, inout vector direction)
+	{
+		if (!m_bFireAtAimPoint || !m_pMechOwner)
+			return;
+
+		BFA_MechWeaponMountComponent mounts = BFA_MechWeaponMountComponent.Cast(m_pMechOwner.FindComponent(BFA_MechWeaponMountComponent));
+		vector aimPoint;
+		if (!mounts || !mounts.GetAimPointForEntity(GetOwner(), aimPoint))
+			return;
+
+		vector toAim = aimPoint - start;
+		if (toAim.LengthSq() < 0.01)
+			return;
+		toAim.Normalize();
+
+		float angle = Math.Acos(Math.Clamp(vector.Dot(toAim, direction), -1, 1)) * Math.RAD2DEG;
+		if (angle <= Math.Max(m_fMaxAimCorrection, 0))
+			direction = toAim;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! World muzzle position and firing direction of this weapon (cycles barrels if configured).
 	protected vector GetMuzzle(out vector direction, bool advanceBarrel = true)
+	{
+		vector muzzleStart = GetMuzzleRaw(direction, advanceBarrel);
+		ApplyFireAtAimPoint(muzzleStart, direction);
+		return muzzleStart;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected vector GetMuzzleRaw(out vector direction, bool advanceBarrel = true)
 	{
 		IEntity weaponEntity = GetOwner();
 		direction = vector.Forward;

@@ -99,7 +99,9 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 	{
 		vector direction;
 		vector start;
-		if (!GetTubeMuzzle(start, direction))
+		if (GetTubeMuzzle(start, direction))
+			ApplyFireAtAimPoint(start, direction);
+		else
 			start = GetMuzzle(direction);
 		vector aimDirection = direction;
 
