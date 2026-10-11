@@ -1,0 +1,52 @@
+GenericEntity {
+ ID "D7BA1C0A3B98A0A0"
+ components {
+  SCR_DamageManagerComponent "{C442EA3FA85C9164}" {
+   "Additional hit zones" {
+    BFA_MechPartHitZone Leg {
+     HZDefault 1
+     MaxHealth 800
+     DamageReduction 2
+     DamageThreshold 1
+     "Melee multiplier" 0.01
+     "Kinetic multiplier" 0.1
+     "Fragmentation multiplier" 0.05
+     "Explosive multiplier" 1
+     "Incendiary multiplier" 0.5
+     m_fHullShare 0.6
+    }
+   }
+  }
+  SignalsManagerComponent "{E1A24368C423CA08}" {
+  }
+  SoundComponent "{4399F0B69B04E492}" {
+   Filenames {
+    "{8B7D7D9A72F30BAD}Sounds/SampleMech.acp"
+   }
+  }
+  BFA_MechLegComponent "{446A65C1DAA94291}" {
+   m_fStepHeight 1
+   m_fObstacleStepHeight 3
+  }
+  MeshObject "{0ACCD7BB1AC0D72A}" {
+  }
+  SCR_SoundDataComponent "{77951E5B9079EA27}" {
+   m_aAudioSourceConfiguration {
+    SCR_AudioSourceConfiguration "{FD3EDD3352218D0A}" {
+     m_sSoundProject "{8B7D7D9A72F30BAD}Sounds/SampleMech.acp"
+     m_sSoundEventName "SOUND_MECH_STEP"
+    }
+   }
+  }
+  AnimationControllerComponent "{DEF777A564EBAE35}" {
+   AnimGraph "{087ADD06D87386F4}Anims/Workspaces/Mech/IK_Arm.agr"
+   AnimInstance "{E51088DDC47AD41A}Anims/Workspaces/Mech/IK_Arm.asi"
+   StartNode "IK Chain to IK Target"
+   AnimUpdate EOnFrame
+  }
+  RplComponent "{A75E8B5481E09EBF}" {
+  }
+  Hierarchy "{FB3CF31D86FCA016}" {
+  }
+ }
+}

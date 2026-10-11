@@ -1,0 +1,5 @@
+AnimSetInstanceSource {
+ Template "{1A88BB06EFB65207}Anims/Workspaces/Mech/IK_Arm.ast"
+ RBF AnimSetInstanceSourceRBFArray "{60EEB1415E4A9D06}" {
+ }
+}

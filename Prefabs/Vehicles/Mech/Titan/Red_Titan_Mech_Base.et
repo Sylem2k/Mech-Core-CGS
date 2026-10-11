@@ -1,0 +1,1107 @@
+Vehicle {
+ ID "6A940CCC05D4BEB0"
+ components {
+  EventHandlerManagerComponent "{6A940CCC05D4BEBF}" {
+   EventHandlers {
+    BaseEventHandler "{6A940CCC05D4BEA8}" {
+     EventName "OnCompartmentEntered"
+    }
+    BaseEventHandler "{6A940CCC05D4BEAF}" {
+     EventName "OnCompartmentLeft"
+    }
+   }
+  }
+  SignalsManagerComponent "{6A940CCC05D4BE50}" {
+  }
+  AIKnowledgeComponent "{6A940CCC05D4BE55}" {
+  }
+  BFA_MechAICrewComponent "{6A940CCC05D4BE56}" {
+   m_bSpreadTargets 1
+  }
+  BFA_MechAimComponent "{6A940CCC05D4BE58}" {
+   m_fReticleAimDistance 1000
+   m_iLocalAimTickMs 16
+  }
+  BFA_MechControllerComponent "{6A940CCC05D4BE5A}" {
+   MaxStartupTime 8
+   m_sCrewStationId "DRIVER"
+   m_iPrimaryWeaponGroup 0
+  }
+  BFA_MechCoreComponent "{6A940CCC05D4BE5C}" {
+   m_aCrewStations {
+    BFA_MechCrewStationDefinition "{6A940CCC05D4BE43}" {
+     m_sStationId "DRIVER"
+     m_bCanDrive 1
+     m_bCanAim 0
+     m_iWeaponGroupMask 0
+     m_iCompartmentIndex 0
+     m_iPrimaryWeaponGroup 0
+     m_iSecondaryWeaponGroup 0
+     m_iAuxWeaponGroup 0
+    }
+    BFA_MechCrewStationDefinition "{6A940CCC05D4BE45}" {
+     m_sStationId "COMMANDER"
+     m_bCanDrive 0
+     m_bCanAim 1
+     m_iWeaponGroupMask 771
+     m_iCompartmentIndex 1
+     m_iPrimaryWeaponGroup 1
+     m_iSecondaryWeaponGroup 2
+     m_iAuxWeaponGroup 9
+    }
+    BFA_MechCrewStationDefinition "{6A940CCC05D4BE49}" {
+     m_sStationId "GUNNER"
+     m_bCanDrive 0
+     m_bCanAim 1
+     m_iWeaponGroupMask 4
+     m_iCompartmentIndex 2
+     m_iPrimaryWeaponGroup 3
+     m_iSecondaryWeaponGroup 0
+     m_iAuxWeaponGroup 0
+    }
+    BFA_MechCrewStationDefinition "{6A940CCC05D4BE48}" {
+     m_sStationId "GUNNER2"
+     m_bCanDrive 0
+     m_bCanAim 1
+     m_iWeaponGroupMask 8
+     m_iCompartmentIndex 3
+     m_iPrimaryWeaponGroup 4
+     m_iSecondaryWeaponGroup 0
+     m_iAuxWeaponGroup 0
+    }
+    BFA_MechCrewStationDefinition "{6A940CCC05D4BE76}" {
+     m_sStationId "GUNNER3"
+     m_bCanDrive 0
+     m_bCanAim 1
+     m_iWeaponGroupMask 16
+     m_iCompartmentIndex 4
+     m_iPrimaryWeaponGroup 5
+     m_iSecondaryWeaponGroup 0
+     m_iAuxWeaponGroup 0
+    }
+    BFA_MechCrewStationDefinition "{6A940CCC05D4BE79}" {
+     m_sStationId "GUNNER4"
+     m_bCanDrive 0
+     m_bCanAim 1
+     m_iWeaponGroupMask 32
+     m_iCompartmentIndex 5
+     m_iPrimaryWeaponGroup 6
+     m_iSecondaryWeaponGroup 0
+     m_iAuxWeaponGroup 0
+    }
+    BFA_MechCrewStationDefinition "{6A940CCC05D4BE78}" {
+     m_sStationId "GUNNER5"
+     m_bCanDrive 0
+     m_bCanAim 1
+     m_iWeaponGroupMask 64
+     m_iCompartmentIndex 6
+     m_iPrimaryWeaponGroup 7
+     m_iSecondaryWeaponGroup 0
+     m_iAuxWeaponGroup 0
+    }
+    BFA_MechCrewStationDefinition "{6A940CCC05D4BE7A}" {
+     m_sStationId "GUNNER6"
+     m_bCanDrive 0
+     m_bCanAim 1
+     m_iWeaponGroupMask 128
+     m_iCompartmentIndex 7
+     m_iPrimaryWeaponGroup 8
+     m_iSecondaryWeaponGroup 0
+     m_iAuxWeaponGroup 0
+    }
+   }
+  }
+  BFA_MechCrewStationControllerComponent "{6A940CCC05D4BE7D}" {
+   m_iSeatWatchMs 100
+   m_iNetAimMs 33
+   m_bBindAuxFire 1
+  }
+  BFA_MechHardpointComponent "{6A940CCC05D4BE7F}" {
+   m_aHardpoints {
+    BFA_MechHardpointDefinition "{6A940CCC05D4BE60}" {
+     m_sName "CMD_GUN_L"
+     m_iClass 1
+     m_sAimMountId "CMD_GUN_L"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 1
+     m_Point PointInfo "{6A940CCC05D4BE65}" {
+      Offset 57.0217 70.0798 37.158
+     }
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 1
+    }
+    BFA_MechHardpointDefinition "{6A940CCC05D4BE67}" {
+     m_sName "CMD_GUN_R"
+     m_iClass 1
+     m_sAimMountId "CMD_GUN_R"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 1
+     m_Point PointInfo "{6A940CCC05D4BE66}" {
+      Offset 59.2986 66.6951 34.8023
+     }
+     m_bRightSide 1
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 1
+    }
+    BFA_MechHardpointDefinition "{6A940CCC05D4BE69}" {
+     m_sName "SHOULDER_POD_L"
+     m_iClass 2
+     m_sAimMountId "SHOULDER_POD_L"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 2
+     m_Point PointInfo "{6A940CCC05D4BE17}" {
+      Offset -46.9388 56.5665 34.2734
+     }
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 2
+    }
+    BFA_MechHardpointDefinition "{6A940CCC05D55038}" {
+     m_sName "SHOULDER_POD_R"
+     m_iClass 2
+     m_sAimMountId "SHOULDER_POD_R"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 2
+     m_Point PointInfo "{6A940CCC05D55036}" {
+      Offset -45.4808 70.7164 36.1457
+     }
+     m_bRightSide 1
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 2
+    }
+    BFA_MechHardpointDefinition "{6A940CCC05D55035}" {
+     m_sName "BACK_AGM_L"
+     m_iClass 2
+     m_sAimMountId "BACK_AGM_L"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 3
+     m_Point PointInfo "{6A940CCC05D55032}" {
+      Offset -53.5569 57.0489 33.6404
+     }
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 9
+    }
+    BFA_MechHardpointDefinition "{6A940CCC05D55033}" {
+     m_sName "BACK_AGM_R"
+     m_iClass 2
+     m_sAimMountId "BACK_AGM_R"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 3
+     m_Point PointInfo "{6A940CCC05D55030}" {
+      Offset -45.3591 72.6319 35.7263
+     }
+     m_bRightSide 1
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 9
+    }
+    BFA_MechHardpointDefinition "{6A940CCC05D5502E}" {
+     m_sName "GUN1_FRONT_L"
+     m_iClass 1
+     m_sAimMountId "GUN1_FRONT_L"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 1
+     m_Point PointInfo "{6A940CCC05D5502F}" {
+      Offset 57.8977 62.8329 33.5164
+     }
+     m_sControlStation "GUNNER"
+     m_iWeaponGroup 3
+    }
+    BFA_MechHardpointDefinition "{6A940CCC05D5502C}" {
+     m_sName "GUN2_FRONT_R"
+     m_iClass 1
+     m_sAimMountId "GUN2_FRONT_R"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 1
+     m_Point PointInfo "{6A940CCC05D53D96}" {
+      Offset 49.7122 70.7673 37.8014
+     }
+     m_bRightSide 1
+     m_sControlStation "GUNNER2"
+     m_iWeaponGroup 4
+    }
+    BFA_MechHardpointDefinition "{6A940CCC05D53D90}" {
+     m_sName "GUN3_LEFT"
+     m_iClass 1
+     m_sAimMountId "GUN3_LEFT"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 1
+     m_Point PointInfo "{6A940CCC05D53D91}" {
+      Offset 46.782 66.2936 34.023
+     }
+     m_sControlStation "GUNNER3"
+     m_iWeaponGroup 5
+    }
+    BFA_MechHardpointDefinition "{6A940CCC05D53D93}" {
+     m_sName "GUN4_RIGHT"
+     m_iClass 1
+     m_sAimMountId "GUN4_RIGHT"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 1
+     m_Point PointInfo "{6A940CCC05D53D9C}" {
+      Offset 53.5626 72.258 37.9887
+     }
+     m_bRightSide 1
+     m_sControlStation "GUNNER4"
+     m_iWeaponGroup 6
+    }
+    BFA_MechHardpointDefinition "{6A940CCC05D53D9D}" {
+     m_sName "GUN5_REAR_L"
+     m_iClass 1
+     m_sAimMountId "GUN5_REAR_L"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 1
+     m_Point PointInfo "{6A940CCC05D53D9F}" {
+      Offset 54.4183 60.7324 32.7878
+     }
+     m_sControlStation "GUNNER5"
+     m_iWeaponGroup 7
+    }
+    BFA_MechHardpointDefinition "{6A940CCC05D53D98}" {
+     m_sName "GUN6_REAR_R"
+     m_iClass 1
+     m_sAimMountId "GUN6_REAR_R"
+     m_bBindExistingAimMount 1
+     m_iDefaultModuleId 1
+     m_Point PointInfo "{6A940CCC05D53D99}" {
+      Offset -51.3874 65.0102 36.0732
+     }
+     m_bRightSide 1
+     m_sControlStation "GUNNER6"
+     m_iWeaponGroup 8
+    }
+    BFA_MechHardpointDefinition "{6A940CCC05D5D399}" {
+     m_sName "COUNTERMEASURES"
+     m_iClass 4
+     m_sAimMountId ""
+     m_bBindExistingAimMount 0
+     m_iDefaultModuleId 4
+     m_Point PointInfo "{6A940CCC05D5D39A}" {
+      Offset 0 46.7966 26.675
+     }
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 10
+    }
+   }
+   m_aModules {
+    BFA_MechModuleDefinition "{6A9623BCDC6E2CCB}" {
+     m_iId 1
+     m_sLabel "Autocannon"
+     m_iClass 1
+     m_sWeaponModuleId "AUTOCANNON"
+     m_sPrefab "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech_Autocannon.et"
+    }
+    BFA_MechModuleDefinition "{6A9623BCDB7509C1}" {
+     m_iId 2
+     m_sLabel "S-13 Rocket Pod"
+     m_iClass 2
+     m_sWeaponModuleId "S13_POD"
+     m_sPrefab "{796DDC90350F1BC0}Prefabs/Vehicles/Mech/Weapons/S13/S13_Rocket_Pod.et"
+    }
+    BFA_MechModuleDefinition "{6A9623BCDBE5FFAC}" {
+     m_iId 3
+     m_sLabel "Sen Missile Rack"
+     m_iClass 2
+     m_sWeaponModuleId "SEN_MISSILE"
+     m_sPrefab "{CCBAC49D1CC785B0}Prefabs/Vehicles/Mech/Weapons/SenMissile/Sen_Missile_Launcher.et"
+    }
+    BFA_MechModuleDefinition "{6A9623B308B98166}" {
+     m_iId 4
+     m_sLabel "Point Defense"
+     m_iClass 4
+     m_sWeaponModuleId "POINT_DEFENSE"
+     m_sPrefab "{13EAD5AB3E4F2AA8}Prefabs/Vehicles/Mech/Mech_Parts/Point_Defense_Module.et"
+    }
+   }
+  }
+  BFA_MechMovementComponent "{6A940CCC05D27383}" {
+   m_aLegPairs {
+    BFA_MechLegPair "{6A940CCC05D27380}" {
+     m_sLeftLegSlotName "Leg_L1"
+     m_sRightLegSlotName "Leg_R1"
+    }
+   }
+   m_fSpeed 5
+   m_bCanSprint 1
+   m_fSprintSpeed 8
+   m_fStrafeSpeed 3
+   m_fSprintStrafeSpeed 4
+   m_fAvgHeightSpeed 2
+   m_fAngularSpeed 0.35
+   m_fSizeScale 7
+   m_GroundPoint PointInfo "{6A940CCC05D27385}" {
+    Offset 0 -31.2287 0
+   }
+   m_fParkedCrouch 0
+   m_fGroundProbeForward 2
+   m_fGroundProbeSide 1.5
+   m_fGroundRiseSpeed 6
+   m_fGroundFallSpeed 4
+   m_fGroundFollowGain 4
+  }
+  BFA_MechWeaponComponent "{6A940CCC05D26C7B}" {
+  }
+  BFA_MechWeaponMountComponent "{6A940CCC05D26C7A}" {
+   m_aMounts {
+    BFA_MechWeaponMountDefinition "{6A940CCC05D26C7F}" {
+     m_sMountId "CMD_GUN_L"
+     m_sSlotName "CMD_GUN_L"
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 1
+     m_fYawMin -90
+     m_fYawMax 90
+     m_fPitchMin -30
+     m_fPitchMax 45
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 4
+    }
+    BFA_MechWeaponMountDefinition "{6A940CCC05D26C7C}" {
+     m_sMountId "CMD_GUN_R"
+     m_sSlotName "CMD_GUN_R"
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 1
+     m_fYawMin -90
+     m_fYawMax 90
+     m_fPitchMin -30
+     m_fPitchMax 45
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 4
+    }
+    BFA_MechWeaponMountDefinition "{6A940CCC05D26C72}" {
+     m_sMountId "SHOULDER_POD_L"
+     m_sSlotName "SHOULDER_POD_L"
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 2
+     m_fYawMin -60
+     m_fYawMax 60
+     m_fPitchMin -20
+     m_fPitchMax 45
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 3
+    }
+    BFA_MechWeaponMountDefinition "{6A940CCC05D26C70}" {
+     m_sMountId "SHOULDER_POD_R"
+     m_sSlotName "SHOULDER_POD_R"
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 2
+     m_fYawMin -60
+     m_fYawMax 60
+     m_fPitchMin -20
+     m_fPitchMax 45
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 3
+    }
+    BFA_MechWeaponMountDefinition "{6A940CCC05D26C76}" {
+     m_sMountId "BACK_AGM_L"
+     m_sSlotName "BACK_AGM_L"
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 9
+     m_fYawMin -60
+     m_fYawMax 60
+     m_fPitchMin -20
+     m_fPitchMax 45
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 3
+    }
+    BFA_MechWeaponMountDefinition "{6A940CCC05D26C75}" {
+     m_sMountId "BACK_AGM_R"
+     m_sSlotName "BACK_AGM_R"
+     m_sControlStation "COMMANDER"
+     m_iWeaponGroup 9
+     m_fYawMin -60
+     m_fYawMax 60
+     m_fPitchMin -20
+     m_fPitchMax 45
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 3
+    }
+    BFA_MechWeaponMountDefinition "{6A940CCC05D26C6B}" {
+     m_sMountId "GUN1_FRONT_L"
+     m_sSlotName "GUN1_FRONT_L"
+     m_sControlStation "GUNNER"
+     m_iWeaponGroup 3
+     m_fYawMin -180
+     m_fYawMax 180
+     m_fPitchMin -45
+     m_fPitchMax 45
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 3
+    }
+    BFA_MechWeaponMountDefinition "{6A940CCC05D26C6A}" {
+     m_sMountId "GUN2_FRONT_R"
+     m_sSlotName "GUN2_FRONT_R"
+     m_sControlStation "GUNNER2"
+     m_iWeaponGroup 4
+     m_fYawMin -180
+     m_fYawMax 180
+     m_fPitchMin -45
+     m_fPitchMax 45
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 3
+    }
+    BFA_MechWeaponMountDefinition "{6A940CCC05D26C69}" {
+     m_sMountId "GUN3_LEFT"
+     m_sSlotName "GUN3_LEFT"
+     m_sControlStation "GUNNER3"
+     m_iWeaponGroup 5
+     m_fYawMin -180
+     m_fYawMax 180
+     m_fPitchMin -45
+     m_fPitchMax 45
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 4
+    }
+    BFA_MechWeaponMountDefinition "{6A940CCC05D26C68}" {
+     m_sMountId "GUN4_RIGHT"
+     m_sSlotName "GUN4_RIGHT"
+     m_sControlStation "GUNNER4"
+     m_iWeaponGroup 6
+     m_fYawMin -180
+     m_fYawMax 180
+     m_fPitchMin -45
+     m_fPitchMax 45
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 4
+    }
+    BFA_MechWeaponMountDefinition "{6A940CCC05D26C6F}" {
+     m_sMountId "GUN5_REAR_L"
+     m_sSlotName "GUN5_REAR_L"
+     m_sControlStation "GUNNER5"
+     m_iWeaponGroup 7
+     m_fYawMin -180
+     m_fYawMax 180
+     m_fPitchMin -20
+     m_fPitchMax 45
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 3
+    }
+    BFA_MechWeaponMountDefinition "{6A940CCC05D26C6E}" {
+     m_sMountId "GUN6_REAR_R"
+     m_sSlotName "GUN6_REAR_R"
+     m_sControlStation "GUNNER6"
+     m_iWeaponGroup 8
+     m_fYawMin -180
+     m_fYawMax 180
+     m_fPitchMin -20
+     m_fPitchMax 45
+     m_bInvertPitch 0
+     m_fConvergenceDistance 1000
+     m_fWeaponScale 5
+    }
+   }
+   m_bDebugAim 0
+  }
+  CGS_MechBrainComponent "{6A940CCC05D26C63}" {
+   m_eMode HUNT
+   m_sPilotPrefab "{C56A957843F590E5}Prefabs/Characters/Factions/OPFOR/USSR_Army/KLMK/REDFOR_BRAIN.et"
+   m_fPatrolRadius 25
+   m_fHuntRadius 1500
+  }
+  CGS_MechHeatComponent "{892B18727CA0F81A}" {
+   m_fMaxHeat 200000
+   m_bDebug 0
+  }
+  CGS_MechShieldComponent "{6A940CCC05D26C62}" {
+   m_fMaxShield 10000
+   m_fRegenPerSecond 220
+   m_fRegenDelay 5
+   m_fBrokenDelay 300
+   m_fReactivateAt 0.25
+   m_fBleedThrough 0.15
+   m_fEmpCost 3
+   m_Center PointInfo "{6A940CCC05D26C61}" {
+    Offset 0 54.6132 0
+   }
+   m_fRadius 90
+   m_bBlockBeams 0
+   m_sBubblePrefab "{198F9942AAB5B87C}Prefabs/Vehicles/Mech/Shield/CGS_Mech_Shield_Bubble.et"
+   m_fBubbleModelRadius 0
+   m_bBubbleAlwaysVisible 1
+   m_fBubbleFlashTime 0.6
+   m_sHitParticle "{6D3BBBCC2FFB0529}Particles/Weapon/Explosion_Shield_Green.ptc"
+   m_sBreakParticle "{6D973BC6A8C2C7F9}Particles/Weapon/Explosion_Shield_Red.ptc"
+   m_sRestoreParticle "{6D3BBBCC2FFB0529}Particles/Weapon/Explosion_Shield_Green.ptc"
+   m_sSoundProject "{C45837D7F7445964}Sounds/Editor/LightningStrike/Editor_LightningStrike.acp"
+   m_sBreakSoundEvent "SOUND_LIGHTNING_STRIKE"
+   m_sRestoreSoundEvent "SOUND_LIGHTNING_STRIKE"
+  }
+  ChimeraAIPathfindingComponent "{6A940CCC05D26C66}" {
+   NavmeshProject "BTRlike"
+   "Use Road Network" 1
+   "Turn radius" 20
+  }
+  ColliderHistoryComponent "{6A940CCC05D26C5B}" {
+  }
+  ControllersManagerComponent "{6A940CCC05D26C58}" {
+  }
+  MeshObject "{6A940CCC05D26C5D}" {
+   Object "{CE4022024014E295}Common/Models/Titan/Titan_Body_Updated.xob"
+  }
+  RigidBody "{6A940CCC05D26C52}" {
+   Active Active
+   Mass 2500
+   Gravity 0
+   ResponseIndex "Normal"
+   Geometries {
+    PhysicsBoxGeometry BodyCollider {
+     LayerPreset "Vehicle"
+     Offset 0 0.5 0
+     Extents 2.5 2.5 3.5
+    }
+   }
+  }
+  SCR_AIVehicleUsageComponent "{6A940CCC05D26C4B}" {
+   m_eVehicleType GROUND_VEHICLE_TRACKED
+  }
+  SCR_BaseCompartmentManagerComponent "{6A940CCC05D26C48}" {
+   DoorInfoList {
+    CompartmentDoorInfo "{6A940CCC05D26C4D}" {
+     ContextName "door_driver"
+     EntryPositionInfo PointInfo "{6A940CCC05D26C43}" {
+      Offset 0 -28 6
+     }
+     ExitPositionInfo PointInfo "{6A940CCC05D26C41}" {
+      Offset 0 -28 6
+     }
+     GetInTeleport 1
+     GetOutTeleport 1
+     FakeDoor 1
+    }
+    CompartmentDoorInfo "{6A940CCC05D26C47}" {
+     ContextName "door_commander"
+     EntryPositionInfo PointInfo "{6A940CCC05D26C46}" {
+      Offset 4.24 -28 4.24
+     }
+     ExitPositionInfo PointInfo "{6A940CCC05D26C45}" {
+      Offset 4.24 -28 4.24
+     }
+     GetInTeleport 1
+     GetOutTeleport 1
+     FakeDoor 1
+    }
+    CompartmentDoorInfo "{6A940CCC05D26C44}" {
+     ContextName "door_gunner"
+     EntryPositionInfo PointInfo "{6A940CCC05D26C3A}" {
+      Offset 6 -28 0
+     }
+     ExitPositionInfo PointInfo "{6A940CCC05D26C38}" {
+      Offset 6 -28 0
+     }
+     GetInTeleport 1
+     GetOutTeleport 1
+     FakeDoor 1
+    }
+    CompartmentDoorInfo "{6A940CCC05D26C3F}" {
+     ContextName "door_gunner2"
+     EntryPositionInfo PointInfo "{6A940CCC05D26C26}" {
+      Offset 4.24 -28 -4.24
+     }
+     ExitPositionInfo PointInfo "{6A940CCC05D26C25}" {
+      Offset 4.24 -28 -4.24
+     }
+     GetInTeleport 1
+     GetOutTeleport 1
+     FakeDoor 1
+    }
+    CompartmentDoorInfo "{6A940CCC05D26C1A}" {
+     ContextName "door_gunner3"
+     EntryPositionInfo PointInfo "{6A940CCC05D26C19}" {
+      Offset 0 -28 -6
+     }
+     ExitPositionInfo PointInfo "{6A940CCC05D26C18}" {
+      Offset 0 -28 -6
+     }
+     GetInTeleport 1
+     GetOutTeleport 1
+     FakeDoor 1
+    }
+    CompartmentDoorInfo "{6A940CCC05D26C1D}" {
+     ContextName "door_gunner4"
+     EntryPositionInfo PointInfo "{6A940CCC05D26C1C}" {
+      Offset -4.24 -28 -4.24
+     }
+     ExitPositionInfo PointInfo "{6A940CCC05D26C12}" {
+      Offset -4.24 -28 -4.24
+     }
+     GetInTeleport 1
+     GetOutTeleport 1
+     FakeDoor 1
+    }
+    CompartmentDoorInfo "{6A940CCC05D26C10}" {
+     ContextName "door_gunner5"
+     EntryPositionInfo PointInfo "{6A940CCC05D26C16}" {
+      Offset -6 -28 0
+     }
+     ExitPositionInfo PointInfo "{6A940CCC05D26C14}" {
+      Offset -6 -28 0
+     }
+     GetInTeleport 1
+     GetOutTeleport 1
+     FakeDoor 1
+    }
+    CompartmentDoorInfo "{6A940CCC05D26C0A}" {
+     ContextName "door_gunner6"
+     EntryPositionInfo PointInfo "{6A940CCC05D26C09}" {
+      Offset -4.24 -28 4.24
+     }
+     ExitPositionInfo PointInfo "{6A940CCC05D2F5FE}" {
+      Offset -4.24 -28 4.24
+     }
+     GetInTeleport 1
+     GetOutTeleport 1
+     FakeDoor 1
+    }
+   }
+   CompartmentSlots {
+    PilotCompartmentSlot pilot {
+     CompartmentUniqueName "driver"
+     CompartmentAction SCR_GetInUserAction "{6A940CCC05D2F5F9}" {
+      ParentContextList {
+       "default"
+      }
+      UIInfo UIInfo "{6A940CCC05D2F5F5}" {
+       Name "Get in - Driver"
+      }
+     }
+     GetOutAction SCR_GetOutAction "{6A940CCC05D2F5F0}" {
+      ParentContextList {
+       "default"
+      }
+     }
+     JumpOutAction SCR_JumpOutAction "{6A940CCC05D2F50C}" {
+     }
+     SwitchSeatAction SCR_SwitchSeatAction "{6A940CCC05D2F50E}" {
+     }
+     PassengerPositionInfo EntitySlotInfo "{284331CB9D0800F1}" {
+      Offset 0 8.2563 0
+     }
+     SkipCharacterDoorAnimationsFromSeat 1
+     EjectUnconsciousAndDeadCharacters 1
+     DoorInfoList {
+      0
+     }
+     m_bIsWaterTight 1
+    }
+    CargoCompartmentSlot commander {
+     CompartmentUniqueName "commander"
+     CompartmentAction SCR_GetInUserAction "{6A940CCC05D2F507}" {
+      ParentContextList {
+       "default"
+      }
+      UIInfo UIInfo "{6A940CCC05D2F500}" {
+       Name "Get in - Commander"
+      }
+     }
+     GetOutAction SCR_GetOutAction "{6A940CCC05D2F501}" {
+      ParentContextList {
+       "default"
+      }
+     }
+     JumpOutAction SCR_JumpOutAction "{6A940CCC05D2F502}" {
+     }
+     SwitchSeatAction SCR_SwitchSeatAction "{6A940CCC05D2F503}" {
+     }
+     PassengerPositionInfo EntitySlotInfo "{83559B08EB3A5092}" {
+      Offset 0 8.2563 -1.5
+     }
+     SkipCharacterDoorAnimationsFromSeat 1
+     EjectUnconsciousAndDeadCharacters 1
+     DoorInfoList {
+      1
+     }
+     m_bIsWaterTight 1
+    }
+    CargoCompartmentSlot gunner {
+     CompartmentUniqueName "gunner"
+     CompartmentAction SCR_GetInUserAction "{6A940CCC05D2F51D}" {
+      ParentContextList {
+       "default"
+      }
+      UIInfo UIInfo "{6A940CCC05D2F51E}" {
+       Name "Get in - Gunner 1"
+      }
+     }
+     GetOutAction SCR_GetOutAction "{6A940CCC05D2F51F}" {
+      ParentContextList {
+       "default"
+      }
+     }
+     JumpOutAction SCR_JumpOutAction "{6A940CCC05D2F518}" {
+     }
+     SwitchSeatAction SCR_SwitchSeatAction "{6A940CCC05D2F51A}" {
+     }
+     PassengerPositionInfo EntitySlotInfo "{14D58EE691A0DE6F}" {
+      Offset -1.5 8.2563 1
+     }
+     SkipCharacterDoorAnimationsFromSeat 1
+     EjectUnconsciousAndDeadCharacters 1
+     DoorInfoList {
+      2
+     }
+     m_bIsWaterTight 1
+    }
+    CargoCompartmentSlot gunner2 {
+     CompartmentUniqueName "gunner2"
+     CompartmentAction SCR_GetInUserAction "{6A940CCC05D2F514}" {
+      ParentContextList {
+       "default"
+      }
+      UIInfo UIInfo "{6A940CCC05D2F516}" {
+       Name "Get in - Gunner 2"
+      }
+     }
+     GetOutAction SCR_GetOutAction "{6A940CCC05D2F517}" {
+      ParentContextList {
+       "default"
+      }
+     }
+     JumpOutAction SCR_JumpOutAction "{6A940CCC05D2F512}" {
+     }
+     SwitchSeatAction SCR_SwitchSeatAction "{6A940CCC05D2F513}" {
+     }
+     PassengerPositionInfo EntitySlotInfo "{3B3FEAEA7DEC804C}" {
+      Offset 1.5 8.2563 1
+     }
+     SkipCharacterDoorAnimationsFromSeat 1
+     EjectUnconsciousAndDeadCharacters 1
+     DoorInfoList {
+      3
+     }
+     m_bIsWaterTight 1
+    }
+    CargoCompartmentSlot gunner3 {
+     CompartmentUniqueName "gunner3"
+     CompartmentAction SCR_GetInUserAction "{6A940CCC05D2F52D}" {
+      ParentContextList {
+       "default"
+      }
+      UIInfo UIInfo "{6A940CCC05D2D6DF}" {
+       Name "Get in - Gunner 3"
+      }
+     }
+     GetOutAction SCR_GetOutAction "{6A940CCC05D2D6DC}" {
+      ParentContextList {
+       "default"
+      }
+     }
+     JumpOutAction SCR_JumpOutAction "{6A940CCC05D2D6DD}" {
+     }
+     SwitchSeatAction SCR_SwitchSeatAction "{6A940CCC05D2D6DA}" {
+     }
+     PassengerPositionInfo EntitySlotInfo "{16AA7D844A6F21E5}" {
+      Offset -1.5 8.2563 -1
+     }
+     SkipCharacterDoorAnimationsFromSeat 1
+     EjectUnconsciousAndDeadCharacters 1
+     DoorInfoList {
+      4
+     }
+     m_bIsWaterTight 1
+    }
+    CargoCompartmentSlot gunner4 {
+     CompartmentUniqueName "gunner4"
+     CompartmentAction SCR_GetInUserAction "{6A940CCC05D2D6D8}" {
+      ParentContextList {
+       "default"
+      }
+      UIInfo UIInfo "{6A940CCC05D2D6D9}" {
+       Name "Get in - Gunner 4"
+      }
+     }
+     GetOutAction SCR_GetOutAction "{6A940CCC05D2D6D6}" {
+      ParentContextList {
+       "default"
+      }
+     }
+     JumpOutAction SCR_JumpOutAction "{6A940CCC05D2D6D4}" {
+     }
+     SwitchSeatAction SCR_SwitchSeatAction "{6A940CCC05D2D6D5}" {
+     }
+     PassengerPositionInfo EntitySlotInfo "{648A114C6FC2A96E}" {
+      Offset 1.5 8.2563 -1
+     }
+     SkipCharacterDoorAnimationsFromSeat 1
+     EjectUnconsciousAndDeadCharacters 1
+     DoorInfoList {
+      5
+     }
+     m_bIsWaterTight 1
+    }
+    CargoCompartmentSlot gunner5 {
+     CompartmentUniqueName "gunner5"
+     CompartmentAction SCR_GetInUserAction "{6A940CCC05D2D6D2}" {
+      ParentContextList {
+       "default"
+      }
+      UIInfo UIInfo "{6A940CCC05D2D6D3}" {
+       Name "Get in - Gunner 5"
+      }
+     }
+     GetOutAction SCR_GetOutAction "{6A940CCC05D2D6D0}" {
+      ParentContextList {
+       "default"
+      }
+     }
+     JumpOutAction SCR_JumpOutAction "{6A940CCC05D2D6D1}" {
+     }
+     SwitchSeatAction SCR_SwitchSeatAction "{6A940CCC05D2D6CE}" {
+     }
+     PassengerPositionInfo EntitySlotInfo "{E0517BEE7E92C9BE}" {
+      Offset -1.5 8.2563 -2.5
+     }
+     SkipCharacterDoorAnimationsFromSeat 1
+     EjectUnconsciousAndDeadCharacters 1
+     DoorInfoList {
+      6
+     }
+     m_bIsWaterTight 1
+    }
+    CargoCompartmentSlot gunner6 {
+     CompartmentUniqueName "gunner6"
+     CompartmentAction SCR_GetInUserAction "{6A940CCC05D2D6CD}" {
+      ParentContextList {
+       "default"
+      }
+      UIInfo UIInfo "{6A940CCC05D2D6CB}" {
+       Name "Get in - Gunner 6"
+      }
+     }
+     GetOutAction SCR_GetOutAction "{6A940CCC05D2D6C8}" {
+      ParentContextList {
+       "default"
+      }
+     }
+     JumpOutAction SCR_JumpOutAction "{6A940CCC05D2D907}" {
+     }
+     SwitchSeatAction SCR_SwitchSeatAction "{6A940CCC05D2D909}" {
+     }
+     PassengerPositionInfo EntitySlotInfo "{104B1E0FB0B598F8}" {
+      Offset 1.5 8.2563 -2.5
+     }
+     SkipCharacterDoorAnimationsFromSeat 1
+     EjectUnconsciousAndDeadCharacters 1
+     DoorInfoList {
+      7
+     }
+     m_bIsWaterTight 1
+    }
+   }
+  }
+  SCR_BaseLockComponent "{6A940CCC05D2D90C}" {
+  }
+  SCR_EditableVehicleComponent "{57A7CE68BAD65027}" : "{AC79C9DD1CF681B3}Prefabs/Editor/Components/Vehicle_SCR_EditableEntityComponent.ct" {
+   m_UIInfo SCR_EditableVehicleUIInfo "{6A940CCC05D2D970}" {
+    Name "CGS Titan (Red)"
+    Description "AI boss titan - core weapons: 8 autocannons, S-13 rocket pods, Sen missile racks, point defense"
+    Icon "{A489F552FB7489C3}UI/Textures/Editor/EditableEntities/Characters/EditableEntity_Character_Custom.edds"
+    m_aAuthoredLabels {
+     CONTENT_MODDED ENTITYTYPE_VEHICLE
+    }
+    m_aAutoLabels {
+     SIZE_L
+    }
+    m_EntityBudgetCost {
+     SCR_EntityBudgetValue "{6A940CCC05D2D979}" {
+      m_BudgetType VEHICLES
+      m_Value 1
+     }
+     SCR_EntityBudgetValue "{6A940CCC05D2D97B}" {
+      m_BudgetType CAMPAIGN
+      m_Value 900
+     }
+     SCR_EntityBudgetValue "{6A940CCC05D2D97C}" {
+      m_BudgetType COOLDOWN
+      m_Value 1
+     }
+    }
+   }
+   m_bAutoRegister ALWAYS
+   m_vIconPos 0 3 0
+  }
+  SCR_VehicleCameraDataComponent "{6A940CCC05D2D963}" {
+   m_fHeight 80
+   m_fBobScale 0.25
+   m_fShakeScale 0.1
+   m_fDist_Max 90
+   m_fDist_Min 30
+   m_fDist_Desired 60
+   m_pCameraAlignData SCR_VehicleCameraAlignment "{6A940CCC05D2D969}" {
+    m_fInterpolateSpeed 0.2
+   }
+  }
+  SCR_VehicleDamageManagerComponent "{6A940CCC05D2D96D}" {
+   "Additional hit zones" {
+    BFA_MechHitZone Hull {
+     HZDefault 1
+     MaxHealth 2000
+     DamageReduction 2
+     DamageThreshold 1
+     "Melee multiplier" 0.01
+     "Kinetic multiplier" 0.1
+     "Fragmentation multiplier" 0.05
+     "Explosive multiplier" 1
+     "Incendiary multiplier" 0.7
+     "DamageState threshold" {
+      0.7 0.4 0.2
+     }
+     m_pDestructionHandler SCR_DestructionBaseHandler "{6A940CCC05D2D952}" {
+      m_iWreckDelay 250
+     }
+     m_sDestructionSoundEvent "SOUND_VEHICLE_DESTRUCTION"
+     m_sDestructionParticle "{5B42FC054E231C28}Particles/Vehicle/Vehicle_explosion_small_01.ptc"
+     m_eHitZoneGroup HULL
+     m_fIncendiaryReduction 3.5
+     m_fIncendiaryThreshold 0.1
+     m_fMinFireBurningTime 40
+     m_fMaxFireBurningTime 160
+     m_sDamagedParticle "{2AEA0DCC3EDDCCFB}Particles/Vehicle/Vehicle_smoke_damaged_low_01.ptc"
+     m_sDamagedParticleHeavy "{3F7B398D4D154CC9}Particles/Vehicle/Vehicle_smoke_damaged_medium_01.ptc"
+     m_sBurningParticle "{79DD3A5F1F3069CD}Particles/Vehicle/Vehicle_fire_engine_small.ptc"
+     m_sBurningGroundParticle "{A9259561960FD620}Particles/Vehicle/Vehicle_fire_ground_medium.ptc"
+     m_sFireStateSignal "EngineFireState"
+     m_bLogDamage 1
+    }
+   }
+   CollisionVelocityThreshold 100000
+   "Heavy damage threshold" 200000
+   m_SecondaryExplosions SCR_SecondaryExplosions "{E02DF7DE687CF827}" : "{35E9E298A6FC4085}Prefabs/Weapons/Core/Damage/SecondaryExplosions.conf" {
+   }
+   m_SecondaryFires SCR_SecondaryExplosions "{A6FB3D18B753B012}" : "{43047EEF7C62238B}Prefabs/Weapons/Core/Damage/SecondaryFires.conf" {
+   }
+   m_RepairConfig SCR_RepairConfig "{44EEB3375743D6D6}" : "{1F8D8C615B5EEAD6}Prefabs/Vehicles/Core/Configs/RepairSmokeHandlingConfig.conf" {
+   }
+   m_fOccupantsDamageSpeedThreshold 30
+   m_fOccupantsSpeedDeath 80
+   m_fVehicleDestroyDamage 10000
+  }
+  SCR_VehicleFactionAffiliationComponent "{6A940CCC05D2D95B}" {
+  }
+  SCR_VehicleSpawnProtectionComponent "{6A940CCC05D2D95C}" {
+  }
+  SCR_VehiclePerceivableComponent "{6A940CCC05D2D82C}" {
+   IlluminationLvPerLight 4
+   UnitType 0
+  }
+  SlotManagerComponent "{6A940CCC05D2D811}" {
+   Slots {
+    EntitySlotInfo Leg_L1 {
+     Offset -25.937 37.2636 -0.6
+     Angles 0 0 -4.1601
+     AutoTransform 1
+     MergePhysics 0
+     Prefab "{B67D2394B9A0C403}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Leg_Left.et"
+     DisablePhysicsInteraction 1
+    }
+    EntitySlotInfo Leg_R1 {
+     Offset 25.5466 36.7079 1.148
+     Angles 0.4879 -7.0279 3.9517
+     AutoTransform 1
+     MergePhysics 0
+     Prefab "{EA17EE85EEE75DBA}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Leg_Right.et"
+     DisablePhysicsInteraction 1
+    }
+    EntitySlotInfo CMD_GUN_L {
+     Offset -1 3 2.5
+     Prefab "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech_Autocannon.et"
+    }
+    EntitySlotInfo CMD_GUN_R {
+     Offset 1 3 2.5
+     Prefab "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech_Autocannon.et"
+    }
+    EntitySlotInfo SHOULDER_POD_L {
+     Offset -3.5 3.5 0
+     Prefab "{796DDC90350F1BC0}Prefabs/Vehicles/Mech/Weapons/S13/S13_Rocket_Pod.et"
+    }
+    EntitySlotInfo SHOULDER_POD_R {
+     Offset 3.5 3.5 0
+     Prefab "{796DDC90350F1BC0}Prefabs/Vehicles/Mech/Weapons/S13/S13_Rocket_Pod.et"
+    }
+    EntitySlotInfo BACK_AGM_L {
+     Offset -1.5 4 -2
+     Prefab "{CCBAC49D1CC785B0}Prefabs/Vehicles/Mech/Weapons/SenMissile/Sen_Missile_Launcher.et"
+    }
+    EntitySlotInfo BACK_AGM_R {
+     Offset 1.5 4 -2
+     Prefab "{CCBAC49D1CC785B0}Prefabs/Vehicles/Mech/Weapons/SenMissile/Sen_Missile_Launcher.et"
+    }
+    EntitySlotInfo GUN1_FRONT_L {
+     Offset -2.5 1 3
+     Prefab "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech_Autocannon.et"
+    }
+    EntitySlotInfo GUN2_FRONT_R {
+     Offset 2.5 1 3
+     Prefab "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech_Autocannon.et"
+    }
+    EntitySlotInfo GUN3_LEFT {
+     Offset -2.5 1 0
+     Prefab "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech_Autocannon.et"
+    }
+    EntitySlotInfo GUN4_RIGHT {
+     Offset 2.5 1 0
+     Prefab "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech_Autocannon.et"
+    }
+    EntitySlotInfo GUN5_REAR_L {
+     Offset -2.5 1 -3
+     Prefab "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech_Autocannon.et"
+    }
+    EntitySlotInfo GUN6_REAR_R {
+     Offset 2.5 1 -3
+     Prefab "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech_Autocannon.et"
+    }
+    EntitySlotInfo Arm_R1 {
+     Offset 4.9713 0.0028 -20.9342
+     Prefab "{BF5A995C0FD5EEAC}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Right_Cannon_Arm.et"
+    }
+    EntitySlotInfo Arm_L1 {
+     Offset -0.2317 -9.7885 -4.3073
+     Prefab "{438868CB49A24973}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Left_Missle_Arm.et"
+    }
+   }
+  }
+  ActionsManagerComponent "{6A940CCC05D2D81A}" {
+   ActionContexts {
+    UserActionContext "{6A940CCC05D2D81E}" {
+     ContextName "default"
+     Position PointInfo "{6A940CCC05D2D800}" {
+      Offset 0 -27 0
+     }
+     Radius 12
+    }
+   }
+  }
+  VehicleAnimationComponent "{6A940CCC05D2D807}" {
+   AnimGraph "{0D0A87608AB28074}Assets/Vehicles/Wheeled/UAZ452/workspaces/UAZ452.agr"
+   AnimInstance "{67DD957FB05A7B62}Assets/Vehicles/Wheeled/UAZ452/workspaces/UAZ452_vehicle.asi"
+   StartNode "VehicleMasterControl"
+   AlwaysActive 1
+   AnimInjection AnimationAttachmentInfo "{6A940CCC05D2D808}" {
+    AnimGraph "{0D0A87608AB28074}Assets/Vehicles/Wheeled/UAZ452/workspaces/UAZ452.agr"
+    AnimInstance "{2D3203B30E63757D}Assets/Vehicles/Wheeled/UAZ452/workspaces/UAZ452_player.asi"
+    BindingName "Vehicle"
+   }
+   AnimCommandsToBind {
+   }
+   AutoVariablesBind 1
+   AnimVariablesToBind {
+   }
+   DeactivationDelay 2
+  }
+  NwkMovementComponent "{6A940CCC05D2D80E}" {
+  }
+  RplComponent "{6A940CCC05D2D874}" {
+  }
+  Hierarchy "{6A940CCC05D2D879}" {
+  }
+ }
+ coords 72.432 34.23 195.995
+ m_eVehicleType VEHICLE
+}

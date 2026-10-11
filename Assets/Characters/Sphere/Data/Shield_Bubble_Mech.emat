@@ -1,0 +1,21 @@
+MatPBRBasicGlass {
+ Color 0.071 0.561 0.192 1
+ Emissive 0.071 0.561 0.192 1
+ EmissiveLV -2.316
+ EmissiveAbsoluteLV 0
+ AlphaMul 0.002
+ BlendMode AlphaBlend
+ NormalPower 0.2
+ NMOMap "{72652CC42E29D9B8}Assets/_SharedData/Glass/ST_Glass_Wired_01_NMO.edds"
+ DetailNormalPower 0.1
+ DetailNormalMap "{C0F1C3EF71FB7CA7}Assets/_SharedData/Plastic/ST_Plastic_Leather02_1m_NMO.edds"
+ DetailNormalMapUVTransform MatUVTransform "{6A5CB11791802FD4}" {
+  TilingU 0.2
+  TilingV 0.2
+ }
+ FresnelPower 5
+ Backscatterig 0
+ RefractionIntensity 0.15
+ DimIntensity 0.3
+ RefractionColor 1 0.985 0.939 1
+}

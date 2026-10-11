@@ -1,0 +1,17 @@
+MetaFileClass {
+ Name "{9DB90D59599A9164}Assets/Characters/Sphere/Data/Shield_Bubble_Mech.emat"
+ Configurations {
+  EMATResourceClass PC {
+  }
+  EMATResourceClass XBOX_ONE : PC {
+  }
+  EMATResourceClass XBOX_SERIES : PC {
+  }
+  EMATResourceClass PS4 : PC {
+  }
+  EMATResourceClass PS5 : PC {
+  }
+  EMATResourceClass HEADLESS : PC {
+  }
+ }
+}

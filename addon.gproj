@@ -1,0 +1,8 @@
+GameProject {
+ ID "MechCoreCGS"
+ GUID "6A8C4B3A46C28E1B"
+ TITLE "Mech Core CGS"
+ Dependencies {
+  "58D0FB3206B6F859"
+ }
+}

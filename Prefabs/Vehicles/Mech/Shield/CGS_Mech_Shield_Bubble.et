@@ -1,0 +1,21 @@
+GenericEntity {
+ ID "FCE1CBE097E9413D"
+ components {
+  MeshObject "{1D3867107A4EB519}" {
+   Object "{BF012179927EE2BD}Assets/Characters/Sphere/spheretest.xob"
+   Materials {
+    MaterialAssignClass "{3182D97184605D59}" {
+     SourceMaterial "DefaultGeneratedMaterial"
+     AssignedMaterial "{9DB90D59599A9164}Assets/Characters/Sphere/Data/Shield_Bubble_Mech.emat"
+    }
+   }
+  }
+  RplComponent "{6A9623BDABECB937}" {
+   "Rpl State Override" Runtime
+   AutoHierarchy 1
+  }
+  Hierarchy "{6A9623BDB6F8D415}" {
+  }
+ }
+ coords 133.648 85.178 248.412
+}

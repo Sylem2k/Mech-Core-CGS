@@ -1,0 +1,11 @@
+GenericEntity {
+ ID "B7190D957C133848"
+ components {
+  SignalsManagerComponent "{4F61CE1863C04EBD}" {
+  }
+  MeshObject "{65343E93B3B73516}" {
+  }
+  Hierarchy "{FC06D194C19CEF1A}" {
+  }
+ }
+}
