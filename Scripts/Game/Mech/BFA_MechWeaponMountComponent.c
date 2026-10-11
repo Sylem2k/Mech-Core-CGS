@@ -12,7 +12,7 @@ class BFA_MechWeaponMountDefinition
 	[Attribute("MOUNT", UIWidgets.EditBox, "Stable mount ID used by weapons and future hardpoints.", category: "Mount")]
 	string m_sMountId;
 
-	[Attribute("", UIWidgets.EditBox, "Root SlotManager slot containing the movable weapon/arm entity.", category: "Mount")]
+	[Attribute("", UIWidgets.EditBox, "Root SlotManager slot containing the movable weapon/arm entity. For a weapon in a part's own slot use Part/Slot, e.g. Arm_L1/Titan_Rocket_Pod.", category: "Mount")]
 	string m_sSlotName;
 
 	[Attribute("DRIVER", UIWidgets.EditBox, "Crew station whose aim direction controls this mount.", category: "Mount")]
@@ -164,7 +164,29 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		if (!m_pSlotManager || mount.m_sSlotName.IsEmpty())
 			return false;
 
-		EntitySlotInfo slot = m_pSlotManager.GetSlotByName(mount.m_sSlotName);
+		// "Arm_L1/Titan_Rocket_Pod" = a slot on a part that sits in one of the mech's slots
+		// (e.g. a pod in the left arm's own SlotManager, riding on its hand bone).
+		array<string> path = {};
+		mount.m_sSlotName.Split("/", path, true);
+		if (path.IsEmpty())
+			return false;
+
+		EntitySlotInfo slot = m_pSlotManager.GetSlotByName(path[0]);
+		for (int p = 1; slot && p < path.Count(); p++)
+		{
+			IEntity holder = slot.GetAttachedEntity();
+			if (!holder)
+				return false;
+
+			SlotManagerComponent holderSlots = SlotManagerComponent.Cast(holder.FindComponent(SlotManagerComponent));
+			if (!holderSlots)
+			{
+				BFA_MechLog.Log(string.Format("[BFA MOUNT] %1: '%2' has no SlotManager for slot '%3'", mount.m_sMountId, path[p - 1], path[p]), LogLevel.WARNING);
+				return false;
+			}
+			slot = holderSlots.GetSlotByName(path[p]);
+		}
+
 		if (!slot)
 			return false;
 

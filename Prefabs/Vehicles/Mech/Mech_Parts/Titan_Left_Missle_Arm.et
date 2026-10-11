@@ -50,6 +50,16 @@ GenericEntity {
     }
    }
   }
+  SlotManagerComponent "{6A973A7F5296A2B9}" {
+   Slots {
+    InventoryStorageSlot Titan_Rocket_Pod {
+     PivotID "J3"
+     Offset 5.2066 3.9722 24.5918
+     Angles 5.98 0.6548 -83.7398
+     Prefab "{06D959742FAB2146}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Pod_System.et"
+    }
+   }
+  }
   AnimationControllerComponent "{6A98D1A0B1C2E310}" {
    AnimGraph "{F8BD36FA8416C4A6}Anims/Workspaces/Mech/IK_Titan_Arm.agr"
    AnimInstance "{A9F566D32EEE75E4}Anims/Workspaces/Mech/IK_Titan_Arm.asi"

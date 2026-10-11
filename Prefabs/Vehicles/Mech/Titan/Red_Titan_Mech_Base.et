@@ -143,9 +143,6 @@ Vehicle {
      m_sAimMountId "Arm_Left_Pod_System"
      m_bBindExistingAimMount 1
      m_iDefaultModuleId 5
-     m_Point PointInfo "{6A98C0A1B2C3D402}" {
-      Offset -50.5365 52.4448 34.2899
-     }
      m_sControlStation "COMMANDER"
      m_iWeaponGroup 2
     }
@@ -423,17 +420,15 @@ Vehicle {
     }
     BFA_MechWeaponMountDefinition "{6A98C0A1B2C3D403}" {
      m_sMountId "Arm_Left_Pod_System"
-     m_sSlotName "Arm_Left_Pod_System"
+     m_sSlotName "Arm_L1/Titan_Rocket_Pod"
      m_sControlStation "COMMANDER"
      m_iWeaponGroup 2
-     m_fYawMin -20
-     m_fYawMax 20
-     m_fPitchMin -10
-     m_fPitchMax 25
+     m_fYawMin 0
+     m_fYawMax 0
+     m_fPitchMin 0
+     m_fPitchMax 0
      m_bInvertPitch 0
      m_fConvergenceDistance 1000
-     m_sFollowArmMount "ARM_L"
-     m_fWeaponScale 2
     }
     BFA_MechWeaponMountDefinition "{6A98D1A0B1C2E305}" {
      m_sMountId "ARM_R"
@@ -1169,7 +1164,7 @@ Vehicle {
      Prefab "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech_Autocannon.et"
     }
     EntitySlotInfo Arm_R1 {
-     Offset 38.1764 72.1806 5.5868
+     Offset 38.1764 68.1307 5.5868
      Prefab "{BF5A995C0FD5EEAC}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Right_Cannon_Arm.et"
     }
     EntitySlotInfo Arm_L1 {
