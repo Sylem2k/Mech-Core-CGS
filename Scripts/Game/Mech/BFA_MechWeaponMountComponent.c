@@ -892,12 +892,14 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 	//! Once a second: where the IK arm was told to reach, and where its hand (J3) really points.
 	protected void DebugIkArm(BFA_MechWeaponMountDefinition mount, float yaw, float pitch, vector aimWorld, vector targetLocal)
 	{
+		// Own timer (the aim solver's diagnostics share m_fDiagNextTime and would swallow this).
 		float now = 0;
 		if (GetOwner() && GetOwner().GetWorld())
 			now = GetOwner().GetWorld().GetWorldTime() * 0.001;
-		if (now < mount.m_fDiagNextTime)
+		float next;
+		if (m_mTraceNext.Find("ik" + mount.m_sMountId, next) && now < next)
 			return;
-		mount.m_fDiagNextTime = now + 1.0;
+		m_mTraceNext.Set("ik" + mount.m_sMountId, now + 1.0);
 
 		string hand = "no skeleton";
 		Animation anim = mount.m_pEntity.GetAnimation();
@@ -912,7 +914,9 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 				if (handFwd.LengthSq() > 0.000001)
 					handFwd.Normalize();
 				float off = Math.Acos(Math.Clamp(vector.Dot(handFwd, aimWorld), -1, 1)) * Math.RAD2DEG;
-				hand = string.Format("handPos=%1 handFwd=%2 offByDeg=%3", handPos, handFwd, off);
+				vector mech = GetOwner().CoordToLocal(handPos);
+				vector targetMech = GetOwner().CoordToLocal(mount.m_pEntity.CoordToParent(targetLocal));
+				hand = string.Format("handInMech=%1 targetInMech=%2 handFwdInMech=%3 offByDeg=%4", mech, targetMech, GetOwner().VectorToLocal(handFwd), off);
 			}
 			else
 				hand = "bone J3 not found";
