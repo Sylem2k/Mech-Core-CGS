@@ -99,6 +99,8 @@ class BFA_MechWeaponMountDefinition
 	vector m_mFollowBoneRest[4];       // bone in mech model space when the rest pose was captured
 	float m_fAimYaw;
 	float m_fAimPitch;
+	vector m_vLastAimPoint;            // world point this mount was last told to aim at
+	bool m_bHasAimPoint;
 	vector m_mBaseLocalTransform[4];
 	vector m_mSlotLocalTransform[4];   // slot pose as placed in the SlotManager (before hardpoint offset)
 	bool m_bResolved;
@@ -568,6 +570,8 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		// Never allow aiming to move the physical mount position.
 		finalMat[3] = base[3];
 
+		mount.m_vLastAimPoint = aimPointWorld;
+		mount.m_bHasAimPoint = true;
 		mount.m_fAimYaw = yaw;
 		mount.m_fAimPitch = pitch;
 		ApplyAimDriver(mount, yaw, pitch, finalMat);
@@ -1051,6 +1055,26 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		if (occupant)
 			Trace("occ" + mount.m_sMountId, string.Format("mount %1: station %2 is occupied by %3, so the driver does not aim it", mount.m_sMountId, mount.m_sControlStation, occupant));
 		return occupant == null;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! The point the mount holding this entity was last told to aim at (the station's crosshair /
+	//! AI target). Weapons on IK arms use it: an IK hand bone moves but does not turn, so its axis
+	//! alone cannot be trusted as the firing direction.
+	bool GetAimPointForEntity(IEntity weaponEntity, out vector aimPoint)
+	{
+		if (!m_aMounts || !weaponEntity)
+			return false;
+
+		foreach (BFA_MechWeaponMountDefinition mount : m_aMounts)
+		{
+			if (mount && mount.m_bHasAimPoint && mount.m_pEntity == weaponEntity)
+			{
+				aimPoint = mount.m_vLastAimPoint;
+				return true;
+			}
+		}
+		return false;
 	}
 
 	//------------------------------------------------------------------------------------------------
