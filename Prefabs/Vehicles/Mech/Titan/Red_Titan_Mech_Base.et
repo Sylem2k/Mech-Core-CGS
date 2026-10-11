@@ -219,7 +219,6 @@ Vehicle {
   BFA_MechWeaponComponent "{6A940CCC05D26C7B}" {
   }
   BFA_MechWeaponMountComponent "{6A940CCC05D26C7A}" {
-   m_bDebugAim 1
    m_aMounts {
     BFA_MechWeaponMountDefinition "{6A98C0A1B2C3D403}" {
      m_sMountId "Arm_Left_Pod_System"
@@ -264,7 +263,7 @@ Vehicle {
      m_sIkPivotBone "J1"
     }
    }
-   m_bDebugAim 0
+   m_bDebugAim 1
   }
   CGS_MechBrainComponent "{6A940CCC05D26C63}" {
    m_eMode HUNT

@@ -109,6 +109,8 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 	[Attribute("false", UIWidgets.CheckBox, "Print aim solver diagnostics once per second per mount while a local station is aiming.", category: "Diagnostics")]
 	protected bool m_bDebugAim;
 
+	static const string DRIVER_STATION = "DRIVER";
+
 	protected SlotManagerComponent m_pSlotManager;
 	protected int m_iResolveAttempts;
 	protected bool m_bHasFollowers;
@@ -928,7 +930,7 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 
 		foreach (BFA_MechWeaponMountDefinition mount : m_aMounts)
 		{
-			if (!mount || mount.m_sControlStation != stationId)
+			if (!mount || !StationAimsMount(stationId, mount))
 				continue;
 
 			ApplyMountAimDirection(mount, mechLocalAimDirection);
@@ -945,11 +947,30 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 
 		foreach (BFA_MechWeaponMountDefinition mount : m_aMounts)
 		{
-			if (!mount || mount.m_sControlStation != stationId)
+			if (!mount || !StationAimsMount(stationId, mount))
 				continue;
 
 			ApplyMountAimPoint(mount, aimPointWorld);
 		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! A mount follows its own station's aim. When nobody sits in that station (e.g. COMMANDER
+	//! weapons on a boss crewed by a single AI pilot), the DRIVER's aim moves it instead - the
+	//! driver can already fire those weapons, so its guns and arms must point where it shoots.
+	protected bool StationAimsMount(string stationId, BFA_MechWeaponMountDefinition mount)
+	{
+		if (mount.m_sControlStation == stationId)
+			return true;
+
+		if (stationId != DRIVER_STATION || mount.m_sControlStation.IsEmpty())
+			return false;
+
+		BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(GetOwner().FindComponent(BFA_MechCoreComponent));
+		if (!core)
+			return false;
+
+		return core.GetStationOccupant(mount.m_sControlStation) == null;
 	}
 
 	//------------------------------------------------------------------------------------------------
