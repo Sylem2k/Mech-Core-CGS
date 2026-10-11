@@ -10,9 +10,6 @@ Vehicle SampleMech2 : "{33D70479FF3498E0}Prefabs/Vehicles/Mech/SampleMech/Sample
 Vehicle Red_Titan_Mech_Base1 : "{971EA16EEA9DBA2A}Prefabs/Vehicles/Mech/Titan/Red_Titan_Mech_Base.et" {
  coords 73.338 12.809 203.346
 }
-GenericEntity : "{BF5A995C0FD5EEAC}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Right_Cannon_Arm.et" {
- coords 149.724 64.795 188.045
-}
 GenericEntity : "{CBBAB4D632239450}Prefabs/Vehicles/Mech/Weapons/Autocannon/Mech_Autocannon.et" {
  coords 81.787 4.858 54.17
 }
