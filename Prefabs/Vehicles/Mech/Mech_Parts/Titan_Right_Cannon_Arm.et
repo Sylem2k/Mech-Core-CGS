@@ -12,7 +12,8 @@ GenericEntity {
    m_bSupportsPulseFire 1
    m_FX BFA_MechWeaponFX "{6A9623BA6FF2FC24}" {
     m_sMuzzleParticle "{25B1DC5E3A244EFB}Particles/Weapon/RPG_22_muzzle_front.ptc"
-    m_sSoundProject "{B3DBE896180DFAE4}Sounds/Rocks/Granite/Fumarole_01/Rocks_Fumarole_01.acp"
+    m_sSoundProject "{D7FD0CE25E74A7A8}Sounds/Weapons/Machineguns/UK59/Cannon_shot.acp"
+    m_sFireSoundEvent "SOUND_SHOT"
     m_sProjectilePrefab "{8B55F8686833B12B}Prefabs/Weapons/Core/FragGrenade_Base.et"
    }
    m_fHeatPerShot 25
@@ -57,6 +58,7 @@ GenericEntity {
    m_fShellSpeed 700
    m_iShellsPerRound 8
    m_iShellIntervalMs 80
+   m_sAltFireSoundEvent "SOUND_SHOT_2"
    m_bDebug 1
   }
   MeshObject "{6A9623BA6FF2FC36}" {

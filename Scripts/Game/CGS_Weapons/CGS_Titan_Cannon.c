@@ -58,6 +58,9 @@ class CGS_Titan_Cannon : BFA_MechWeaponModuleComponent
 	[Attribute("", UIWidgets.EditBox, "Charge-up sound event inside the Effects sound file (.acp). Empty = silent charge.", category: "Charge")]
 	protected string m_sChargeSoundEvent;
 
+	[Attribute("", UIWidgets.EditBox, "Second fire sound event in the same Effects .acp (e.g. SOUND_SHOT_2). Shots alternate between Fire Sound Event and this one. Empty = always the same sound.", category: "Titan Cannon")]
+	protected string m_sAltFireSoundEvent;
+
 	// ---- Diagnostics -----------------------------------------------------------------------
 	[Attribute("false", UIWidgets.CheckBox, "Print every round, hit and splash to the log.", category: "Diagnostics")]
 	protected bool m_bDebug;
@@ -67,6 +70,7 @@ class CGS_Titan_Cannon : BFA_MechWeaponModuleComponent
 	protected int m_iChargeToken;  // a newer charge / volley makes older scheduled calls do nothing
 	protected IEntity m_pRoundInstigator;
 	protected int m_iShellsLeft;
+	protected bool m_bAltSound;    // local, per machine: which of the two fire sounds is next
 
 	//------------------------------------------------------------------------------------------------
 	override void OnPostInit(IEntity owner)
@@ -202,6 +206,26 @@ class CGS_Titan_Cannon : BFA_MechWeaponModuleComponent
 
 		if (m_bDebug)
 			Print(string.Format("[CGS TITAN CANNON] impact at %1: direct=%2 (-%3 hp), splash targets=%4", position, hitEntity, directLost, splashed));
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Every machine: alternate the two fire sounds shot by shot.
+	override void ClientOnShot(vector start, vector end)
+	{
+		BFA_MechWeaponFX fx = GetFX();
+		if (!fx || m_sAltFireSoundEvent.IsEmpty())
+		{
+			super.ClientOnShot(start, end);
+			return;
+		}
+
+		string mainEvent = fx.m_sFireSoundEvent;
+		if (m_bAltSound)
+			fx.m_sFireSoundEvent = m_sAltFireSoundEvent;
+		m_bAltSound = !m_bAltSound;
+
+		super.ClientOnShot(start, end);
+		fx.m_sFireSoundEvent = mainEvent;
 	}
 
 	//------------------------------------------------------------------------------------------------

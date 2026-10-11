@@ -3,7 +3,7 @@ AudioClass {
   SoundClass "7177" {
    id 7177
    name "SOUND_SHOT"
-   comment "Las cannon shot"
+   comment "Titan cannon shot 1"
    version 5
    tl 462.727 -27.273
    ctl 0 -21
@@ -21,6 +21,27 @@ AudioClass {
    outState 8203
    outStatePort 79879
   }
+  SoundClass "7178" {
+   id 7178
+   name "SOUND_SHOT_2"
+   comment "Titan cannon shot 2"
+   version 5
+   tl 462.727 172.727
+   ctl 0 -21
+   ins {
+    ConnectionsClass "con:64" {
+     id 64
+     links {
+      ConnectionClass "3091:65" {
+       id 3091
+       port 65
+      }
+     }
+    }
+   }
+   outState 8203
+   outStatePort 79880
+  }
  }
  mixers {
   MixerClass "8203" {
@@ -37,6 +58,15 @@ AudioClass {
      links {
       ConnectionClass "7177:65" {
        id 7177
+       port 65
+      }
+     }
+    }
+    ConnectionsClass "con:79880" {
+     id 79880
+     links {
+      ConnectionClass "7178:65" {
+       id 7178
        port 65
       }
      }
@@ -98,6 +128,53 @@ AudioClass {
     7 0
    }
   }
+  ShaderClass "3091" {
+   id 3091
+   name "Shader Shot 2"
+   version 5
+   tl 241.818 158.182
+   ins {
+    ConnectionsClass "con:0" {
+     id 0
+     links {
+      ConnectionClass "5149:65" {
+       id 5149
+       port 65
+      }
+     }
+    }
+    ConnectionsClass "con:1" {
+     id 1
+     links {
+      ConnectionClass "4116:65" {
+       id 4116
+       port 65
+      }
+     }
+    }
+    ConnectionsClass "con:2" {
+     id 2
+     links {
+      ConnectionClass "6166:65" {
+       id 6166
+       port 65
+      }
+     }
+    }
+    ConnectionsClass "con:64" {
+     id 64
+     links {
+      ConnectionClass "2053:65" {
+       id 2053
+       port 65
+      }
+     }
+    }
+   }
+   pi {
+    7 0
+   }
+  }
  }
  amplitudes {
   AmplitudeClass "4115" {
@@ -107,6 +184,13 @@ AudioClass {
    tl 250 -223
    curve Linear
   }
+  AmplitudeClass "4116" {
+   id 4116
+   name "Amplitude Shot 2"
+   version 5
+   tl 250 377
+   curve Linear
+  }
  }
  frequency {
   FrequencyClass "6165" {
@@ -114,6 +198,13 @@ AudioClass {
    name "Frequency Shot"
    version 5
    tl 242.727 -136.364
+   enableDistanceAtt 1
+  }
+  FrequencyClass "6166" {
+   id 6166
+   name "Frequency Shot 2"
+   version 5
+   tl 242.727 263.636
    enableDistanceAtt 1
   }
  }
@@ -127,7 +218,20 @@ AudioClass {
    "Pitch variance" 3
    Samples {
     AudioBankSampleClass Sample {
-     Filename "{A810F7CF1FD11DBD}Sounds/Weapons/Machineguns/UK59/las_cannon.wav"
+     Filename "{96B784F365194749}Sounds/Weapons/Machineguns/UK59/cannon 1.wav"
+    }
+   }
+  }
+  BankLocalClass "2053" {
+   id 2053
+   name "Shot 2"
+   version 7
+   tl 0 168
+   Volume -6
+   "Pitch variance" 3
+   Samples {
+    AudioBankSampleClass Sample {
+     Filename "{0FA93D6A78FE76D9}Sounds/Weapons/Machineguns/UK59/cannon 2.wav"
     }
    }
   }
@@ -138,6 +242,13 @@ AudioClass {
    name "Spatiality Shot"
    version 5
    tl 246 -297.909
+   spatialFactor 1
+  }
+  SpatialityClass "5149" {
+   id 5149
+   name "Spatiality Shot 2"
+   version 5
+   tl 246 302.091
    spatialFactor 1
   }
  }
