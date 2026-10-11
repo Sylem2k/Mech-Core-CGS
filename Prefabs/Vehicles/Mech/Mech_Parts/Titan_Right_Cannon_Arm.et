@@ -12,7 +12,8 @@ GenericEntity {
    m_bSupportsPulseFire 1
    m_FX BFA_MechWeaponFX "{6A9623BA6FF2FC24}" {
     m_sMuzzleParticle "{25B1DC5E3A244EFB}Particles/Weapon/RPG_22_muzzle_front.ptc"
-    m_sProjectilePrefab "{EFC76BFD1984F44D}Prefabs/Weapons/Core/Cannon_base.et"
+    m_sSoundProject "{B3DBE896180DFAE4}Sounds/Rocks/Granite/Fumarole_01/Rocks_Fumarole_01.acp"
+    m_sProjectilePrefab "{8B55F8686833B12B}Prefabs/Weapons/Core/FragGrenade_Base.et"
    }
    m_fHeatPerShot 25
    m_MuzzlePoint PointInfo "{6A9623BA6FF2FC2D}" {
@@ -80,5 +81,5 @@ GenericEntity {
   Hierarchy "{6A9623BA6FF2FC00}" {
   }
  }
- coords 149.724 64.795 188.045
+ coords 164.127 6.812 195.484
 }
