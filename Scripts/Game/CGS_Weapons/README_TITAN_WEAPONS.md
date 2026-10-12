@@ -304,3 +304,28 @@ On a test copy, turn on **Log Damage** on the hull and **Log Hits** on the hit b
 ```
 
 Turn **Log Hits** off on every hit box before release.
+
+### Boss mode (`CGS_MechBossComponent`)
+
+Lets one titan survive a whole server shooting at it. Put it on the mech next to the shield.
+
+**Damage caps (per second).** Damage up to the cap counts fully; anything over it only counts **Over Cap Multiplier** (15%). So 100 players can't melt it in seconds, but more players still helps a little. The caps apply before the shield, so they also slow how fast the shield drains.
+
+| Setting | Red Titan | What it limits |
+|---|---|---|
+| Heavy Per Second | 300 | Rockets, explosives, cannons on the hull |
+| Small Arms Per Second | 60 | Bullets and fragments on the hull: rifles chip in but never crowd out the rockets |
+| Part Heavy / Small Arms Per Second | 150 / 30 | The same, for each leg and arm separately |
+
+**Shield phases.** When the hull drops below each listed fraction (Red Titan: 0.66 and 0.33), the shield comes back to full at once.
+
+**Minimum fight length** (if every second hits the heavy cap): shield 15,000 ÷ 300 = 50 s, ×3 with the phases, plus hull 60,000 ÷ 300 = 200 s. That's about **6 minutes of perfect pressure**; with players dying and reloading, expect 10–15 minutes.
+
+Turn on **Debug** to get a summary every 10 s:
+
+```
+[CGS BOSS] last 10 s: 8400 damage in (840/s), 3150 counted after caps (315/s) | hull 51200 / 60000
+[CGS BOSS] ... hull at 66 percent - PHASE 1: shield restored
+```
+
+If "damage in" is far above "counted", the caps are doing the work. Raise them for a shorter fight, lower them for a longer one.

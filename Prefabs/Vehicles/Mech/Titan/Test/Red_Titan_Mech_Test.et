@@ -182,11 +182,11 @@ Vehicle {
      m_sRightLegSlotName "Leg_R1"
     }
    }
-   m_fSpeed 5
+   m_fSpeed 1
    m_bCanSprint 1
-   m_fSprintSpeed 8
-   m_fStrafeSpeed 3
-   m_fSprintStrafeSpeed 4
+   m_fSprintSpeed 2
+   m_fStrafeSpeed 2
+   m_fSprintStrafeSpeed 3
    m_fAvgHeightSpeed 2
    m_fAngularSpeed 0.35
    m_fSizeScale 7
@@ -256,7 +256,7 @@ Vehicle {
    m_sPilotPrefab "{C56A957843F590E5}Prefabs/Characters/Factions/OPFOR/USSR_Army/KLMK/REDFOR_BRAIN.et"
    m_fPatrolRadius 1
    m_fPatrolPause 1
-   m_fHuntRadius 1500
+   m_fHuntRadius 1000
    m_fRehomeDistance 1
   }
   CGS_MechDeathComponent "{56C5072E338D47A8}" {
@@ -281,10 +281,10 @@ Vehicle {
    m_bDebug 0
   }
   CGS_MechShieldComponent "{6A940CCC05D26C62}" {
-   m_fMaxShield 500
-   m_fRegenPerSecond 220
-   m_fRegenDelay 5
-   m_fBrokenDelay 300
+   m_fMaxShield 15000
+   m_fRegenPerSecond 250
+   m_fRegenDelay 6
+   m_fBrokenDelay 90
    m_fReactivateAt 0.25
    m_fBleedThrough 0
    m_fEmpCost 3
@@ -713,14 +713,14 @@ Vehicle {
    "Additional hit zones" {
     BFA_MechHitZone Hull {
      HZDefault 1
-     MaxHealth 20000
+     MaxHealth 60000
      DamageReduction 0
      DamageThreshold 0
-     "Melee multiplier" 1
-     "Kinetic multiplier" 1
-     "Fragmentation multiplier" 1
+     "Melee multiplier" 0.05
+     "Kinetic multiplier" 0.05
+     "Fragmentation multiplier" 0.05
      "Explosive multiplier" 1
-     "Incendiary multiplier" 1
+     "Incendiary multiplier" 0.3
      "DamageState threshold" {
       0.7 0.4 0.2
      }
@@ -736,7 +736,7 @@ Vehicle {
      m_sBurningParticle "{79DD3A5F1F3069CD}Particles/Vehicle/Vehicle_fire_engine_small.ptc"
      m_sBurningGroundParticle "{A9259561960FD620}Particles/Vehicle/Vehicle_fire_ground_medium.ptc"
      m_sFireStateSignal "EngineFireState"
-     m_bLogDamage 1
+     m_bLogDamage 0
     }
    }
    CollisionVelocityThreshold 100000
@@ -850,7 +850,6 @@ Vehicle {
   Hierarchy "{6A940CCC05D2D879}" {
   }
  }
- coords 73.259 40.944 231.521
- angles 0 -179.711 0
+ coords 107.285 58.659 50.37
  m_eVehicleType VEHICLE
 }

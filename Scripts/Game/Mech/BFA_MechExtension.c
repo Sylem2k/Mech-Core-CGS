@@ -34,6 +34,9 @@ class BFA_MechExtension
 	// hit the mech. -1 = not a MechCore weapon (vanilla RPG, tank, mine ...).
 	static int s_iCurrentDamageKind = -1;
 	static IEntity s_pCurrentShooterMech;
+	//! While a part passes its share of a hit on to the hull: the ORIGINAL damage type of that
+	//! hit (the hull receives it as TRUE damage). -1 = not forwarding.
+	static int s_iPartForwardType = -1;
 
 	//------------------------------------------------------------------------------------------------
 	static BFA_MechExtension Get()
@@ -239,7 +242,10 @@ class BFA_MechPartHitZone : SCR_HitZone
 
 		// TRUE: the part's multipliers already acted as its armour; the shield still filters it.
 		SCR_DamageContext context = new SCR_DamageContext(EDamageType.TRUE, damage * m_fHullShare, empty, mech, hull, damageContext.instigator, null, -1, -1);
+		int previousForward = BFA_MechExtension.s_iPartForwardType;
+		BFA_MechExtension.s_iPartForwardType = damageContext.damageType;
 		hullManager.HandleDamage(context);
+		BFA_MechExtension.s_iPartForwardType = previousForward;
 
 		// The part loses its own health too (MaxHealth on this hit zone). At 0 it is destroyed:
 		// LEG = slower mech, WEAPON = that weapon stops. Repairs restore it.

@@ -10,7 +10,7 @@ GenericEntity {
      DamageThreshold 0
      m_fMultiplier 1
      m_sLabel "BODY CHEST"
-     m_bLogHits 1
+     m_bLogHits 0
     }
    }
   }

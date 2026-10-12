@@ -158,6 +158,19 @@ class CGS_MechShieldComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! [Server] Shield back to full at once (boss phases).
+	void ServerRestoreFull()
+	{
+		if (!Replication.IsServer())
+			return;
+
+		m_fShield = m_fMaxShield;
+		m_bDown = false;
+		Replication.BumpMe();
+		OnRepShield();
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! 0..1 for HUDs.
 	float GetShield01()
 	{
