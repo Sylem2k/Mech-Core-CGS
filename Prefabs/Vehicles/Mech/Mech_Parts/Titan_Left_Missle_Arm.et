@@ -3,40 +3,6 @@ GenericEntity {
  components {
   SignalsManagerComponent "{6A9623BA2165408D}" {
   }
-  CGS_Titan_Missile "{6A9623BA21654098}" {
-   m_sModuleId "TITAN_MISSILE"
-   m_sDisplayName "Titan Arm Missiles"
-   m_sControlStation "COMMANDER"
-   m_iWeaponGroup 2
-   m_bSupportsHeldFire 1
-   m_bSupportsPulseFire 1
-   m_FX BFA_MechWeaponFX "{6A9623BA2165409F}" {
-    m_sMuzzleParticle "{25B1DC5E3A244EFB}Particles/Weapon/RPG_22_muzzle_front.ptc"
-   }
-   m_fHeatPerShot 15
-   m_eDamageKind EXPLOSIVE
-   m_bFireAtAimPoint 1
-   m_MuzzlePoint PointInfo "{6A9623BA216540A1}" {
-    PivotID "J3"
-   }
-   m_iMagazineSize 8
-   m_fReloadTime 10
-   m_fRocketSpeed 90
-   m_fRange 1500
-   m_iSalvoCount 4
-   m_iSalvoIntervalMs 800
-   m_iRefireMs 12000
-   m_fSpreadDeg 2
-   m_fDirectHitDamage 900
-   m_fSplashDamage 300
-   m_fSplashRadius 10
-   m_bDebug 1
-   m_bHoming 1
-   m_bLockTargets 1
-   m_fTurnRate 70
-   m_fArmingDistance 20
-   m_fLoftAngle 0
-  }
   MeshObject "{6A9623BA216540E8}" {
    Object "{2E0A7C1F57556FC1}Common/Models/Titan/Titan_Left_Arm_Updated.xob"
   }
@@ -70,4 +36,5 @@ GenericEntity {
   Hierarchy "{6A9623BA216540F0}" {
   }
  }
+ coords -63.948 23.252 30.334
 }

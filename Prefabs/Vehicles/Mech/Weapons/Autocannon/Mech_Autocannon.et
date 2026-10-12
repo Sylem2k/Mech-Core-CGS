@@ -15,7 +15,7 @@ GenericEntity : "{8942F09222374843}Prefabs/Vehicles/Mech/Core/Mech_Module_Base.e
     m_sProjectilePrefab "{D52D998FF0829639}Prefabs/Particles/RocketTrace.et"
     m_sTrailParticle "{0F364F4CD1D72350}Particles/Weapon/Trail_PG7VL.ptc"
     m_fProjectileSpeed 1
-    m_bDebugTracer 1
+    m_bDebugTracer 0
    }
    m_fHeatPerShot 0.5
    m_Crosshair BFA_MechCrosshair "{6A9623AF75AD0095}" {

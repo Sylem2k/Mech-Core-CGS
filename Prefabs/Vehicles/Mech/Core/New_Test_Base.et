@@ -198,7 +198,7 @@ Vehicle {
    "Additional hit zones" {
     BFA_MechHitZone Hull {
      HZDefault 1
-     m_bLogDamage 1
+     m_bLogDamage 0
      MaxHealth 2000
      DamageReduction 2
      DamageThreshold 1

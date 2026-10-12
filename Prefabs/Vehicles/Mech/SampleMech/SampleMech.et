@@ -331,7 +331,7 @@ Vehicle {
      m_sBurningParticle "{79DD3A5F1F3069CD}Particles/Vehicle/Vehicle_fire_engine_small.ptc"
      m_sBurningGroundParticle "{A9259561960FD620}Particles/Vehicle/Vehicle_fire_ground_medium.ptc"
      m_sFireStateSignal "EngineFireState"
-     m_bLogDamage 1
+     m_bLogDamage 0
     }
    }
    CollisionVelocityThreshold 100000

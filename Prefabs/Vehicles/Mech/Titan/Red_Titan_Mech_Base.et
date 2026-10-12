@@ -207,7 +207,7 @@ Vehicle {
    m_fAngularSpeed 0.35
    m_fSizeScale 7
    m_GroundPoint PointInfo "{6A940CCC05D27385}" {
-    Offset 0 -31.2287 0
+    Offset 0 -32.1085 0
    }
    m_fParkedCrouch 0
    m_fGroundProbeForward 2
@@ -265,7 +265,7 @@ Vehicle {
      m_bIkTargetFromRest 1
     }
    }
-   m_bDebugAim 1
+   m_bDebugAim 0
   }
   CGS_MechBrainComponent "{6A940CCC05D26C63}" {
    m_eMode HUNT
@@ -738,7 +738,7 @@ Vehicle {
      m_sBurningParticle "{79DD3A5F1F3069CD}Particles/Vehicle/Vehicle_fire_engine_small.ptc"
      m_sBurningGroundParticle "{A9259561960FD620}Particles/Vehicle/Vehicle_fire_ground_medium.ptc"
      m_sFireStateSignal "EngineFireState"
-     m_bLogDamage 1
+     m_bLogDamage 0
     }
    }
    CollisionVelocityThreshold 100000
@@ -764,7 +764,7 @@ Vehicle {
   SlotManagerComponent "{6A940CCC05D2D811}" {
    Slots {
     EntitySlotInfo Leg_L1 {
-     Offset -25.937 37.2636 -0.6
+     Offset -28.5948 36.5217 -12.017
      Angles 0 0 -4.1601
      AutoTransform 1
      MergePhysics 0
@@ -772,7 +772,7 @@ Vehicle {
      DisablePhysicsInteraction 1
     }
     EntitySlotInfo Leg_R1 {
-     Offset 25.5466 36.7079 1.148
+     Offset 27.6997 34.1896 -16.4329
      Angles 0.4879 -7.0279 3.9517
      AutoTransform 1
      MergePhysics 0
@@ -781,11 +781,14 @@ Vehicle {
     }
     EntitySlotInfo Arm_R1 {
      Offset 38.1764 68.1307 5.5868
+     Angles 0 17.8273 0
      Prefab "{BF5A995C0FD5EEAC}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Right_Cannon_Arm.et"
     }
     EntitySlotInfo Arm_L1 {
      Offset -39.44 58.0486 -4.3073
+     Angles 0 -11.1627 0
      Prefab "{438868CB49A24973}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Left_Missle_Arm.et"
+     DisablePhysicsInteraction 1
     }
    }
   }
@@ -824,6 +827,7 @@ Vehicle {
   Hierarchy "{6A940CCC05D2D879}" {
   }
  }
- coords 73.338 12.809 203.346
+ coords 73.259 40.944 231.521
+ angles 0 -179.711 0
  m_eVehicleType VEHICLE
 }

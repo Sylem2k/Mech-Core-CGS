@@ -421,6 +421,43 @@ class BFA_MechCoreComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Who gets the kill. Damage needs a CHARACTER as instigator (a vehicle entity becomes
+	//! INSTIGATOR_OTHER, which the game rejects with an error and no kill credit).
+	//! Keeps 'preferred' when it is a character; otherwise the first crew member found on any
+	//! station (e.g. an AI pilot in DRIVER firing COMMANDER weapons). Falls back to 'preferred'.
+	static IEntity BFA_ResolveKiller(IEntity mech, IEntity preferred)
+	{
+		if (ChimeraCharacter.Cast(preferred))
+			return preferred;
+
+		if (!mech)
+			return preferred;
+
+		IEntity root = mech.GetRootParent();
+		if (!root)
+			root = mech;
+
+		BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(root.FindComponent(BFA_MechCoreComponent));
+		if (core && core.m_aCrewStations)
+		{
+			foreach (BFA_MechCrewStationDefinition station : core.m_aCrewStations)
+			{
+				if (!station)
+					continue;
+
+				IEntity occupant = core.GetStationOccupant(station.m_sStationId);
+				if (ChimeraCharacter.Cast(occupant))
+					return occupant;
+			}
+		}
+
+		if (preferred)
+			return preferred;
+
+		return mech;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	void ServerSetStationOccupant(string stationId, IEntity occupant)
 	{
 		if (!Replication.IsServer())

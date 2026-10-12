@@ -1101,7 +1101,7 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		empty[1] = vector.Zero;
 		empty[2] = vector.Zero;
 
-		IEntity instigatorEntity = ResolveDamageInstigator(weapon);
+		IEntity instigatorEntity = BFA_MechCoreComponent.BFA_ResolveKiller(GetOwner(), ResolveDamageInstigator(weapon));
 		Instigator instigator = Instigator.CreateInstigator(instigatorEntity);
 
 		// First try normal KINETIC damage so ordinary hit zones still use their

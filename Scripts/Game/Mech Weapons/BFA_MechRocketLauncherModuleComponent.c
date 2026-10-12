@@ -490,8 +490,7 @@ class BFA_MechRocketLauncherModuleComponent : BFA_MechWeaponModuleComponent
 		hitTransform[1] = direction;
 		hitTransform[2] = direction * -1.0;
 
-		if (!instigatorEntity)
-			instigatorEntity = mechOwner;
+		instigatorEntity = BFA_MechCoreComponent.BFA_ResolveKiller(mechOwner, instigatorEntity);
 
 		Instigator instigator = Instigator.CreateInstigator(instigatorEntity);
 

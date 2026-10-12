@@ -167,8 +167,7 @@ class BFA_MechLasCannonModuleComponent : BFA_MechWeaponModuleComponent
 		empty[1] = vector.Zero;
 		empty[2] = vector.Zero;
 
-		if (!instigatorEntity)
-			instigatorEntity = m_pMechOwner;
+		instigatorEntity = BFA_MechCoreComponent.BFA_ResolveKiller(m_pMechOwner, instigatorEntity);
 
 		Instigator instigator = Instigator.CreateInstigator(instigatorEntity);
 

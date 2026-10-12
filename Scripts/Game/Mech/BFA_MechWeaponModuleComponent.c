@@ -1135,8 +1135,7 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 		hitTransform[1] = direction;
 		hitTransform[2] = direction * -1.0;
 
-		if (!instigator)
-			instigator = m_pMechOwner;
+		instigator = BFA_MechCoreComponent.BFA_ResolveKiller(m_pMechOwner, instigator);
 
 		SCR_DamageContext context = new SCR_DamageContext(type, amount, hitTransform, m_pMechOwner, hitZone, Instigator.CreateInstigator(instigator), null, -1, -1);
 		BeginDamage();

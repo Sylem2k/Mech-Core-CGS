@@ -20,22 +20,22 @@ GenericEntity {
    }
    m_fHeatPerShot 4
    m_eDamageKind EXPLOSIVE
-   m_bFireAtAimPoint 1
    m_bAutoMuzzleFromBounds 1
+   m_bFireAtAimPoint 1
    m_iMagazineSize 48
    m_fReloadTime 10
-   m_fRocketSpeed 120
+   m_fRocketSpeed 60
    m_fRange 1500
    m_iSalvoCount 12
-   m_iSalvoIntervalMs 360
+   m_iSalvoIntervalMs 720
    m_iRefireMs 12000
    m_fSpreadDeg 3
-   m_fDirectHitDamage 500
-   m_fSplashDamage 200
-   m_fSplashRadius 8
+   m_fDirectHitDamage 25
+   m_fSplashDamage 15
+   m_fSplashRadius 2
    m_fTrailLength 6
    m_fTrailThickness 0.4
-   m_bDebug 1
+   m_bDebug 0
    m_aTubeGrids {
     CGS_TubeGrid "{6A97251E919D4A01}" {
      m_FirstTube PointInfo "{6A97251E919D4A02}" {
@@ -69,6 +69,6 @@ GenericEntity {
   Hierarchy "{6A97251E919D46C5}" {
   }
  }
- coords 52.634 25.453 151.694
+ coords 16.709 4.897 45.173
  scale 2
 }

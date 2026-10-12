@@ -52,15 +52,15 @@ GenericEntity {
    m_iMagazineSize 6
    m_fReloadTime 8
    m_fRange 2500
-   m_fDirectDamage 500
-   m_fSplashDamage 150
-   m_fSplashRadius 8
+   m_fDirectDamage 1
+   m_fSplashDamage 8
+   m_fSplashRadius 2
    m_fSpread 0.1
-   m_fShellSpeed 700
+   m_fShellSpeed 300
    m_iShellsPerRound 8
    m_iShellIntervalMs 80
    m_sAltFireSoundEvent "SOUND_SHOT_2"
-   m_bDebug 1
+   m_bDebug 0
   }
   MeshObject "{6A9623BA6FF2FC36}" {
    Object "{1AF52B580089C1D0}Common/Models/Titan/Titan_Right_Arm_Updated.xob"
@@ -85,5 +85,5 @@ GenericEntity {
   Hierarchy "{6A9623BA6FF2FC00}" {
   }
  }
- coords 164.127 6.812 195.484
+ coords -30.216 23.57 19.943
 }
