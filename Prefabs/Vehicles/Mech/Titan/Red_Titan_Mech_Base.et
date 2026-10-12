@@ -129,15 +129,6 @@ Vehicle {
      m_sControlStation "COMMANDER"
      m_iWeaponGroup 1
     }
-    BFA_MechHardpointDefinition "{6A98D1A0B1C2E304}" {
-     m_sName "ARM_L"
-     m_iClass 2
-     m_sAimMountId "ARM_L"
-     m_bBindExistingAimMount 1
-     m_iDefaultModuleId 7
-     m_sControlStation "COMMANDER"
-     m_iWeaponGroup 2
-    }
     BFA_MechHardpointDefinition "{6A98C0A1B2C3D401}" {
      m_sName "ARM_LEFT_POD"
      m_iClass 2
@@ -181,13 +172,6 @@ Vehicle {
      m_iClass 1
      m_sWeaponModuleId "TITAN_CANNON"
      m_sPrefab "{BF5A995C0FD5EEAC}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Right_Cannon_Arm.et"
-    }
-    BFA_MechModuleDefinition "{6A98D1A0B1C2E302}" {
-     m_iId 7
-     m_sLabel "Titan Arm Missiles"
-     m_iClass 2
-     m_sWeaponModuleId "TITAN_MISSILE"
-     m_sPrefab "{438868CB49A24973}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Left_Missle_Arm.et"
     }
    }
   }
