@@ -210,6 +210,9 @@ class CGS_MechDeathComponent : ScriptComponent
 		if (!m_bSeenAlive)
 		{
 			m_bDone = true;
+			CGS_MechShieldComponent deadShield = CGS_MechShieldComponent.Find(GetOwner());
+			if (deadShield)
+				deadShield.OnMechDestroyed();
 			if (m_bCollapse)
 			{
 				Collapse(false);
@@ -258,6 +261,11 @@ class CGS_MechDeathComponent : ScriptComponent
 	//------------------------------------------------------------------------------------------------
 	protected void StartSequence(int now)
 	{
+		// Shield off for good and bubble gone.
+		CGS_MechShieldComponent shield = CGS_MechShieldComponent.Find(GetOwner());
+		if (shield)
+			shield.OnMechDestroyed();
+
 		if (m_bDebug)
 			Print(string.Format("[CGS MECH DEATH] %1 hull destroyed - starting death sequence (body model %2)", GetOwner(), m_pBodyObject));
 		m_bRunning = true;
@@ -792,5 +800,43 @@ class CGS_MechDebris
 		mat[3] = m_vPosition;
 		m_pEntity.SetWorldTransform(mat);
 		m_pEntity.SetScale(m_fScale);
+	}
+}
+
+//------------------------------------------------------------------------------------------------
+//! A destroyed mech never fires and never walks again (AI crews, point defense, everything).
+modded class BFA_MechExtension
+{
+	//------------------------------------------------------------------------------------------------
+	static bool IsMechDestroyed(IEntity mech)
+	{
+		if (!mech)
+			return false;
+		SCR_DamageManagerComponent damage = SCR_DamageManagerComponent.Cast(mech.FindComponent(SCR_DamageManagerComponent));
+		return damage && damage.GetState() == EDamageState.DESTROYED;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override bool CanWeaponEntityFire(IEntity mech, IEntity weaponEntity)
+	{
+		if (IsMechDestroyed(mech))
+			return false;
+		return super.CanWeaponEntityFire(mech, weaponEntity);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override float GetMechSpeedScale(IEntity mech)
+	{
+		if (IsMechDestroyed(mech))
+			return 0;
+		return super.GetMechSpeedScale(mech);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override bool CanMechSprint(IEntity mech)
+	{
+		if (IsMechDestroyed(mech))
+			return false;
+		return super.CanMechSprint(mech);
 	}
 }

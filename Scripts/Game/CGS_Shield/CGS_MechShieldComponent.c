@@ -148,7 +148,34 @@ class CGS_MechShieldComponent : ScriptComponent
 	//------------------------------------------------------------------------------------------------
 	bool IsUp()
 	{
-		return !m_bDown && m_fShield > 0;
+		return !m_bDown && m_fShield > 0 && !IsMechDestroyed();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! A destroyed mech has no shield: no absorbing, no regen, no bubble, no boss phases.
+	bool IsMechDestroyed()
+	{
+		IEntity owner = GetOwner();
+		if (!owner)
+			return true;
+		SCR_DamageManagerComponent damage = SCR_DamageManagerComponent.Cast(owner.FindComponent(SCR_DamageManagerComponent));
+		return damage && damage.GetState() == EDamageState.DESTROYED;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Every machine, when the mech dies: shield off for good, bubble hidden.
+	void OnMechDestroyed()
+	{
+		if (Replication.IsServer())
+		{
+			m_fShield = 0;
+			m_bDown = true;
+			StopTick();
+			Replication.BumpMe();
+		}
+
+		if (m_pBubble)
+			m_pBubble.ClearFlags(EntityFlags.VISIBLE, true);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -161,7 +188,7 @@ class CGS_MechShieldComponent : ScriptComponent
 	//! [Server] Shield back to full at once (boss phases).
 	void ServerRestoreFull()
 	{
-		if (!Replication.IsServer())
+		if (!Replication.IsServer() || IsMechDestroyed())
 			return;
 
 		m_fShield = m_fMaxShield;
@@ -407,6 +434,12 @@ class CGS_MechShieldComponent : ScriptComponent
 	//------------------------------------------------------------------------------------------------
 	protected void ServerTick()
 	{
+		if (IsMechDestroyed())
+		{
+			StopTick();
+			return;
+		}
+
 		if (m_fShield >= m_fMaxShield && !m_bDown)
 		{
 			StopTick();

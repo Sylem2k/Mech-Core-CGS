@@ -139,6 +139,8 @@ class CGS_MechBossComponent : ScriptComponent
 		if (max <= 0)
 			return;
 		float fraction = zone.GetHealth() / max;
+		if (fraction <= 0)
+			return; // dead: no more phases
 
 		for (int i = 0; i < m_aShieldPhases.Count(); i++)
 		{
