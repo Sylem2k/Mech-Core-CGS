@@ -279,7 +279,7 @@ Vehicle {
    m_bDebug 0
   }
   CGS_MechShieldComponent "{6A940CCC05D26C62}" {
-   m_fMaxShield 10000
+   m_fMaxShield 500
    m_fRegenPerSecond 220
    m_fRegenDelay 5
    m_fBrokenDelay 300
@@ -712,13 +712,13 @@ Vehicle {
     BFA_MechHitZone Hull {
      HZDefault 1
      MaxHealth 20000
-     DamageReduction 2
-     DamageThreshold 20
-     "Melee multiplier" 0
-     "Kinetic multiplier" 0.02
-     "Fragmentation multiplier" 0.02
+     DamageReduction 0
+     DamageThreshold 0
+     "Melee multiplier" 1
+     "Kinetic multiplier" 1
+     "Fragmentation multiplier" 1
      "Explosive multiplier" 1
-     "Incendiary multiplier" 0.3
+     "Incendiary multiplier" 1
      "DamageState threshold" {
       0.7 0.4 0.2
      }

@@ -9,6 +9,9 @@ enum BFA_EMechMountAimDriver
 [BaseContainerProps()]
 class BFA_MechWeaponMountDefinition
 {
+	// Runtime: the nested slot path warning was printed already.
+	bool m_bWarnedSlotPath;
+
 	[Attribute("MOUNT", UIWidgets.EditBox, "Stable mount ID used by weapons and future hardpoints.", category: "Mount")]
 	string m_sMountId;
 
@@ -211,7 +214,11 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 			SlotManagerComponent holderSlots = SlotManagerComponent.Cast(holder.FindComponent(SlotManagerComponent));
 			if (!holderSlots)
 			{
-				BFA_MechLog.Log(string.Format("[BFA MOUNT] %1: '%2' has no SlotManager for slot '%3'", mount.m_sMountId, path[p - 1], path[p]), LogLevel.WARNING);
+				if (!mount.m_bWarnedSlotPath)
+				{
+					mount.m_bWarnedSlotPath = true; // once, not every frame
+					BFA_MechLog.Log(string.Format("[BFA MOUNT] %1: '%2' (%3) has no SlotManager for slot '%4'", mount.m_sMountId, path[p - 1], holder, path[p]), LogLevel.WARNING);
+				}
 				return false;
 			}
 			slot = holderSlots.GetSlotByName(path[p]);

@@ -109,17 +109,19 @@ GenericEntity {
     BFA_MechPartHitZone Arm {
      HZDefault 1
      MaxHealth 6000
-     DamageReduction 2
-     DamageThreshold 20
-     "Melee multiplier" 0
-     "Kinetic multiplier" 0.02
-     "Fragmentation multiplier" 0.02
+     DamageReduction 0
+     DamageThreshold 0
+     "Melee multiplier" 1
+     "Kinetic multiplier" 1
+     "Fragmentation multiplier" 1
      "Explosive multiplier" 1
-     "Incendiary multiplier" 0.3
+     "Incendiary multiplier" 1
      m_ePart WEAPON
      m_fHullShare 0.4
     }
    }
+  }
+  RplComponent "{EF17244230E5EDA4}" {
   }
   Hierarchy "{6A9623BA6FF2FC00}" {
   }

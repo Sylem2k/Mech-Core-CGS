@@ -23,6 +23,8 @@ GenericEntity {
     }
    }
   }
+  RplComponent "{BCD1D8E2A91B9C03}" {
+  }
   Hierarchy "{5D19455DD0A56B4A}" {
   }
  }
