@@ -4,7 +4,10 @@
 //! When the hull is destroyed:
 //!  1. A chain of explosions ripples over the body, legs and arms for Sequence Time seconds.
 //!  2. One huge final blast at Final Blast Point (server: damages everything in Blast Radius).
-//!  3. Fires keep burning on the wreck.
+//!  3. COLLAPSE: every arm and leg blows up, breaks off and falls; the torso crashes down.
+//!     The falling pieces are local copies of the models (no physics, no network), so the
+//!     real mech can stay where it is; its own models and hit boxes are hidden.
+//!  4. Fires keep burning on the wreck pieces.
 //! Runs on every machine from the replicated hull state, no network traffic. The explosion
 //! points are picked the same way everywhere, so every player sees the same show. A mech that
 //! is already dead when a player joins just shows the burning wreck.
@@ -59,6 +62,25 @@ class CGS_MechDeathComponent : ScriptComponent
 	[Attribute("600", UIWidgets.Auto, "Final blast explosive damage at the centre. Titan ~3000.", category: "Final Blast")]
 	protected float m_fBlastDamage;
 
+	// ---- Collapse --------------------------------------------------------------------------
+	[Attribute("true", UIWidgets.CheckBox, "At the final blast the arms and legs blow up, break off and fall, and the torso crashes down. Off = the mech just stays where it is.", category: "Collapse")]
+	protected bool m_bCollapse;
+
+	[Attribute("{DB460C99707F948E}Particles/Weapon/Explosion_TM62M_AT_Mine.ptc", UIWidgets.ResourcePickerThumbnail, "Explosion on each arm / leg as it breaks off. Empty = none.", "ptc", category: "Collapse")]
+	protected ResourceName m_sPartBlastParticle;
+
+	[Attribute("3", UIWidgets.Auto, "How fast the arms and legs are thrown away from the body (m/s). Titan ~8.", category: "Collapse")]
+	protected float m_fFlingSpeed;
+
+	[Attribute("60", UIWidgets.Auto, "How fast the falling pieces tumble (degrees per second). Titan ~25 (big things turn slowly).", category: "Collapse")]
+	protected float m_fSpinSpeed;
+
+	[Attribute("9.81", UIWidgets.Auto, "Fall acceleration of the pieces (m/s2).", category: "Collapse")]
+	protected float m_fGravity;
+
+	[Attribute("{2E8B5767FDBED4A1}Particles/Logistics/Explosion/Ammo_Rack/Explosion_Ammo_Rack_Medium.ptc", UIWidgets.ResourcePickerThumbnail, "Effect when a piece hits the ground. Empty = none.", "ptc", category: "Collapse")]
+	protected ResourceName m_sLandParticle;
+
 	// ---- Wreck -----------------------------------------------------------------------------
 	[Attribute("{79DD3A5F1F3069CD}Particles/Vehicle/Vehicle_fire_engine_small.ptc", UIWidgets.ResourcePickerThumbnail, "Fire left burning on the wreck (at several points). Empty = none.", "ptc", category: "Wreck")]
 	protected ResourceName m_sWreckFireParticle;
@@ -86,10 +108,18 @@ class CGS_MechDeathComponent : ScriptComponent
 	protected ref array<vector> m_aChainLocal = {}; // explosion points in the titan's local space
 	protected ref array<IEntity> m_aChainAnchor = {}; // ... or on a part (follows it), null = titan
 
+	protected VObject m_pBodyObject;                  // the torso model, kept even if the game swaps it out
+	protected ref array<ref CGS_MechDebris> m_aDebris = {};
+	protected int m_iLastTickMs;
+	protected int m_iFiresLeft;
+	protected ref array<IEntity> m_aHidden = {};       // real mech parts we hid (kept hidden)
+	protected ref array<IEntity> m_aFires = {};        // wreck fires (removed with the mech)
+
 	//------------------------------------------------------------------------------------------------
 	override void OnPostInit(IEntity owner)
 	{
 		super.OnPostInit(owner);
+		m_pBodyObject = owner.GetVObject();
 		if (!s_aAll.Contains(this))
 			s_aAll.Insert(this);
 		EnsureTick();
@@ -98,7 +128,10 @@ class CGS_MechDeathComponent : ScriptComponent
 	//------------------------------------------------------------------------------------------------
 	override void OnDelete(IEntity owner)
 	{
+		if (m_bDebug && m_bRunning)
+			Print(string.Format("[CGS MECH DEATH] %1 was DELETED during its death sequence (something removed the mech)", owner), LogLevel.WARNING);
 		s_aAll.RemoveItem(this);
+		ClearDebris();
 		super.OnDelete(owner);
 	}
 
@@ -111,7 +144,7 @@ class CGS_MechDeathComponent : ScriptComponent
 			return;
 
 		GetGame().GetCallqueue().Remove(StaticTick);
-		GetGame().GetCallqueue().CallLater(StaticTick, 100, true);
+		GetGame().GetCallqueue().CallLater(StaticTick, 0, true); // every frame: falling pieces move smoothly
 		s_iHeartbeatMs = System.GetTickCount();
 	}
 
@@ -145,11 +178,21 @@ class CGS_MechDeathComponent : ScriptComponent
 	//------------------------------------------------------------------------------------------------
 	protected void Tick(int now)
 	{
+		float dt = 0;
+		if (m_iLastTickMs > 0 && now > m_iLastTickMs)
+			dt = Math.Min((now - m_iLastTickMs) * 0.001, 0.1);
+		m_iLastTickMs = now;
+
 		if (m_bDone)
+		{
+			KeepPartsHidden();
+			UpdateDebris(dt, true);
 			return;
+		}
 
 		if (m_bRunning)
 		{
+			KeepBodyVisible();
 			RunSequence(now);
 			return;
 		}
@@ -157,13 +200,21 @@ class CGS_MechDeathComponent : ScriptComponent
 		if (!IsHullDestroyed())
 		{
 			m_bSeenAlive = true;
+			if (!m_pBodyObject)
+				m_pBodyObject = GetOwner().GetVObject();
 			return;
 		}
 
-		// Already dead the first time we look (joined late / streamed in): just the wreck.
+		// Already dead the first time we look (joined late / streamed in): the wreck is
+		// already lying on the ground - no explosions, pieces dropped straight away.
 		if (!m_bSeenAlive)
 		{
 			m_bDone = true;
+			if (m_bCollapse)
+			{
+				Collapse(false);
+				for (int i = 0; i < 1500 && UpdateDebris(0.02, false); i++) {}
+			}
 			SpawnWreckFires();
 			return;
 		}
@@ -172,8 +223,43 @@ class CGS_MechDeathComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Leg / arm scripts may switch their parts back on; keep the real parts hidden after the
+	//! collapse (the falling copies are what players see).
+	protected void KeepPartsHidden()
+	{
+		if (m_aDebris.IsEmpty())
+			return;
+
+		IEntity owner = GetOwner();
+		if (owner.GetFlags() & EntityFlags.VISIBLE)
+			owner.ClearFlags(EntityFlags.VISIBLE, false);
+
+		foreach (IEntity hidden : m_aHidden)
+		{
+			if (hidden && (hidden.GetFlags() & EntityFlags.VISIBLE))
+				hidden.ClearFlags(EntityFlags.VISIBLE, true);
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! The game's vehicle destruction can swap the torso model away the moment the hull dies;
+	//! keep it on screen until the collapse takes over.
+	protected void KeepBodyVisible()
+	{
+		IEntity owner = GetOwner();
+		if (!m_pBodyObject || !m_bCollapse)
+			return;
+
+		if (owner.GetVObject() != m_pBodyObject)
+			owner.SetObject(m_pBodyObject, "");
+		owner.SetFlags(EntityFlags.VISIBLE, false);
+	}
+
+	//------------------------------------------------------------------------------------------------
 	protected void StartSequence(int now)
 	{
+		if (m_bDebug)
+			Print(string.Format("[CGS MECH DEATH] %1 hull destroyed - starting death sequence (body model %2)", GetOwner(), m_pBodyObject));
 		m_bRunning = true;
 		m_iStartMs = now;
 		m_iNextChain = 0;
@@ -280,9 +366,250 @@ class CGS_MechDeathComponent : ScriptComponent
 			return;
 
 		FinalBlast();
+		if (m_bCollapse)
+			Collapse(true);
 		SpawnWreckFires();
 		m_bRunning = false;
 		m_bDone = true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Every model on the mech (torso, legs, arms, pods) becomes a falling piece; the real
+	//! ones are hidden and their colliders removed.
+	protected void Collapse(bool withBlasts)
+	{
+		IEntity owner = GetOwner();
+		vector bodyCenter = owner.CoordToParent(GetPointLocal(m_FinalBlastPoint));
+
+		RandomGenerator rng = new RandomGenerator();
+		rng.SetSeed(4242);
+		m_iFiresLeft = m_iWreckFires;
+
+		array<IEntity> pieces = {};
+		CollectPieces(owner, pieces, 0);
+
+		// Torso first (from the cached model: the game may have removed it).
+		if (m_pBodyObject)
+			AddDebris(owner, m_pBodyObject, vector.Zero, rng, 0.25);
+
+		foreach (IEntity piece : pieces)
+		{
+			vector mins, maxs;
+			piece.GetWorldBounds(mins, maxs);
+			vector center = (mins + maxs) * 0.5;
+
+			if (withBlasts && !m_sPartBlastParticle.IsEmpty())
+				Boom(m_sPartBlastParticle, string.Empty, center);
+
+			vector away = center - bodyCenter;
+			away[1] = 0;
+			if (away.LengthSq() > 0.0001)
+				away.Normalize();
+			else
+				away = Vector(rng.RandFloatXY(-1, 1), 0, rng.RandFloatXY(-1, 1)).Normalized();
+
+			vector velocity = away * m_fFlingSpeed * rng.RandFloatXY(0.6, 1.2) + vector.Up * m_fFlingSpeed * rng.RandFloatXY(0.2, 0.6);
+			AddDebris(piece, piece.GetVObject(), velocity, rng, 1);
+		}
+
+		// Hide the real mech and take its colliders away (invisible boxes would stop bullets).
+		foreach (IEntity piece2 : pieces)
+		{
+			if (!m_aHidden.Contains(piece2))
+				m_aHidden.Insert(piece2);
+		}
+		owner.ClearFlags(EntityFlags.VISIBLE, true);
+		foreach (IEntity hidden : m_aHidden)
+		{
+			if (!hidden)
+				continue;
+			hidden.ClearFlags(EntityFlags.VISIBLE, true);
+			RemoveColliders(hidden);
+		}
+
+		if (m_bDebug)
+			Print(string.Format("[CGS MECH DEATH] %1 collapsed into %2 pieces", owner, m_aDebris.Count()));
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Child models: legs, arms, pods ... (not the pilot, not particles, not hit boxes).
+	protected void CollectPieces(IEntity parent, array<IEntity> pieces, int depth)
+	{
+		if (!parent || depth > 4)
+			return;
+
+		// Children in the hierarchy ...
+		IEntity child = parent.GetChildren();
+		while (child)
+		{
+			AddPiece(child, pieces, depth);
+			child = child.GetSibling();
+		}
+
+		// ... and everything sitting in a slot (legs can be slotted without being a child).
+		SlotManagerComponent slots = SlotManagerComponent.Cast(parent.FindComponent(SlotManagerComponent));
+		if (slots)
+		{
+			array<EntitySlotInfo> infos = {};
+			slots.GetSlotInfos(infos);
+			foreach (EntitySlotInfo info : infos)
+			{
+				if (info)
+					AddPiece(info.GetAttachedEntity(), pieces, depth);
+			}
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void AddPiece(IEntity entity, array<IEntity> pieces, int depth)
+	{
+		if (!entity || entity == GetOwner() || pieces.Contains(entity) || ChimeraCharacter.Cast(entity) || ParticleEffectEntity.Cast(entity))
+			return;
+
+		if (entity.GetVObject())
+			pieces.Insert(entity);
+		else if (!m_aHidden.Contains(entity))
+			m_aHidden.Insert(entity); // hit boxes etc.: no model, just hide / disable
+
+		CollectPieces(entity, pieces, depth + 1);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void RemoveColliders(IEntity entity)
+	{
+		if (!entity || ChimeraCharacter.Cast(entity))
+			return;
+
+		entity.ClearFlags(EntityFlags.TRACEABLE, true);
+		Physics physics = entity.GetPhysics();
+		if (physics)
+			physics.Destroy();
+
+		IEntity child = entity.GetChildren();
+		while (child)
+		{
+			RemoveColliders(child);
+			child = child.GetSibling();
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void AddDebris(IEntity source, VObject model, vector velocity, RandomGenerator rng, float spinScale)
+	{
+		if (!source || !model)
+			return;
+
+		vector mat[4];
+		source.GetWorldTransform(mat);
+
+		// World scale (legs are often scaled in their prefab).
+		float scale = 1;
+		IEntity e = source;
+		while (e)
+		{
+			scale *= e.GetScale();
+			e = e.GetParent();
+		}
+		for (int a = 0; a < 3; a++)
+		{
+			if (mat[a].LengthSq() > 0.000001)
+				mat[a] = mat[a].Normalized();
+		}
+
+		EntitySpawnParams params = new EntitySpawnParams();
+		params.TransformMode = ETransformMode.WORLD;
+		params.Transform[0] = mat[0];
+		params.Transform[1] = mat[1];
+		params.Transform[2] = mat[2];
+		params.Transform[3] = mat[3];
+		IEntity debris = GetGame().SpawnEntity(GenericEntity, GetGame().GetWorld(), params);
+		if (!debris)
+			return;
+
+		debris.SetObject(model, "");
+		debris.SetScale(scale);
+
+		CGS_MechDebris piece = new CGS_MechDebris();
+		piece.m_pEntity = debris;
+		piece.m_vPosition = mat[3];
+		piece.m_vAngles = Math3D.MatrixToAngles(mat);
+		piece.m_vVelocity = velocity;
+		piece.m_vSpin = Vector(rng.RandFloatXY(-1, 1), rng.RandFloatXY(-1, 1), rng.RandFloatXY(-1, 1)) * m_fSpinSpeed * spinScale;
+		piece.m_fScale = scale;
+		m_aDebris.Insert(piece);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Moves the falling pieces. Returns true while any piece is still falling.
+	protected bool UpdateDebris(float dt, bool effects)
+	{
+		if (m_aDebris.IsEmpty() || dt <= 0)
+			return false;
+
+		BaseWorld world = GetGame().GetWorld();
+		bool anyFalling = false;
+		foreach (CGS_MechDebris piece : m_aDebris)
+		{
+			if (!piece || !piece.m_pEntity || piece.m_bLanded)
+				continue;
+
+			piece.m_vVelocity = piece.m_vVelocity + vector.Up * (-m_fGravity * dt);
+			piece.m_vPosition = piece.m_vPosition + piece.m_vVelocity * dt;
+			piece.m_vAngles = piece.m_vAngles + piece.m_vSpin * dt;
+			piece.Apply();
+
+			vector mins, maxs;
+			piece.m_pEntity.GetWorldBounds(mins, maxs);
+			float ground = world.GetSurfaceY(piece.m_vPosition[0], piece.m_vPosition[2]);
+			if (mins[1] <= ground)
+			{
+				// Rest on the ground (a bit sunk in looks heavier than floating).
+				vector rest = piece.m_vPosition;
+				rest[1] = rest[1] + (ground - mins[1]) - (maxs[1] - mins[1]) * 0.08;
+				piece.m_vPosition = rest;
+				piece.m_bLanded = true;
+				piece.Apply();
+
+				vector landPoint = Vector(rest[0], ground, rest[2]);
+				if (effects && !m_sLandParticle.IsEmpty())
+					Boom(m_sLandParticle, string.Empty, landPoint);
+
+				// Wreck fires burn where the pieces came down.
+				if (m_iFiresLeft > 0 && !m_sWreckFireParticle.IsEmpty())
+				{
+					m_iFiresLeft--;
+					ParticleEffectEntitySpawnParams fireParams = new ParticleEffectEntitySpawnParams();
+					Math3D.MatrixIdentity4(fireParams.Transform);
+					fireParams.Transform[3] = landPoint;
+					IEntity fire = ParticleEffectEntity.SpawnParticleEffect(m_sWreckFireParticle, fireParams);
+					if (fire)
+						m_aFires.Insert(fire);
+				}
+				continue;
+			}
+
+			anyFalling = true;
+		}
+
+		return anyFalling;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void ClearDebris()
+	{
+		foreach (CGS_MechDebris piece : m_aDebris)
+		{
+			if (piece && piece.m_pEntity)
+				SCR_EntityHelper.DeleteEntityAndChildren(piece.m_pEntity);
+		}
+		m_aDebris.Clear();
+
+		foreach (IEntity fire : m_aFires)
+		{
+			if (fire)
+				SCR_EntityHelper.DeleteEntityAndChildren(fire);
+		}
+		m_aFires.Clear();
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -341,6 +668,10 @@ class CGS_MechDeathComponent : ScriptComponent
 		if (m_sWreckFireParticle.IsEmpty() || m_iWreckFires <= 0)
 			return;
 
+		// Collapsed: the fires start where the pieces land (see UpdateDebris).
+		if (!m_aDebris.IsEmpty())
+			return;
+
 		IEntity owner = GetOwner();
 		array<IEntity> anchors = {};
 		CollectAnchors(owner, anchors, 0);
@@ -359,7 +690,9 @@ class CGS_MechDeathComponent : ScriptComponent
 			if (parent == owner)
 				spawnParams.Transform[3] = GetPointLocal(m_FinalBlastPoint);
 			spawnParams.Parent = parent;
-			ParticleEffectEntity.SpawnParticleEffect(m_sWreckFireParticle, spawnParams);
+			IEntity fire = ParticleEffectEntity.SpawnParticleEffect(m_sWreckFireParticle, spawnParams);
+			if (fire)
+				m_aFires.Insert(fire);
 		}
 	}
 
@@ -434,5 +767,30 @@ class CGS_MechDeathComponent : ScriptComponent
 		if (entity)
 			s_aBlastCollect.Insert(entity);
 		return true;
+	}
+}
+
+//------------------------------------------------------------------------------------------------
+//! One falling wreck piece (a local copy of a mech model).
+class CGS_MechDebris
+{
+	IEntity m_pEntity;
+	vector m_vPosition;
+	vector m_vAngles;
+	vector m_vVelocity;
+	vector m_vSpin;
+	float m_fScale = 1;
+	bool m_bLanded;
+
+	void Apply()
+	{
+		if (!m_pEntity)
+			return;
+
+		vector mat[4];
+		Math3D.AnglesToMatrix(m_vAngles, mat);
+		mat[3] = m_vPosition;
+		m_pEntity.SetWorldTransform(mat);
+		m_pEntity.SetScale(m_fScale);
 	}
 }

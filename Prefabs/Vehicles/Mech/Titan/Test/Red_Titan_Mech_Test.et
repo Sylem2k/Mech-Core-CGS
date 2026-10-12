@@ -271,6 +271,8 @@ Vehicle {
    m_iFinalParticleCount 3
    m_fBlastRadius 60
    m_fBlastDamage 3000
+   m_fFlingSpeed 8
+   m_fSpinSpeed 25
    m_iWreckFires 5
    m_bDebug 1
   }
@@ -721,9 +723,6 @@ Vehicle {
      "Incendiary multiplier" 1
      "DamageState threshold" {
       0.7 0.4 0.2
-     }
-     m_pDestructionHandler SCR_DestructionBaseHandler "{6A940CCC05D2D952}" {
-      m_iWreckDelay 250
      }
      m_sDestructionSoundEvent "SOUND_VEHICLE_DESTRUCTION"
      m_sDestructionParticle "{5B42FC054E231C28}Particles/Vehicle/Vehicle_explosion_small_01.ptc"

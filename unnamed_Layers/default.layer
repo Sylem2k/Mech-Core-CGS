@@ -11,3 +11,11 @@ Vehicle Red_Titan_Mech_Test1 : "{DB1C9F8936F28710}Prefabs/Vehicles/Mech/Titan/Te
  coords 107.285 70.836 50.37
  angles 0 0 0
 }
+$grp Vehicle : "{E8BB8884F5622576}Prefabs/Vehicles/Mech/SampleMech/SampleMech3.et" {
+ SampleMech1 {
+  coords 176.177 3.218 234.561
+ }
+ SampleMech2 {
+  coords 169.177 3.779 234.043
+ }
+}

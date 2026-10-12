@@ -273,7 +273,8 @@ When the hull is destroyed:
 
 1. A chain of explosions ripples over the body, legs, arms and hit boxes.
 2. One final blast damages everything nearby.
-3. Fires keep burning on the wreck.
+3. **Collapse:** every arm and leg blows up, breaks off and is thrown away from the body; the torso crashes straight down. The falling pieces are local copies of the models (no physics, no network traffic); the real mech and its hit boxes are hidden.
+4. Fires burn where the pieces land.
 
 It runs on every machine from the replicated hull state, so every player sees the same thing. A mech that is already dead when a player joins only shows the burning wreck.
 
@@ -287,6 +288,8 @@ It runs on every machine from the replicated hull state, so every player sees th
 | Final Particle Count | 1 | 3 |
 | Blast Radius | 12 m | 60 m |
 | Blast Damage | 600 | 3000 |
+| Fling Speed | 3 m/s | 8 m/s |
+| Spin Speed | 60 °/s | 25 °/s |
 | Wreck Fires | 2 | 5 |
 
 Set **Final Blast Point** on the reactor (or wherever the big boom should be). Turn on **Debug** to see the sequence in the log.
