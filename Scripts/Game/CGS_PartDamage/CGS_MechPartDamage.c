@@ -45,8 +45,14 @@ modded class BFA_MechExtension
 		if (!super.CanWeaponEntityFire(mech, weaponEntity))
 			return false;
 
-		if (weaponEntity && BFA_MechPartHitZone.IsPartDestroyed(weaponEntity))
-			return false;
+		// The weapon's own part, or any part it rides on (pod on a destroyed arm stops too).
+		IEntity part = weaponEntity;
+		while (part && part != mech)
+		{
+			if (BFA_MechPartHitZone.IsPartDestroyed(part))
+				return false;
+			part = part.GetParent();
+		}
 		return true;
 	}
 

@@ -51,6 +51,14 @@ class BFA_MechExtension
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! [Server] Damage a PART (leg, arm, pod) is about to lose from its own health, after its
+	//! armour. Return what is left (e.g. a shield protects the parts too).
+	float FilterPartDamage(IEntity mech, IEntity part, float damage, BaseDamageContext ctx)
+	{
+		return damage;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! [Server] Hitscan beams ask this before they hit anything. Return the distance along the
 	//! ray where something (e.g. an enemy shield bubble) stops the beam and set blockingEntity to
 	//! the entity that takes the hit; return -1 for no interception.
@@ -235,6 +243,7 @@ class BFA_MechPartHitZone : SCR_HitZone
 
 		// The part loses its own health too (MaxHealth on this hit zone). At 0 it is destroyed:
 		// LEG = slower mech, WEAPON = that weapon stops. Repairs restore it.
-		return damage;
+		// Add-ons may protect it (shield up = the part is not hurt).
+		return BFA_MechExtension.Get().FilterPartDamage(mech, part, damage, damageContext);
 	}
 }

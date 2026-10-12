@@ -17,6 +17,21 @@ modded class BFA_MechExtension
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Parts (legs, arms) are inside the bubble too: while the shield is up they only lose the
+	//! Bleed Through share (0 = untouchable until the shield is down). The hull share of the same
+	//! hit already drains the shield.
+	override float FilterPartDamage(IEntity mech, IEntity part, float damage, BaseDamageContext ctx)
+	{
+		damage = super.FilterPartDamage(mech, part, damage, ctx);
+
+		CGS_MechShieldComponent shield = CGS_MechShieldComponent.Find(mech);
+		if (!shield || !shield.IsUp())
+			return damage;
+
+		return damage * Math.Clamp(shield.GetBleedThrough(), 0, 1);
+	}
+
+	//------------------------------------------------------------------------------------------------
 	override float InterceptRay(IEntity shooterMech, vector start, vector direction, float range, out IEntity blockingEntity)
 	{
 		float best = super.InterceptRay(shooterMech, start, direction, range, blockingEntity);

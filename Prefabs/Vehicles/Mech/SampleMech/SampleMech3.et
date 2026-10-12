@@ -784,6 +784,8 @@ Vehicle {
   }
   NwkMovementComponent "{6A8F4AB350911FA9}" {
   }
+  CGS_MechDeathComponent "{74C182B09F4608CB}" {
+  }
   RplComponent "{6A8F4AB350911FAC}" {
   }
   Hierarchy "{6A8F4AB350911FAE}" {
