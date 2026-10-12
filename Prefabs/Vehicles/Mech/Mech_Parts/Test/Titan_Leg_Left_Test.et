@@ -36,11 +36,11 @@ GenericEntity {
      MaxHealth 15000
      DamageReduction 0
      DamageThreshold 0
-     "Melee multiplier" 0.05
-     "Kinetic multiplier" 0.05
-     "Fragmentation multiplier" 0.05
+     "Melee multiplier" 0.02
+     "Kinetic multiplier" 0.02
+     "Fragmentation multiplier" 0.02
      "Explosive multiplier" 1
-     "Incendiary multiplier" 0.3
+     "Incendiary multiplier" 0.05
      m_fHullShare 0.6
     }
    }

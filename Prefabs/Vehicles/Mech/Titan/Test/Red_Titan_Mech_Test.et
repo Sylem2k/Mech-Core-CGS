@@ -276,6 +276,19 @@ Vehicle {
    m_iWreckFires 5
    m_bDebug 1
   }
+  CGS_MechBossComponent "{F83185BC19A3141C}" {
+   m_fHeavyPerSecond 300
+   m_fSmallArmsPerSecond 25
+   m_fPartHeavyPerSecond 150
+   m_fPartSmallArmsPerSecond 10
+   m_fOverCapMultiplier 0.15
+   m_fSmallArmsOverCap 0
+   m_fHeavyHitMin 150
+   m_aShieldPhases {
+    0.66 0.33
+   }
+   m_bDebug 1
+  }
   CGS_MechHeatComponent "{892B18727CA0F81A}" {
    m_fMaxHeat 200000
    m_bDebug 0
@@ -716,11 +729,11 @@ Vehicle {
      MaxHealth 60000
      DamageReduction 0
      DamageThreshold 0
-     "Melee multiplier" 0.05
-     "Kinetic multiplier" 0.05
-     "Fragmentation multiplier" 0.05
+     "Melee multiplier" 0.02
+     "Kinetic multiplier" 0.02
+     "Fragmentation multiplier" 0.02
      "Explosive multiplier" 1
-     "Incendiary multiplier" 0.3
+     "Incendiary multiplier" 0.05
      "DamageState threshold" {
       0.7 0.4 0.2
      }

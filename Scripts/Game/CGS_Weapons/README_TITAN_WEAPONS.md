@@ -314,8 +314,9 @@ Lets one titan survive a whole server shooting at it. Put it on the mech next to
 | Setting | Red Titan | What it limits |
 |---|---|---|
 | Heavy Per Second | 300 | Rockets, explosives, cannons on the hull |
-| Small Arms Per Second | 60 | Bullets and fragments on the hull: rifles chip in but never crowd out the rockets |
-| Part Heavy / Small Arms Per Second | 150 / 30 | The same, for each leg and arm separately |
+| Small Arms Per Second | 25 | Bullets, fragments and fire on the hull. **Hard cap** (Small Arms Over Cap 0): 100 rifles never do more than this |
+| Part Heavy / Small Arms Per Second | 150 / 10 | The same, for each leg and arm separately |
+| Heavy Hit Min | 150 | Any single hit smaller than this counts as small arms, whatever its damage type (catches modded las / plasma guns) |
 
 **Shield phases.** When the hull drops below each listed fraction (Red Titan: 0.66 and 0.33), the shield comes back to full at once.
 

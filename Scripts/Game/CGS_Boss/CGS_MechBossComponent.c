@@ -19,17 +19,23 @@ class CGS_MechBossComponent : ScriptComponent
 	[Attribute("300", UIWidgets.Auto, "Hull: heavy damage (rockets, explosives, cannons ...) that counts fully per second. 0 = no cap.", category: "Damage Cap")]
 	protected float m_fHeavyPerSecond;
 
-	[Attribute("60", UIWidgets.Auto, "Hull: small arms damage (bullets, fragments) that counts fully per second. 0 = no cap.", category: "Damage Cap")]
+	[Attribute("25", UIWidgets.Auto, "Hull: small arms damage (bullets, fragments) that counts fully per second. 0 = no cap.", category: "Damage Cap")]
 	protected float m_fSmallArmsPerSecond;
 
 	[Attribute("150", UIWidgets.Auto, "Each leg / arm: heavy damage per second that counts fully. 0 = no cap.", category: "Damage Cap")]
 	protected float m_fPartHeavyPerSecond;
 
-	[Attribute("30", UIWidgets.Auto, "Each leg / arm: small arms damage per second that counts fully. 0 = no cap.", category: "Damage Cap")]
+	[Attribute("10", UIWidgets.Auto, "Each leg / arm: small arms damage per second that counts fully. 0 = no cap.", category: "Damage Cap")]
 	protected float m_fPartSmallArmsPerSecond;
 
-	[Attribute("0.15", UIWidgets.Slider, "Damage over the cap still counts this much (0 = hard cap, 1 = no cap).", "0 1 0.05", category: "Damage Cap")]
+	[Attribute("0.15", UIWidgets.Slider, "HEAVY damage over the cap still counts this much (0 = hard cap, 1 = no cap).", "0 1 0.05", category: "Damage Cap")]
 	protected float m_fOverCapMultiplier;
+
+	[Attribute("0", UIWidgets.Slider, "SMALL ARMS damage over the cap still counts this much. 0 = hard cap: no matter how many rifles, never more than Small Arms Per Second.", "0 1 0.05", category: "Damage Cap")]
+	protected float m_fSmallArmsOverCap;
+
+	[Attribute("150", UIWidgets.Auto, "Any single hit SMALLER than this (after armour) counts as small arms, whatever its damage type. Catches modded guns (las, plasma ...) that use unusual damage types.", category: "Damage Cap")]
+	protected float m_fHeavyHitMin;
 
 	// ---- Phases ------------------------------------------------------------------------------
 	[Attribute("", UIWidgets.Auto, "Hull health fractions where the shield comes back to full (e.g. 0.66 and 0.33). Each fires once.", category: "Phases")]
@@ -67,12 +73,18 @@ class CGS_MechBossComponent : ScriptComponent
 	//------------------------------------------------------------------------------------------------
 	static bool IsSmallArms(int damageType)
 	{
-		return damageType == EDamageType.KINETIC || damageType == EDamageType.FRAGMENTATION || damageType == EDamageType.MELEE;
+		return damageType == EDamageType.KINETIC || damageType == EDamageType.FRAGMENTATION || damageType == EDamageType.MELEE || damageType == EDamageType.INCENDIARY;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected bool CountsAsSmallArms(float damage, int damageType)
+	{
+		return IsSmallArms(damageType) || damage < m_fHeavyHitMin;
 	}
 
 	//------------------------------------------------------------------------------------------------
 	//! Soft cap in a rolling 1-second window per bucket.
-	protected float Cap(string bucket, float damage, float perSecond)
+	protected float Cap(string bucket, float damage, float perSecond, float overCap)
 	{
 		if (damage <= 0 || perSecond <= 0)
 			return damage;
@@ -89,7 +101,7 @@ class CGS_MechBossComponent : ScriptComponent
 		float room = Math.Max(perSecond - used, 0);
 		float passed = damage;
 		if (damage > room)
-			passed = room + (damage - room) * Math.Clamp(m_fOverCapMultiplier, 0, 1);
+			passed = room + (damage - room) * Math.Clamp(overCap, 0, 1);
 
 		m_mWindowDamage.Set(bucket, used + damage);
 		return passed;
@@ -101,12 +113,11 @@ class CGS_MechBossComponent : ScriptComponent
 	{
 		CheckPhases(zone);
 
-		bool small = IsSmallArms(damageType);
 		float result;
-		if (small)
-			result = Cap("hull_small", damage, m_fSmallArmsPerSecond);
+		if (CountsAsSmallArms(damage, damageType))
+			result = Cap("hull_small", damage, m_fSmallArmsPerSecond, m_fSmallArmsOverCap);
 		else
-			result = Cap("hull_heavy", damage, m_fHeavyPerSecond);
+			result = Cap("hull_heavy", damage, m_fHeavyPerSecond, m_fOverCapMultiplier);
 
 		Report(damage, result);
 		return result;
@@ -121,9 +132,9 @@ class CGS_MechBossComponent : ScriptComponent
 
 		// Each part gets its own pair of buckets.
 		string bucket = part.ToString();
-		if (IsSmallArms(damageType))
-			return Cap(bucket + "_small", damage, m_fPartSmallArmsPerSecond);
-		return Cap(bucket + "_heavy", damage, m_fPartHeavyPerSecond);
+		if (CountsAsSmallArms(damage, damageType))
+			return Cap(bucket + "_small", damage, m_fPartSmallArmsPerSecond, m_fSmallArmsOverCap);
+		return Cap(bucket + "_heavy", damage, m_fPartHeavyPerSecond, m_fOverCapMultiplier);
 	}
 
 	//------------------------------------------------------------------------------------------------
