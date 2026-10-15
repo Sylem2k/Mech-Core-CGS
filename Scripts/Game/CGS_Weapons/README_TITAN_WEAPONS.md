@@ -1,5 +1,7 @@
 # CGS Titan Weapons
 
+Two heavy weapon components that ship with the framework, plus the setup used by the **Red Chaos Titan** example (in the separate *Sample Mechs with CGS* mod). The Titan prefabs and models named below are in that mod; the components and settings work on any mech.
+
 Two weapon components for your own weapon models. Put **one** on the weapon part prefab (the `GenericEntity` with your `MeshObject`), exactly where the autocannon or rocket component would go.
 
 | Component | What it is |
@@ -115,6 +117,35 @@ Instead of placing one point per tube, describe each **block** of tubes as a gri
 5. **Random Tube Order** on: every tube fires once (random order) before any fires again, so a salvo ripples out all over the pod.
 
 To check: turn Debug on, fire, and watch where the rockets start. Adjust spacing until they leave the tube mouths. Leave Tube Grids empty to use Muzzle Point / Barrel Points instead.
+
+---
+
+## CGS_AntiAirModuleComponent: automatic flak
+
+Stops helicopters and gunships circling a mech that can't aim up. It needs no turret and no gunner:
+
+- It scans for **hostile vehicles flying** at least **Min Altitude** above the ground within **Range**.
+- It leads them by their speed and fires flak shells that burst near them after their travel time.
+- Accuracy drops with distance, so far targets take more shells and close ones get shredded.
+- It fires in bursts; ammo, reload, heat and "destroyed" rules apply like any weapon.
+
+| Category | Setting | Red Titan | Notes |
+|---|---|---|---|
+| Anti-Air | Range | 1500 | Metres |
+| | Min Altitude | 12 | Only things this high above the ground count as aircraft |
+| | Scan Interval | 0.5 | Seconds between target checks |
+| | Requires Crew | on | Fires only while the mech is crewed (AI pilot counts) |
+| Flak | Shell Speed | 900 | Travel time and lead |
+| | Burst Damage / Radius | 180 / 9 | Explosive, falls off to 0 at the edge |
+| | Miss Radius / Miss Per 100 m | 3 / 1.2 | About 15 m spread at 1 km |
+| Bursts | Burst Shots / Burst Pause | 8 / 1.5 s | At Fire > Shots Per Minute (360) |
+| Ammo | Magazine / Reload | 64 / 5 s | |
+
+Install it like any module: a weapon part prefab with the component, a **module** entry with Weapon Module Id `ANTI_AIR`, and a **hardpoint** with a Point (no aim mount needed). Give it its own weapon group (the Titan uses 9) so AI gunners don't treat it as a main gun.
+
+**Red Titan example** (Sample Mechs mod): `Mech_Parts/Titan_Flak_Battery.et` on hardpoint **FLAK** (module 8, class UTILITY) high on the titan's back.
+
+Tuning: aircraft still circling → raise Burst Damage or lower Miss Per 100 m. Aircraft die instantly → lower Burst Damage or raise Burst Pause.
 
 ---
 

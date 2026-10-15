@@ -11,9 +11,9 @@ class BFA_SentinelDeployableComponent : SCR_BaseDeployableInventoryItemComponent
 {
 	// Mech prefab spawned by this deployment item.
 	[Attribute(
-		"{33D70479FF3498E0}Prefabs/Vehicles/Mech/SampleMech.et",
+		"",
 		UIWidgets.ResourcePickerThumbnail,
-		"Sentinel mech prefab to spawn"
+		"Mech prefab this deployable item spawns (the Sample Mechs mod sets it to Sample Mech 1)"
 	)]
 	protected ResourceName m_sMechPrefab;
 
