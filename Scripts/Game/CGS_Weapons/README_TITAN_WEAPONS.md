@@ -149,6 +149,38 @@ Tuning: aircraft still circling → raise Burst Damage or lower Miss Per 100 m. 
 
 ---
 
+## CGS_ForcePulseModuleComponent: stomp shockwave
+
+Stops vehicles and infantry hiding under a big mech's feet, where its guns can't reach. It needs no turret and no gunner:
+
+1. When at least **Min Targets** hostile vehicles or soldiers on foot are inside **Trigger Radius**, it charges for **Charge Time**.
+2. Then it releases a shockwave and waits **Cooldown** seconds.
+3. Everything inside **Push Radius** is thrown away from the centre and upward, hardest at the centre and fading to nothing at the edge:
+    - **Vehicles** fly and spin.
+    - **Soldiers on foot** are knocked down (ragdoll).
+    - Both can also take damage.
+
+**Multiplayer:** each machine pushes what it simulates (the driver's PC moves the car being driven, the server moves AI vehicles and AI soldiers), so pushes don't snap back. The pulse centre is the weapon part's position, so put its hardpoint Point under the mech.
+
+| Category | Setting | Red Titan | Notes |
+|---|---|---|---|
+| Trigger | Trigger Radius | 35 | Metres, measured flat (ignores height) |
+| | Min Targets | 1 | Hostiles needed to trigger |
+| | Max Height | 80 | Ignore things this far above / below the centre (aircraft) |
+| | Cooldown / Charge Time | 8 s / 1 s | |
+| | Requires Crew | on | Fires only while the mech is crewed (AI pilot counts) |
+| Push | Push Radius | 45 | Metres |
+| | Push Speed / Lift Speed | 18 / 8 m/s | Speed added at the centre |
+| | Spin | 1.5 | Random spin for vehicles (flips them) |
+| | Knock Down Infantry | on | Ragdoll soldiers on foot |
+| | Push Friendlies | off | Friendly units are left alone; empty vehicles are pushed |
+| Damage | Vehicle / Infantry Damage | 150 / 25 | Explosive, at the centre |
+| Effects | Pulse / Ring Particle, Ring Count, Ring Scale | | Blast at the centre plus a ring of blasts (the shockwave) |
+
+**Red Titan example** (Sample Mechs mod): `Mech_Parts/Titan_Stomp_Pulse.et` on hardpoint **STOMP** (module 9, class UTILITY, weapon group 8) at the titan's origin.
+
+---
+
 ## Weapons on IK arms
 
 The arm's hand bone (`J3`) **moves** with the IK but **does not turn**, so a muzzle on it keeps pointing level. Fix it on the weapon part:
