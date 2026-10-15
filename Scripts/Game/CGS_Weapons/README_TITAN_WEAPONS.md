@@ -122,30 +122,61 @@ To check: turn Debug on, fire, and watch where the rockets start. Adjust spacing
 
 ## CGS_AntiAirModuleComponent: automatic flak
 
-Stops helicopters and gunships circling a mech that can't aim up. It needs no turret and no gunner:
+Stops helicopters and gunships circling a mech that can't aim up. It needs no gunner:
 
 - It scans for **hostile vehicles flying** at least **Min Altitude** above the ground within **Range**.
-- It leads them by their speed and fires flak shells that burst near them after their travel time.
-- Accuracy drops with distance, so far targets take more shells and close ones get shredded.
-- It fires in bursts; ammo, reload, heat and "destroyed" rules apply like any weapon.
+- A **turret** visibly swings onto the target, and the flak bursts near it after its travel time.
+- It's built for **area denial, not sniping**:
+    - The first bursts are scattered wide and walk in over **Settle Time**.
+    - Fast movers get extra spread.
+    - An aircraft that flies through takes a few hits; one that hangs around or hovers gets shredded.
+- Ammo, reload, heat and "destroyed" rules apply like any weapon.
 
 | Category | Setting | Red Titan | Notes |
 |---|---|---|---|
-| Anti-Air | Range | 1500 | Metres |
+| Anti-Air | Range | 800 | Metres |
 | | Min Altitude | 12 | Only things this high above the ground count as aircraft |
-| | Scan Interval | 0.5 | Seconds between target checks |
 | | Requires Crew | on | Fires only while the mech is crewed (AI pilot counts) |
 | Flak | Shell Speed | 900 | Travel time and lead |
-| | Burst Damage / Radius | 180 / 9 | Explosive, falls off to 0 at the edge |
-| | Miss Radius / Miss Per 100 m | 3 / 1.2 | About 15 m spread at 1 km |
-| Bursts | Burst Shots / Burst Pause | 8 / 1.5 s | At Fire > Shots Per Minute (360) |
+| | Burst Damage / Radius | 120 / 8 | Explosive, falls off to 0 at the edge |
+| | Miss Radius / Miss Per 100 m | 3 / 2 | Base spread: 23 m at 1 km once settled |
+| Area Denial | Start Spread Scale | 4 | Spread ×4 when it first engages, shrinking to ×1 ... |
+| | Settle Time | 8 s | ... over this long on the same target |
+| | Hover Speed | 12 m/s | Slower than this = hovering, no speed penalty |
+| | Speed Per Extra Spread | 40 m/s | Every 40 m/s faster adds ×1 spread |
+| Bursts | Burst Shots / Burst Pause | 6 / 2 s | At Fire > Shots Per Minute (360) |
 | Ammo | Magazine / Reload | 64 / 5 s | |
+| Turret | Animate Turret | on | Visual, on every machine |
+| | Turret Slot | `Turret` | Slot on the part holding the piece that turns left / right. Empty = the whole part turns |
+| | Gun Slot | `Guns` | Slot on the turret piece holding the piece that tilts. Empty = the turret tilts too |
+| | Turn Speed | 90 °/s | |
+| | Min / Max Elevation | −5 / 85 ° | |
+| | Return To Rest Time | 4 s | Turns back to rest after this long without a target |
+| | Barrel Length | 1 | Shots start this far along the gun piece's blue (Z) axis |
 
-Install it like any module: a weapon part prefab with the component, a **module** entry with Weapon Module Id `ANTI_AIR`, and a **hardpoint** with a Point (no aim mount needed). Give it its own weapon group (the Titan uses 9) so AI gunners don't treat it as a main gun.
+**Turret setup:**
 
-**Red Titan example** (Sample Mechs mod): `Mech_Parts/Titan_Flak_Battery.et` on hardpoint **FLAK** (module 8, class UTILITY) high on the titan's back.
+1. Split the model into a **base**, a **turret** (turns) and **guns** (tilt).
+2. **Base part**: the weapon part with the component, plus a SlotManager slot `Turret` holding the turret prefab.
+3. **Turret prefab**: its mesh, plus a SlotManager slot `Guns` holding the guns prefab.
+4. **Guns prefab**: its mesh with the barrels along +Z (blue).
 
-Tuning: aircraft still circling → raise Burst Damage or lower Miss Per 100 m. Aircraft die instantly → lower Burst Damage or raise Burst Pause.
+Each piece needs a Hierarchy component and no RplComponent.
+
+Install it like any module: a **module** entry with Weapon Module Id `ANTI_AIR`, and a **hardpoint** with a Point (no aim mount needed). Give it its own weapon group (the Titan uses 9).
+
+**Red Titan example** (Sample Mechs mod):
+
+- `Mech_Parts/Titan_Flak_Battery.et` (base)
+- `Titan_Flak_Turret.et` (placeholder dish model)
+- `Titan_Flak_Guns.et` (placeholder las cannon model)
+
+They sit on hardpoint **FLAK** (module 8). Swap in your own meshes on the turret and guns prefabs.
+
+**Tuning:**
+
+- **Too deadly:** raise Start Spread Scale or Settle Time, or lower Burst Damage.
+- **Aircraft can still hover safely:** lower Settle Time or Miss Per 100 m.
 
 ---
 

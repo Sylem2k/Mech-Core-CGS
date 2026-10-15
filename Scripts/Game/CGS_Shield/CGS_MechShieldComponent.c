@@ -81,16 +81,25 @@ class CGS_MechShieldComponent : ScriptComponent
 	[Attribute("", UIWidgets.ResourceNamePicker, "Particle (.ptc) at the centre when the shield comes back up.", params: "ptc", category: "Effects")]
 	protected ResourceName m_sRestoreParticle;
 
-	[Attribute("", UIWidgets.ResourceNamePicker, "Sound file (.acp) for the shield sounds below.", params: "acp", category: "Effects")]
+	[Attribute("", UIWidgets.ResourceNamePicker, "Default sound file (.acp), used for any sound below that has no sound file of its own.", params: "acp", category: "Effects")]
 	protected ResourceName m_sSoundProject;
 
-	[Attribute("", UIWidgets.EditBox, "Hit sound event inside the .acp.", category: "Effects")]
+	[Attribute("", UIWidgets.ResourceNamePicker, "HIT: sound file (.acp) played where a hit lands on the bubble. Empty = the default Sound Project.", params: "acp", category: "Sounds")]
+	protected ResourceName m_sHitSoundProject;
+
+	[Attribute("", UIWidgets.EditBox, "HIT: event name inside that .acp (open the .acp in Workbench to see its events, e.g. SOUND_HIT). Empty = no hit sound.", category: "Sounds")]
 	protected string m_sHitSoundEvent;
 
-	[Attribute("", UIWidgets.EditBox, "Shield down sound event.", category: "Effects")]
+	[Attribute("", UIWidgets.ResourceNamePicker, "BREAK: sound file (.acp) played when the shield is knocked down. Empty = the default Sound Project.", params: "acp", category: "Sounds")]
+	protected ResourceName m_sBreakSoundProject;
+
+	[Attribute("", UIWidgets.EditBox, "BREAK: event name inside that .acp. Empty = no break sound.", category: "Sounds")]
 	protected string m_sBreakSoundEvent;
 
-	[Attribute("", UIWidgets.EditBox, "Shield back up sound event.", category: "Effects")]
+	[Attribute("", UIWidgets.ResourceNamePicker, "RESTORE: sound file (.acp) played when the shield comes back up. Empty = the default Sound Project.", params: "acp", category: "Sounds")]
+	protected ResourceName m_sRestoreSoundProject;
+
+	[Attribute("", UIWidgets.EditBox, "RESTORE: event name inside that .acp. Empty = no restore sound.", category: "Sounds")]
 	protected string m_sRestoreSoundEvent;
 
 	// ---- Replicated state ----------------------------------------------------------------------
@@ -482,7 +491,7 @@ class CGS_MechShieldComponent : ScriptComponent
 			return;
 
 		SpawnParticle(m_sHitParticle, position);
-		PlaySound(m_sHitSoundEvent, position);
+		PlaySound(m_sHitSoundProject, m_sHitSoundEvent, position);
 		FlashBubble();
 	}
 
@@ -501,13 +510,13 @@ class CGS_MechShieldComponent : ScriptComponent
 		{
 			vector center = GetCenterWorld();
 			SpawnParticle(m_sBreakParticle, center);
-			PlaySound(m_sBreakSoundEvent, center);
+			PlaySound(m_sBreakSoundProject, m_sBreakSoundEvent, center);
 		}
 		else if (!m_bDown && wasDown)
 		{
 			vector center = GetCenterWorld();
 			SpawnParticle(m_sRestoreParticle, center);
-			PlaySound(m_sRestoreSoundEvent, center);
+			PlaySound(m_sRestoreSoundProject, m_sRestoreSoundEvent, center);
 			FlashBubble();
 		}
 
@@ -527,12 +536,17 @@ class CGS_MechShieldComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected void PlaySound(string eventName, vector position)
+	protected void PlaySound(ResourceName project, string eventName, vector position)
 	{
+		if (eventName.IsEmpty())
+			return;
+		if (project.IsEmpty())
+			project = m_sSoundProject;
+
 		vector mat[4];
 		Math3D.MatrixIdentity4(mat);
 		mat[3] = position;
-		BFA_MechWeaponModuleComponent.BFA_MechPlaySound(m_sSoundProject, eventName, mat);
+		BFA_MechWeaponModuleComponent.BFA_MechPlaySound(project, eventName, mat);
 	}
 
 	//------------------------------------------------------------------------------------------------
