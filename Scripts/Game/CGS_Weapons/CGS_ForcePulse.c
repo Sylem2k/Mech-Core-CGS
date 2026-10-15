@@ -49,6 +49,12 @@ class CGS_ForcePulseModuleComponent : BFA_MechWeaponModuleComponent
 	[Attribute("8", UIWidgets.Auto, "Upward speed added at the centre (m/s).", category: "Push")]
 	protected float m_fLiftSpeed;
 
+	[Attribute("1", UIWidgets.Auto, "How the push fades with distance. 1 = evenly to the edge, 0.5 = stays strong far out, 2 = only strong near the centre.", category: "Push")]
+	protected float m_fFalloffPower;
+
+	[Attribute("0.5", UIWidgets.Auto, "Soldiers are thrown at this share of the vehicle push / lift speed.", category: "Push")]
+	protected float m_fInfantryThrowScale;
+
 	[Attribute("1.5", UIWidgets.Auto, "Random spin given to vehicles (radians/s) - flips them.", category: "Push")]
 	protected float m_fSpin;
 
@@ -366,7 +372,10 @@ class CGS_ForcePulseModuleComponent : BFA_MechWeaponModuleComponent
 	protected float Falloff(IEntity entity)
 	{
 		float d = vector.DistanceXZ(entity.GetOrigin(), GetCentre());
-		return Math.Clamp(1.0 - d / Math.Max(m_fPushRadius, 0.1), 0.0, 1.0);
+		float linear = Math.Clamp(1.0 - d / Math.Max(m_fPushRadius, 0.1), 0.0, 1.0);
+		if (linear <= 0)
+			return 0;
+		return Math.Pow(linear, Math.Max(m_fFalloffPower, 0.05));
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -450,7 +459,7 @@ class CGS_ForcePulseModuleComponent : BFA_MechWeaponModuleComponent
 					controller.Ragdoll();
 
 				// Throw the ragdoll a little once it is active (best effort).
-				vector throwVelocity = away * (m_fPushSpeed * 0.5 * falloff) + vector.Up * (m_fLiftSpeed * 0.5 * falloff);
+				vector throwVelocity = away * (m_fPushSpeed * m_fInfantryThrowScale * falloff) + vector.Up * (m_fLiftSpeed * m_fInfantryThrowScale * falloff);
 				GetGame().GetCallqueue().CallLater(ThrowBody, 60, false, character, throwVelocity);
 				pushed++;
 				continue;

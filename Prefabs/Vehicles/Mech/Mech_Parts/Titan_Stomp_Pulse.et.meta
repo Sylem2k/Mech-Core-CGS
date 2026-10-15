@@ -1,0 +1,17 @@
+MetaFileClass {
+ Name "{3764FA8EDD9C9864}Prefabs/Vehicles/Mech/Mech_Parts/Titan_Stomp_Pulse.et"
+ Configurations {
+  EntityTemplateResourceClass PC {
+  }
+  EntityTemplateResourceClass XBOX_ONE : PC {
+  }
+  EntityTemplateResourceClass XBOX_SERIES : PC {
+  }
+  EntityTemplateResourceClass PS4 : PC {
+  }
+  EntityTemplateResourceClass PS5 : PC {
+  }
+  EntityTemplateResourceClass HEADLESS : PC {
+  }
+ }
+}

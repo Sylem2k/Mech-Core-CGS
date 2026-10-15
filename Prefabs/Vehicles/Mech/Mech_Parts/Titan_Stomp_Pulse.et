@@ -1,0 +1,35 @@
+GenericEntity : "{8942F09222374843}Prefabs/Vehicles/Mech/Core/Mech_Module_Base.et" {
+ ID "AB16263277940E96"
+ components {
+  CGS_ForcePulseModuleComponent "{A5ADE4175BAF8327}" {
+   m_sModuleId "FORCE_PULSE"
+   m_sDisplayName "Titan Stomp"
+   m_sControlStation "COMMANDER"
+   m_iWeaponGroup 8
+   m_bSupportsHeldFire 1
+   m_bSupportsPulseFire 0
+   m_FX BFA_MechWeaponFX "{4311C91CA39CE1B2}" {
+    m_sSoundProject "{C45837D7F7445964}Sounds/Editor/LightningStrike/Editor_LightningStrike.acp"
+    m_sFireSoundEvent "SOUND_LIGHTNING_STRIKE"
+   }
+   m_fHeatPerShot 5
+   m_eDamageKind EXPLOSIVE
+   m_fShotsPerMinute 60
+   m_fTriggerRadius 60
+   m_iMinTargets 1
+   m_fMaxHeight 80
+   m_fCooldown 8
+   m_fChargeTime 1
+   m_fPushRadius 90
+   m_fPushSpeed 35
+   m_fLiftSpeed 15
+   m_fFalloffPower 0.5
+   m_fInfantryThrowScale 1
+   m_fSpin 2
+   m_fVehicleDamage 150
+   m_fInfantryDamage 25
+   m_iRingCount 14
+   m_bDebug 1
+  }
+ }
+}

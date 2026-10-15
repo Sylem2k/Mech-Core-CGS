@@ -164,13 +164,15 @@ Stops vehicles and infantry hiding under a big mech's feet, where its guns can't
 
 | Category | Setting | Red Titan | Notes |
 |---|---|---|---|
-| Trigger | Trigger Radius | 35 | Metres, measured flat (ignores height) |
+| Trigger | Trigger Radius | 60 | Metres, measured flat (ignores height) |
 | | Min Targets | 1 | Hostiles needed to trigger |
 | | Max Height | 80 | Ignore things this far above / below the centre (aircraft) |
 | | Cooldown / Charge Time | 8 s / 1 s | |
 | | Requires Crew | on | Fires only while the mech is crewed (AI pilot counts) |
-| Push | Push Radius | 45 | Metres |
-| | Push Speed / Lift Speed | 18 / 8 m/s | Speed added at the centre |
+| Push | Push Radius | 90 | Metres |
+| | Push Speed / Lift Speed | 35 / 15 m/s | Speed added at the centre |
+| | Falloff Power | 0.5 | 1 = fades evenly, 0.5 = stays strong far out, 2 = strong only near the centre |
+| | Infantry Throw Scale | 1 | Soldiers thrown at this share of the push / lift speed |
 | | Spin | 1.5 | Random spin for vehicles (flips them) |
 | | Knock Down Infantry | on | Ragdoll soldiers on foot |
 | | Push Friendlies | off | Friendly units are left alone; empty vehicles are pushed |
