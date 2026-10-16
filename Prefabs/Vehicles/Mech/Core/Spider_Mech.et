@@ -1,0 +1,314 @@
+Vehicle {
+ ID "6AA01B4A381D377B"
+ components {
+  EventHandlerManagerComponent "{6AA01B4A381D37A0}" {
+   EventHandlers {
+    BaseEventHandler "{6AA01B4A381D3789}" {
+     EventName "OnCompartmentEntered"
+    }
+    BaseEventHandler "{6AA01B4A381D378C}" {
+     EventName "OnCompartmentLeft"
+    }
+   }
+  }
+  SignalsManagerComponent "{6AA01B4A381D3792}" {
+  }
+  AIKnowledgeComponent "{6AA01B4A381D3790}" {
+  }
+  BFA_MechAICrewComponent "{6AA01B4A381D3791}" {
+  }
+  BFA_MechAimComponent "{6AA01B4A381D3796}" {
+   m_fReticleAimDistance 1000
+   m_iLocalAimTickMs 16
+  }
+  BFA_MechControllerComponent "{6AA01B4A381D3794}" {
+   MaxStartupTime 8
+   m_sCrewStationId "DRIVER"
+   m_iPrimaryWeaponGroup 0
+  }
+  BFA_MechCoreComponent "{6AA01B4A381D3795}" {
+   m_aCrewStations {
+    BFA_MechCrewStationDefinition "{6AA01B4A381D3799}" {
+     m_sStationId "DRIVER"
+     m_bCanDrive 1
+     m_bCanAim 0
+     m_iWeaponGroupMask 0
+     m_iCompartmentIndex 0
+     m_iPrimaryWeaponGroup 0
+     m_iSecondaryWeaponGroup 0
+     m_iAuxWeaponGroup 0
+    }
+   }
+  }
+  BFA_MechCrewStationControllerComponent "{6AA01B4A381D379F}" {
+   m_iSeatWatchMs 100
+   m_iNetAimMs 33
+   m_bBindAuxFire 1
+  }
+  BFA_MechHardpointComponent "{6AA01B4A381D379D}" {
+  }
+  BFA_MechMovementComponent "{6AA01B4A381EBDCC}" {
+   m_aLegPairs {
+    BFA_MechLegPair "{6AA01B4A381EBD96}" {
+     m_sLeftLegSlotName "Leg_L1"
+     m_sRightLegSlotName "Leg_R1"
+    }
+   }
+   m_fSpeed 5
+   m_bCanSprint 1
+   m_fSprintSpeed 8
+   m_fStrafeSpeed 3
+   m_fSprintStrafeSpeed 4
+   m_fAvgHeightSpeed 2
+   m_fAngularSpeed 1
+   m_fBodyHeightPilot 2.3
+   m_fBodyHeightEmpty 0.5
+   m_fGroundProbeForward 2
+   m_fGroundProbeSide 1.5
+   m_fGroundRiseSpeed 6
+   m_fGroundFallSpeed 4
+   m_fGroundFollowGain 4
+  }
+  BFA_MechWeaponComponent "{6AA01B4A381EBD94}" {
+  }
+  BFA_MechWeaponMountComponent "{6AA01B4A381EBD9A}" {
+   m_bDebugAim 0
+  }
+  CGS_MechBrainComponent "{6AA01B4A381EBD99}" {
+   m_sPilotPrefab "{D49891BE09F32E3B}Prefabs/Characters/Factions/BLUFOR/US_Army/CGS_Pilot_US.et"
+  }
+  CGS_MechDeathComponent "{6AA01B4A381EBD98}" {
+  }
+  CGS_MechHeatComponent "{6AA01B4A381EBD9F}" {
+  }
+  ChimeraAIPathfindingComponent "{6AA01B4A381E0C02}" {
+   NavmeshProject "BTRlike"
+   "Use Road Network" 1
+  }
+  ColliderHistoryComponent "{6AA01B4A381E0C01}" {
+  }
+  ControllersManagerComponent "{6AA01B4A381E0C1F}" {
+  }
+  MeshObject "{6AA01B4A381E0C1D}" {
+   Object "{7E59FDAE17D695C6}Common/Models/Sen_Bodyv2.xob"
+  }
+  RigidBody "{6AA01B4A381E0C1A}" {
+   Active Active
+   Mass 2500
+   Gravity 0
+   ResponseIndex "Normal"
+   Geometries {
+    PhysicsBoxGeometry BodyCollider {
+     LayerPreset "Vehicle"
+     Offset 0 0.5 0
+     Extents 2.5 2.5 3.5
+    }
+   }
+  }
+  SCR_AIVehicleUsageComponent "{6AA01B4A381E0DEC}" {
+   m_eVehicleType GROUND_VEHICLE_TRACKED
+  }
+  SCR_BaseCompartmentManagerComponent "{6AA01B4A381E0DE8}" {
+   DoorInfoList {
+    CompartmentDoorInfo "{6AA01B4A381E0DE6}" {
+     ContextName "door_driver"
+     EntryPositionInfo PointInfo "{6AA01B4A381E0DE7}" {
+      Offset -1.5 0 1.5
+     }
+     ExitPositionInfo PointInfo "{6AA01B4A381E0DE5}" {
+      Offset -1.5 0 1.5
+     }
+     GetInTeleport 1
+     GetOutTeleport 1
+     FakeDoor 1
+    }
+   }
+   CompartmentSlots {
+    PilotCompartmentSlot pilot {
+     CompartmentUniqueName "driver"
+     CompartmentAction SCR_GetInUserAction "{6AA01B4A381E0DFE}" {
+      ParentContextList {
+       "default"
+      }
+      UIInfo UIInfo "{6AA01B4A381E0DFC}" {
+       Name "Get in - Driver"
+      }
+     }
+     GetOutAction SCR_GetOutAction "{6AA01B4A381E0DFA}" {
+      ParentContextList {
+       "default"
+      }
+     }
+     JumpOutAction SCR_JumpOutAction "{6AA01B4A381E0DF8}" {
+     }
+     SwitchSeatAction SCR_SwitchSeatAction "{6AA01B4A381E0DF9}" {
+     }
+     PassengerPositionInfo EntitySlotInfo "{284331CB9D0800F1}" {
+      Offset 0 1.5 0
+     }
+     SkipCharacterDoorAnimationsFromSeat 1
+     EjectUnconsciousAndDeadCharacters 1
+     DoorInfoList {
+      0
+     }
+     m_bIsWaterTight 1
+    }
+   }
+  }
+  SCR_BaseLockComponent "{6AA01B4A381E0DF5}" {
+  }
+  SCR_EditableVehicleComponent "{57A7CE68BAD65027}" : "{AC79C9DD1CF681B3}Prefabs/Editor/Components/Vehicle_SCR_EditableEntityComponent.ct" {
+   m_UIInfo SCR_EditableVehicleUIInfo "{6AA01B4A381E0DF0}" {
+    Name "BFA Mech (base)"
+    Description "MechCore base walker - inherit this prefab to make a mech"
+    Icon "{A489F552FB7489C3}UI/Textures/Editor/EditableEntities/Characters/EditableEntity_Character_Custom.edds"
+    m_aAuthoredLabels {
+     CONTENT_MODDED ENTITYTYPE_VEHICLE
+    }
+    m_aAutoLabels {
+     SIZE_M
+    }
+    m_EntityBudgetCost {
+     SCR_EntityBudgetValue "{6AA01B4A381E0DCF}" {
+      m_BudgetType VEHICLES
+      m_Value 1
+     }
+     SCR_EntityBudgetValue "{6AA01B4A381E0DCC}" {
+      m_BudgetType CAMPAIGN
+      m_Value 900
+     }
+     SCR_EntityBudgetValue "{6AA01B4A381E0DCD}" {
+      m_BudgetType COOLDOWN
+      m_Value 1
+     }
+    }
+   }
+   m_bAutoRegister ALWAYS
+   m_vIconPos 0 3 0
+  }
+  SCR_VehicleCameraDataComponent "{6AA01B4A381E0DCB}" {
+   m_fHeight 3
+   m_fBobScale 0.25
+   m_fShakeScale 0.1
+   m_fDist_Max 14
+   m_fDist_Min 4
+   m_fDist_Desired 9
+   m_fAngleFirstPerson 5
+   m_fAngleThirdPerson 15
+   m_pCameraAlignData SCR_VehicleCameraAlignment "{6AA01B4A381E0DC4}" {
+    m_fInterpolateSpeed 0.2
+   }
+  }
+  SCR_VehicleDamageManagerComponent "{6AA01B4A381E0DC2}" {
+   "Additional hit zones" {
+    BFA_MechHitZone Hull {
+     HZDefault 1
+     MaxHealth 2000
+     DamageReduction 2
+     DamageThreshold 1
+     "Melee multiplier" 0.01
+     "Kinetic multiplier" 0.1
+     "Fragmentation multiplier" 0.05
+     "Explosive multiplier" 1
+     "Incendiary multiplier" 0.7
+     "DamageState threshold" {
+      0.7 0.4 0.2
+     }
+     m_pDestructionHandler SCR_DestructionBaseHandler "{6AA01B4A381E0DDE}" {
+      m_iWreckDelay 250
+     }
+     m_sDestructionSoundEvent "SOUND_VEHICLE_DESTRUCTION"
+     m_sDestructionParticle "{5B42FC054E231C28}Particles/Vehicle/Vehicle_explosion_small_01.ptc"
+     m_eHitZoneGroup HULL
+     m_fIncendiaryReduction 3.5
+     m_fIncendiaryThreshold 0.1
+     m_fMinFireBurningTime 40
+     m_fMaxFireBurningTime 160
+     m_sDamagedParticle "{2AEA0DCC3EDDCCFB}Particles/Vehicle/Vehicle_smoke_damaged_low_01.ptc"
+     m_sDamagedParticleHeavy "{3F7B398D4D154CC9}Particles/Vehicle/Vehicle_smoke_damaged_medium_01.ptc"
+     m_sBurningParticle "{79DD3A5F1F3069CD}Particles/Vehicle/Vehicle_fire_engine_small.ptc"
+     m_sBurningGroundParticle "{A9259561960FD620}Particles/Vehicle/Vehicle_fire_ground_medium.ptc"
+     m_sFireStateSignal "EngineFireState"
+     m_bLogDamage 0
+    }
+   }
+   CollisionVelocityThreshold 100000
+   "Heavy damage threshold" 200000
+   m_SecondaryExplosions SCR_SecondaryExplosions "{E02DF7DE687CF827}" : "{35E9E298A6FC4085}Prefabs/Weapons/Core/Damage/SecondaryExplosions.conf" {
+   }
+   m_SecondaryFires SCR_SecondaryExplosions "{A6FB3D18B753B012}" : "{43047EEF7C62238B}Prefabs/Weapons/Core/Damage/SecondaryFires.conf" {
+   }
+   m_RepairConfig SCR_RepairConfig "{44EEB3375743D6D6}" : "{1F8D8C615B5EEAD6}Prefabs/Vehicles/Core/Configs/RepairSmokeHandlingConfig.conf" {
+   }
+   m_fOccupantsDamageSpeedThreshold 30
+   m_fOccupantsSpeedDeath 80
+   m_fVehicleDestroyDamage 10000
+  }
+  SCR_VehicleFactionAffiliationComponent "{6AA01B4A381E0DD8}" {
+  }
+  SCR_VehicleSpawnProtectionComponent "{6AA01B4A381E0DD9}" {
+  }
+  SCR_VehiclePerceivableComponent "{6AA01B4A381E0DD7}" {
+   IlluminationLvPerLight 4
+   UnitType 0
+  }
+  SlotManagerComponent "{6AA01B4A381E0DA8}" {
+   Slots {
+    EntitySlotInfo Leg_L1 {
+     Offset -0.3584 -1.9382 -0.4469
+     MergePhysics 0
+     Prefab "{BA4602396DF2E15D}Prefabs/Vehicles/Mech/Mech_Parts/Mech_Leg_Right.et"
+     DisablePhysicsInteraction 1
+    }
+    EntitySlotInfo Leg_R1 {
+     Offset 0.9441 -1.9011 -0.4397
+     MergePhysics 0
+     Prefab "{BA4602396DF2E15D}Prefabs/Vehicles/Mech/Mech_Parts/Mech_Leg_Right.et"
+     DisablePhysicsInteraction 1
+    }
+    EntitySlotInfo Hips {
+     Offset -0.1179 -0.1234 -0.5726
+     MergePhysics 0
+     Prefab "{61A846D7093FF826}Prefabs/Vehicles/Mech/Mech_Parts/Hip.et"
+     DisablePhysicsInteraction 1
+    }
+   }
+  }
+  ActionsManagerComponent "{6AA01B4A381E0DA5}" {
+   ActionContexts {
+    UserActionContext "{6AA01B4A381E0DA2}" {
+     ContextName "default"
+     Position PointInfo "{6AA01B4A381E0DA3}" {
+      Offset 0 1.0526 0
+     }
+     Radius 50
+    }
+   }
+  }
+  VehicleAnimationComponent "{6AA01B4A381E0DBE}" {
+   AnimGraph "{0D0A87608AB28074}Assets/Vehicles/Wheeled/UAZ452/workspaces/UAZ452.agr"
+   AnimInstance "{67DD957FB05A7B62}Assets/Vehicles/Wheeled/UAZ452/workspaces/UAZ452_vehicle.asi"
+   StartNode "VehicleMasterControl"
+   AlwaysActive 1
+   AnimInjection AnimationAttachmentInfo "{6AA01B4A381E0DBA}" {
+    AnimGraph "{0D0A87608AB28074}Assets/Vehicles/Wheeled/UAZ452/workspaces/UAZ452.agr"
+    AnimInstance "{2D3203B30E63757D}Assets/Vehicles/Wheeled/UAZ452/workspaces/UAZ452_player.asi"
+    BindingName "Vehicle"
+   }
+   AnimCommandsToBind {
+   }
+   AutoVariablesBind 1
+   AnimVariablesToBind {
+   }
+   DeactivationDelay 2
+  }
+  NwkMovementComponent "{6AA01B4A381E0DB8}" {
+  }
+  RplComponent "{6AA01B4A381E0DB6}" {
+  }
+  Hierarchy "{6AA01B4A381E0DB4}" {
+  }
+ }
+ coords 71.718 7.693 34.076
+ m_eVehicleType VEHICLE
+}
