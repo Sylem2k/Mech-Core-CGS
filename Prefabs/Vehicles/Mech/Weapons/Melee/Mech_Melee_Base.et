@@ -1,0 +1,12 @@
+GenericEntity : "{8942F09222374843}Prefabs/Vehicles/Mech/Core/Mech_Module_Base.et" {
+ ID "AB5513A798162547"
+ components {
+  CGS_MeleeModuleComponent "{C3406E1880109594}" {
+   m_sModuleId "MELEE"
+   m_sDisplayName "Melee Weapon"
+   m_bSupportsHeldFire 0
+   m_bSupportsPulseFire 1
+   m_fHeatPerShot 2
+  }
+ }
+}

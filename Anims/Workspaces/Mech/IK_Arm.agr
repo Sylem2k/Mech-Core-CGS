@@ -3,16 +3,16 @@ AnimSrcGraph {
  ControlTemplate AnimSrcGCT "{60EEB14350299C12}" {
   Variables {
    AnimSrcGCTVarFloat TargetX {
-    MinValue -10
-    MaxValue 10
+    MinValue -500
+    MaxValue 500
    }
    AnimSrcGCTVarFloat TargetY {
-    MinValue -10
-    MaxValue 10
+    MinValue -500
+    MaxValue 500
    }
    AnimSrcGCTVarFloat TargetZ {
-    MinValue -10
-    MaxValue 10
+    MinValue -500
+    MaxValue 500
    }
   }
   IkChains {

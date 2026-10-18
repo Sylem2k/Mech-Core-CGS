@@ -17,6 +17,7 @@ These are set automatically if you leave **Module Id** on its default.
 |---|---|
 | `CGS_Titan_Cannon` | `TITAN_CANNON` |
 | `CGS_Titan_Missile` | `TITAN_MISSILE` |
+| `CGS_MeleeModuleComponent` | `MELEE` |
 
 The mech's hardpoint module definition needs:
 
@@ -211,6 +212,58 @@ Stops vehicles and infantry hiding under a big mech's feet, where its guns can't
 | Effects | Pulse / Ring Particle, Ring Count, Ring Scale | | Blast at the centre plus a ring of blasts (the shockwave) |
 
 **Red Titan example** (Sample Mechs mod): `Mech_Parts/Titan_Stomp_Pulse.et` on hardpoint **STOMP** (module 9, class UTILITY, weapon group 8) at the titan's origin.
+
+---
+
+## CGS_MeleeModuleComponent: swords, claws, fists
+
+A melee weapon on a mech arm. Module Id defaults to `MELEE`.
+
+- **Players** swing with the weapon group's fire key (press again for the next swing).
+- **AI** swings by itself when a hostile is within **Reach** in front of the arm. An AI gunner "firing" this group from far away is ignored.
+- **The swing** is a scripted arc: the arm's mount is turned by an offset on top of where it aims: wind-up, strike, recover. Works on IK arms (including Shooting Pose) and rigid arms; no new animations.
+- **Damage** is checked on the server along the blade line, from the arm's pivot out to Reach, during the strike only. Each object is hit once per swing. Soldiers are knocked down and thrown; AI-driven and empty vehicles are shoved.
+
+**Ready-made templates** in `Prefabs/Vehicles/Mech/Weapons/Melee/` (no model; inherit one and set your mesh):
+
+| Template | Swing |
+|---|---|
+| `Mech_Melee_Base.et` | Sword: horizontal slash, back and forth |
+| `Mech_Melee_Chop.et` | Axe / hammer: slow overhead chop, heavy damage |
+| `Mech_Melee_Fist.et` | Fist / claw: short, fast jab, big knockback |
+
+**Setup**
+
+1. Make your weapon: right-click a template > **Inherit**, set the **MeshObject** to your sword, axe, claw... and tune Reach to the model's length.
+2. Hang it on the arm's hand the way the Titan's rocket pod is: a slot in the arm's SlotManager with PivotID = the hand bone (`J3`).
+3. Add a module definition with Weapon Module Id `MELEE`, and a hardpoint whose **Aim Mount** is the arm (or set **Swing Mount Id** on the component).
+4. Give it its own weapon group.
+
+**Animation:** no extra anim graph is needed. The swing moves the arm through its mount, the same way aiming does:
+
+- **IK arm** (Aim Driver `ANIM_IK_TARGET`): uses the arm's normal IK graph. The framework's `Anims/Workspaces/Mech/IK_Arm.agr` / `.asi` works for any 3-bone arm (`J1` shoulder, `J2` elbow, `J3` hand); set it as the arm part's AnimationController, Start Node `IK Chain to IK Target`.
+- **Rigid arm** (Aim Driver `ENTITY_ROTATION`): no graph at all; the whole arm part turns.
+
+| Category | Setting | Default | Notes |
+|---|---|---|---|
+| Swing | Swing Mount Id | (empty) | Arm mount that swings (e.g. `ARM_R`). Empty = the hardpoint's Aim Mount |
+| | Windup / Strike / Recover Time | 0.45 / 0.3 / 0.5 s | Damage happens during the strike only |
+| | Cooldown | 1.2 s | Extra wait after a swing |
+| | Strike From / To | 70 25 / -70 -15 | Yaw, pitch degrees added to the aim. Horizontal slash as shown; overhead chop: 0 70 -> 0 -40 |
+| | Alternate | on | Every second swing goes back the other way |
+| Reach | Reach | 14 m | From the arm's pivot (shoulder). Also the AI's swing distance |
+| | Blade Start | 4 m | Nothing closer to the shoulder is hit |
+| | Blade Radius | 1.5 m | Thickness of the hit area |
+| | Max Hits Per Swing | 6 | Cleave limit |
+| | Hit Friendlies | off | |
+| Damage | Infantry / Vehicle Damage | 150 / 400 | |
+| | Infantry / Vehicle Damage Type | MELEE / EXPLOSIVE | Vehicle armour multipliers apply; EXPLOSIVE gets through most armour |
+| | Knock Down, Knockback | on, 10 m/s | |
+| AI | Auto Swing AI | on | |
+| | AI Arc | 60 degrees | Only swings at targets this far left/right of where the arm faces |
+| Effects | Swing / Hit Sound Event, Hit Particle | | Swing sound plays at the start of the strike (empty = Fire Sound Event) |
+
+**For a Titan-sized arm:** Reach about 70, Blade Start 35, Blade Radius 5, Vehicle Damage 2000+.
 
 ---
 

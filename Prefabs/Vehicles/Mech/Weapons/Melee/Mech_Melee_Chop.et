@@ -1,0 +1,18 @@
+GenericEntity : "{B051A23EA045BA08}Prefabs/Vehicles/Mech/Weapons/Melee/Mech_Melee_Base.et" {
+ ID "245A456213BD4A78"
+ components {
+  CGS_MeleeModuleComponent "{C3406E1880109594}" {
+   m_sDisplayName "Melee Chop"
+   m_fWindupTime 0.6
+   m_fStrikeTime 0.25
+   m_fRecoverTime 0.6
+   m_fCooldown 1.6
+   m_vStrikeFrom 0 70 0
+   m_vStrikeTo 0 -40 0
+   m_bAlternate 0
+   m_iMaxHitsPerSwing 3
+   m_fInfantryDamage 250
+   m_fVehicleDamage 700
+  }
+ }
+}

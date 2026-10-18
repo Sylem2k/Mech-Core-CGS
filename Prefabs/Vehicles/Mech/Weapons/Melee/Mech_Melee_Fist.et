@@ -1,0 +1,21 @@
+GenericEntity : "{B051A23EA045BA08}Prefabs/Vehicles/Mech/Weapons/Melee/Mech_Melee_Base.et" {
+ ID "3A5FA747CE99C6CB"
+ components {
+  CGS_MeleeModuleComponent "{C3406E1880109594}" {
+   m_sDisplayName "Melee Punch"
+   m_fWindupTime 0.25
+   m_fStrikeTime 0.15
+   m_fRecoverTime 0.3
+   m_fCooldown 0.6
+   m_vStrikeFrom 15 10 0
+   m_vStrikeTo -5 -5 0
+   m_fReach 10
+   m_fBladeStart 3
+   m_fBladeRadius 2
+   m_iMaxHitsPerSwing 2
+   m_fInfantryDamage 120
+   m_fVehicleDamage 300
+   m_fKnockback 16
+  }
+ }
+}

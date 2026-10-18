@@ -51,8 +51,7 @@ AnimSrcGraphFile {
        Operation Translate
        Axis Z
        Amount "TargetZ"
-       Space Pivot
-       PivotBone "Scene_Root"
+       Space Model
        IkTarget "IK_Target_Mech"
       }
      }

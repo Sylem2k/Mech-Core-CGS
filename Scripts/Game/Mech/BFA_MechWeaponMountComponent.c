@@ -115,6 +115,9 @@ class BFA_MechWeaponMountDefinition
 	vector m_vIkEndRest;               // hand bone rest position in the arm's model space
 	bool m_bIkEndRestKnown;
 	vector m_vIkSmoothed;              // smoothed target sent to the IK graph
+	bool m_bSwingActive;               // a melee swing is driving this mount
+	float m_fSwingYaw;                 // degrees added on top of the aim while swinging
+	float m_fSwingPitch;
 	int m_iHandYawVar = -1;
 	int m_iHandPitchVar = -1;
 	bool m_bHandBindTried;
@@ -596,6 +599,25 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 			}
 		}
 
+		mount.m_vLastAimPoint = aimPointWorld;
+		mount.m_bHasAimPoint = true;
+		mount.m_fAimYaw = yaw;
+		mount.m_fAimPitch = pitch;
+		ApplyMountPose(mount, base);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Builds the mount's pose from its stored aim (+ melee swing offset) and applies it.
+	protected void ApplyMountPose(BFA_MechWeaponMountDefinition mount, vector base[4])
+	{
+		float yaw = mount.m_fAimYaw;
+		float pitch = mount.m_fAimPitch;
+		if (mount.m_bSwingActive)
+		{
+			yaw = Math.Clamp(yaw + mount.m_fSwingYaw, -170, 170);
+			pitch = Math.Clamp(pitch + mount.m_fSwingPitch, -85, 85);
+		}
+
 		// Build the local aim rotation.
 		vector deltaMat[4];
 		Math3D.AnglesToMatrix(Vector(yaw, pitch, 0), deltaMat);
@@ -608,11 +630,44 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		// Never allow aiming to move the physical mount position.
 		finalMat[3] = base[3];
 
-		mount.m_vLastAimPoint = aimPointWorld;
-		mount.m_bHasAimPoint = true;
-		mount.m_fAimYaw = yaw;
-		mount.m_fAimPitch = pitch;
 		ApplyAimDriver(mount, yaw, pitch, finalMat);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! MELEE: swing a mount by an offset (degrees) on top of where it aims. Call every frame while
+	//! swinging on every machine that shows it; active = false puts the mount back on its aim.
+	void SetMountSwing(string mountId, bool active, float yawOffset, float pitchOffset)
+	{
+		BFA_MechWeaponMountDefinition mount = FindMount(mountId);
+		if (!mount || !ResolveMount(mount) || !mount.m_pParent)
+			return;
+
+		mount.m_bSwingActive = active;
+		mount.m_fSwingYaw = yawOffset;
+		mount.m_fSwingPitch = pitchOffset;
+
+		vector base[4];
+		GetLiveBase(mount, base);
+		ApplyMountPose(mount, base);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! MELEE: where a mount swings from (its entity origin) and the point it currently aims at.
+	bool GetMountAim(string mountId, out vector originWorld, out vector aimPointWorld)
+	{
+		BFA_MechWeaponMountDefinition mount = FindMount(mountId);
+		if (!mount || !ResolveMount(mount) || !mount.m_pEntity)
+			return false;
+
+		originWorld = mount.m_pEntity.GetOrigin();
+		if (mount.m_bIkPivotFromBone)
+			originWorld = mount.m_pEntity.CoordToParent(mount.m_vIkPivotModel);
+
+		if (mount.m_bHasAimPoint)
+			aimPointWorld = mount.m_vLastAimPoint;
+		else
+			aimPointWorld = originWorld + mount.m_pEntity.GetTransformAxis(2) * 10;
+		return true;
 	}
 
 	//==================================================================================================
@@ -1067,8 +1122,11 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		if (dt <= 0)
 			return mount.m_vIkSmoothed;
 
-		// ~95% of the way in Smooth Time.
-		float alpha = 1.0 - Math.Pow(0.05, dt / mount.m_fIkSmoothTime);
+		// ~95% of the way in Smooth Time (much faster during a melee swing).
+		float smoothTime = mount.m_fIkSmoothTime;
+		if (mount.m_bSwingActive)
+			smoothTime = Math.Min(smoothTime, 0.05);
+		float alpha = 1.0 - Math.Pow(0.05, dt / smoothTime);
 		mount.m_vIkSmoothed = mount.m_vIkSmoothed + (wanted - mount.m_vIkSmoothed) * alpha;
 		return mount.m_vIkSmoothed;
 	}
