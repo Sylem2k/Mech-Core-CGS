@@ -72,6 +72,15 @@ class BFA_MechWeaponMountDefinition
 	[Attribute("J3", UIWidgets.EditBox, "ANIM_IK_TARGET: the hand bone at the end of the IK chain (used with Target From Rest).", category: "Aim Driver")]
 	string m_sIkEndBone;
 
+	[Attribute("false", UIWidgets.CheckBox, "ANIM_IK_TARGET: SWING FROM REST. Aiming straight ahead keeps the arm in its modelled rest pose; aiming elsewhere swings the hand from there, as if the arm turned at the shoulder. Use it when the arm folds up or reaches oddly because its rest pose is not pointing straight out from the shoulder. Needs Target From Rest.", category: "Aim Driver")]
+	bool m_bIkSwingFromRest;
+
+	[Attribute("0", UIWidgets.Auto, "ANIM_IK_TARGET + Swing From Rest: how far the hand swings, in metres, for each radian of aim (about the shoulder-to-hand distance). 0 = use Ik Reach.", category: "Aim Driver")]
+	float m_fIkSwingRadius;
+
+	[Attribute("0", UIWidgets.Auto, "ANIM_IK_TARGET: seconds for the hand to glide most of the way to a new target (0 = instant). 0.3-0.6 stops arms snapping when the target changes.", category: "Aim Driver")]
+	float m_fIkSmoothTime;
+
 	[Attribute("", UIWidgets.EditBox, "FOLLOW ARM: Mount Id of an IK arm (e.g. ARM_L). This weapon rides on that arm: it moves with the arm and still aims on top of it. Empty = fixed to the body.", category: "Follow Arm")]
 	string m_sFollowArmMount;
 
@@ -93,6 +102,9 @@ class BFA_MechWeaponMountDefinition
 	vector m_vIkPivotModel;            // pivot bone position in the arm's model space (bind pose)
 	vector m_vIkEndRest;               // hand bone rest position in the arm's model space
 	bool m_bIkEndRestKnown;
+	vector m_vIkSmoothed;              // smoothed target sent to the IK graph
+	bool m_bIkSmoothInit;
+	float m_fIkSmoothLastTime;
 
 	// Follow-arm runtime.
 	bool m_bFollowReady;
@@ -911,10 +923,28 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 			if (aimWorld.LengthSq() > 0.000001)
 				aimWorld.Normalize();
 
-			vector targetWorld = pivotWorld + aimWorld * Math.Max(mount.m_fIkReach, 0.1);
-			vector targetLocal = mount.m_pEntity.CoordToLocal(targetWorld);
-			if (mount.m_bIkEndRestKnown)
-				targetLocal = targetLocal - mount.m_vIkEndRest;
+			vector targetLocal;
+			if (mount.m_bIkSwingFromRest && mount.m_bIkEndRestKnown)
+			{
+				// Offset from the rest pose: straight ahead = rest, other aims swing the hand
+				// along the arc a stiff arm would trace from the shoulder.
+				vector restWorld = mount.m_pParent.VectorToParent(mount.m_mBaseLocalTransform[2]);
+				if (restWorld.LengthSq() > 0.000001)
+					restWorld.Normalize();
+				float radius = mount.m_fIkSwingRadius;
+				if (radius <= 0)
+					radius = mount.m_fIkReach;
+				targetLocal = mount.m_pEntity.VectorToLocal((aimWorld - restWorld) * Math.Max(radius, 0.1));
+			}
+			else
+			{
+				vector targetWorld = pivotWorld + aimWorld * Math.Max(mount.m_fIkReach, 0.1);
+				targetLocal = mount.m_pEntity.CoordToLocal(targetWorld);
+				if (mount.m_bIkEndRestKnown)
+					targetLocal = targetLocal - mount.m_vIkEndRest;
+			}
+
+			targetLocal = SmoothIkTarget(mount, targetLocal);
 
 			mount.m_pAnimController.SetFloatVariable(mount.m_iAnimVarA, targetLocal[0]);
 			mount.m_pAnimController.SetFloatVariable(mount.m_iAnimVarB, targetLocal[1]);
@@ -928,6 +958,33 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		// ENTITY_ROTATION: rigid gun.
 		mount.m_pEntity.SetLocalTransform(finalMat);
 		mount.m_pEntity.Update();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Glides the IK target toward the wanted point (exponential, frame-rate independent).
+	protected vector SmoothIkTarget(BFA_MechWeaponMountDefinition mount, vector wanted)
+	{
+		float now = 0;
+		if (GetOwner() && GetOwner().GetWorld())
+			now = GetOwner().GetWorld().GetWorldTime() * 0.001;
+
+		if (mount.m_fIkSmoothTime <= 0 || !mount.m_bIkSmoothInit)
+		{
+			mount.m_vIkSmoothed = wanted;
+			mount.m_bIkSmoothInit = true;
+			mount.m_fIkSmoothLastTime = now;
+			return wanted;
+		}
+
+		float dt = Math.Clamp(now - mount.m_fIkSmoothLastTime, 0.0, 0.25);
+		mount.m_fIkSmoothLastTime = now;
+		if (dt <= 0)
+			return mount.m_vIkSmoothed;
+
+		// ~95% of the way in Smooth Time.
+		float alpha = 1.0 - Math.Pow(0.05, dt / mount.m_fIkSmoothTime);
+		mount.m_vIkSmoothed = mount.m_vIkSmoothed + (wanted - mount.m_vIkSmoothed) * alpha;
+		return mount.m_vIkSmoothed;
 	}
 
 	//------------------------------------------------------------------------------------------------

@@ -270,8 +270,11 @@ On the mech's `BFA_MechWeaponMountComponent`:
 | Ik Pivot Bone | `J1` | The shoulder |
 | Ik Target From Rest | ON | `IK_Titan_Arm` moves the hand *from* its rest position |
 | Ik End Bone | `J3` | |
-| Pitch Min / Max | -75 / 30 | -75 lets it shoot at people under its feet |
+| Pitch Min / Max | -75 / 10 | -75 lets it shoot at people under its feet; keep Max low (flak covers the air) |
 | Yaw Min / Max | -45 / 45 | |
+| Ik Swing From Rest | ON | Aiming straight ahead keeps the modelled rest pose; other aims swing the hand from there. Stops arms folding up |
+| Ik Swing Radius | about shoulder-to-hand distance | How far the hand swings per radian of aim (Red Titan: right 40, left 35). 0 = Ik Reach |
+| Ik Smooth Time | 0.4 | Seconds to glide to a new target, so arms don't snap |
 
 On the arm part prefab: **AnimationController** = `IK_Titan_Arm.agr` / `.asi`, **Start Node** = `IK Chain to IK Target`.
 
