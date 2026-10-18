@@ -45,10 +45,10 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 	[Attribute("1.2", UIWidgets.Auto, "Extra seconds after a swing before the next one can start.", category: "Swing")]
 	protected float m_fCooldown;
 
-	[Attribute("70 25 0", UIWidgets.Auto, "Where the strike STARTS, as degrees added to the aim: yaw (+ = right), pitch (+ = up). Example horizontal slash: 70 25 -> -70 -15. Overhead chop: 0 70 -> 0 -40.", category: "Swing")]
+	[Attribute("70 25 0", UIWidgets.Auto, "Where the strike STARTS: yaw degrees (+ = right), pitch degrees (+ = up), PUSH metres (+ = arm pushed forward along its aim, - = pulled back). Horizontal slash: 70 25 0 -> -70 -15 0. Overhead chop: 0 70 0 -> 0 -40 0. Punch: 5 5 -0.6 -> 0 -3 1.5.", category: "Swing")]
 	protected vector m_vStrikeFrom;
 
-	[Attribute("-70 -15 0", UIWidgets.Auto, "Where the strike ENDS (yaw, pitch degrees added to the aim).", category: "Swing")]
+	[Attribute("-70 -15 0", UIWidgets.Auto, "Where the strike ENDS: yaw, pitch degrees, push metres (see Strike From).", category: "Swing")]
 	protected vector m_vStrikeTo;
 
 	[Attribute("true", UIWidgets.CheckBox, "Every second swing goes the other way (back-hand), so repeated slashes look natural.", category: "Swing")]
@@ -232,7 +232,7 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 	//! AI swings from ServerAITick when something is actually in reach.
 	override protected void OnTriggerDown(IEntity instigator)
 	{
-		if (IsAI(instigator))
+		if (IsAI(instigator) || !CanSwingNow())
 			return;
 		m_pInstigator = instigator;
 		TryFireShot(instigator);
@@ -251,10 +251,19 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 	//------------------------------------------------------------------------------------------------
 	override protected void OnFirePulse(IEntity instigator)
 	{
-		if (IsAI(instigator))
+		if (IsAI(instigator) || !CanSwingNow())
 			return;
 		m_pInstigator = instigator;
 		TryFireShot(instigator);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Checked BEFORE TryFireShot, so heat / ammo are only spent when a swing really starts.
+	protected bool CanSwingNow()
+	{
+		if (m_bServerSwing || Now() < m_fReadyAt)
+			return false;
+		return m_pMechOwner && !BFA_MechExtension.IsMechDestroyed(m_pMechOwner);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -315,7 +324,7 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 	//------------------------------------------------------------------------------------------------
 	//! Swing offset (yaw, pitch degrees) at 'elapsed' seconds into the swing. strikeT = -1 when
 	//! not in the strike, else 0..1 through the strike. Returns false when the swing is over.
-	protected bool SwingOffset(float elapsed, bool mirror, out float yawOff, out float pitchOff, out float strikeT)
+	protected bool SwingOffset(float elapsed, bool mirror, out float yawOff, out float pitchOff, out float strikeT, out float push)
 	{
 		strikeT = -1;
 		float w = Math.Max(m_fWindupTime, 0);
@@ -349,11 +358,13 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 		{
 			yawOff = 0;
 			pitchOff = 0;
+			push = 0;
 			return false;
 		}
 
 		yawOff = offset[0];
 		pitchOff = offset[1];
+		push = offset[2];
 		return true;
 	}
 
@@ -411,7 +422,8 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 		float yawOff;
 		float pitchOff;
 		float strikeT;
-		bool running = SwingOffset(now - m_fLocalStart, m_bLocalMirror, yawOff, pitchOff, strikeT);
+		float push;
+		bool running = SwingOffset(now - m_fLocalStart, m_bLocalMirror, yawOff, pitchOff, strikeT, push);
 
 		if (!running || !m_pMechOwner || BFA_MechExtension.IsMechDestroyed(m_pMechOwner))
 		{
@@ -422,7 +434,7 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 		}
 
 		if (mounts && !mountId.IsEmpty())
-			mounts.SetMountSwing(mountId, true, yawOff, pitchOff);
+			mounts.SetMountSwing(mountId, true, yawOff, pitchOff, push);
 
 		if (strikeT >= 0 && !m_bLocalStrikeSound)
 		{
@@ -442,7 +454,7 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 	//------------------------------------------------------------------------------------------------
 	//! Blade line right now: from the arm pivot toward the aim point, turned by the swing offset
 	//! (in the mech's own frame: yaw around its up axis, pitch up/down).
-	protected bool GetBlade(float yawOff, float pitchOff, out vector bladeFrom, out vector bladeTo)
+	protected bool GetBlade(float yawOff, float pitchOff, out vector bladeFrom, out vector bladeTo, float push = 0)
 	{
 		BFA_MechWeaponMountComponent mounts = GetMounts();
 		string mountId = GetSwingMountId();
@@ -469,8 +481,8 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 		vector swungMech = Vector(Math.Sin(yaw * Math.DEG2RAD) * cp, Math.Sin(pitch * Math.DEG2RAD), Math.Cos(yaw * Math.DEG2RAD) * cp);
 		vector dirWorld = m_pMechOwner.VectorToParent(swungMech);
 
-		bladeFrom = origin + dirWorld * Math.Max(m_fBladeStart, 0);
-		bladeTo = origin + dirWorld * Math.Max(m_fReach, m_fBladeStart + 0.5);
+		bladeFrom = origin + dirWorld * (Math.Max(m_fBladeStart, 0) + push);
+		bladeTo = origin + dirWorld * (Math.Max(m_fReach, m_fBladeStart + 0.5) + push);
 		return true;
 	}
 
@@ -480,7 +492,8 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 		float yawOff;
 		float pitchOff;
 		float strikeT;
-		bool running = SwingOffset(now - m_fServerStart, m_bServerMirror, yawOff, pitchOff, strikeT);
+		float push;
+		bool running = SwingOffset(now - m_fServerStart, m_bServerMirror, yawOff, pitchOff, strikeT, push);
 		if (!running || !m_pMechOwner || BFA_MechExtension.IsMechDestroyed(m_pMechOwner))
 		{
 			m_bServerSwing = false;
@@ -492,7 +505,7 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 
 		vector bladeFrom;
 		vector bladeTo;
-		if (!GetBlade(yawOff, pitchOff, bladeFrom, bladeTo))
+		if (!GetBlade(yawOff, pitchOff, bladeFrom, bladeTo, push))
 			return;
 
 		HitAlongBlade(bladeFrom, bladeTo);
@@ -682,6 +695,8 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 		if (!HostileInReach())
 			return;
 
+		if (!CanSwingNow())
+			return;
 		m_pInstigator = crew;
 		TryFireShot(crew);
 	}

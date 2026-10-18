@@ -230,7 +230,7 @@ A melee weapon on a mech arm. Module Id defaults to `MELEE`.
 |---|---|
 | `Mech_Melee_Base.et` | Sword: horizontal slash, back and forth |
 | `Mech_Melee_Chop.et` | Axe / hammer: slow overhead chop, heavy damage |
-| `Mech_Melee_Fist.et` | Fist / claw: short, fast jab, big knockback |
+| `Mech_Melee_Fist.et` | Fist / claw: punch - pulls back, then drives forward 1.5 m, big knockback |
 
 **Setup**
 
@@ -249,7 +249,7 @@ A melee weapon on a mech arm. Module Id defaults to `MELEE`.
 | Swing | Swing Mount Id | (empty) | Arm mount that swings (e.g. `ARM_R`). Empty = the hardpoint's Aim Mount |
 | | Windup / Strike / Recover Time | 0.45 / 0.3 / 0.5 s | Damage happens during the strike only |
 | | Cooldown | 1.2 s | Extra wait after a swing |
-| | Strike From / To | 70 25 / -70 -15 | Yaw, pitch degrees added to the aim. Horizontal slash as shown; overhead chop: 0 70 -> 0 -40 |
+| | Strike From / To | 70 25 0 / -70 -15 0 | Yaw, pitch (degrees added to the aim), push (metres along the aim, + forward, - pulled back). Slash as shown; overhead chop: 0 70 0 -> 0 -40 0; punch: 5 8 -0.6 -> 0 -3 1.5 |
 | | Alternate | on | Every second swing goes back the other way |
 | Reach | Reach | 14 m | From the arm's pivot (shoulder). Also the AI's swing distance |
 | | Blade Start | 4 m | Nothing closer to the shoulder is hit |

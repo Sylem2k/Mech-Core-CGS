@@ -118,6 +118,7 @@ class BFA_MechWeaponMountDefinition
 	bool m_bSwingActive;               // a melee swing is driving this mount
 	float m_fSwingYaw;                 // degrees added on top of the aim while swinging
 	float m_fSwingPitch;
+	float m_fSwingPush;                // metres the mount is pushed along its aim (punch / thrust)
 	int m_iHandYawVar = -1;
 	int m_iHandPitchVar = -1;
 	bool m_bHandBindTried;
@@ -627,8 +628,10 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		vector finalMat[4];
 		Math3D.MatrixMultiply4(base, deltaMat, finalMat);
 
-		// Never allow aiming to move the physical mount position.
+		// Never allow aiming to move the physical mount position (a melee punch may push it).
 		finalMat[3] = base[3];
+		if (mount.m_bSwingActive && mount.m_fSwingPush != 0)
+			finalMat[3] = base[3] + finalMat[2].Normalized() * mount.m_fSwingPush;
 
 		ApplyAimDriver(mount, yaw, pitch, finalMat);
 	}
@@ -636,7 +639,7 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	//! MELEE: swing a mount by an offset (degrees) on top of where it aims. Call every frame while
 	//! swinging on every machine that shows it; active = false puts the mount back on its aim.
-	void SetMountSwing(string mountId, bool active, float yawOffset, float pitchOffset)
+	void SetMountSwing(string mountId, bool active, float yawOffset, float pitchOffset, float push = 0)
 	{
 		BFA_MechWeaponMountDefinition mount = FindMount(mountId);
 		if (!mount || !ResolveMount(mount) || !mount.m_pParent)
@@ -645,6 +648,9 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		mount.m_bSwingActive = active;
 		mount.m_fSwingYaw = yawOffset;
 		mount.m_fSwingPitch = pitchOffset;
+		mount.m_fSwingPush = push;
+		if (!active)
+			mount.m_fSwingPush = 0;
 
 		vector base[4];
 		GetLiveBase(mount, base);
@@ -1017,6 +1023,10 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 				if (mount.m_bIkEndRestKnown)
 					targetLocal = targetLocal - mount.m_vIkEndRest;
 			}
+
+			// Melee punch / thrust: the hand goes further along the aim.
+			if (mount.m_bSwingActive && mount.m_fSwingPush != 0)
+				targetLocal = targetLocal + mount.m_pEntity.VectorToLocal(aimWorld) * mount.m_fSwingPush;
 
 			targetLocal = SmoothIkTarget(mount, targetLocal);
 

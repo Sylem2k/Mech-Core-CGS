@@ -3,12 +3,13 @@ GenericEntity : "{B051A23EA045BA08}Prefabs/Vehicles/Mech/Weapons/Melee/Mech_Mele
  components {
   CGS_MeleeModuleComponent "{C3406E1880109594}" {
    m_sDisplayName "Melee Punch"
-   m_fWindupTime 0.25
-   m_fStrikeTime 0.15
-   m_fRecoverTime 0.3
-   m_fCooldown 0.6
-   m_vStrikeFrom 15 10 0
-   m_vStrikeTo -5 -5 0
+   m_fWindupTime 0.3
+   m_fStrikeTime 0.12
+   m_fRecoverTime 0.35
+   m_fCooldown 0.5
+   m_vStrikeFrom 5 8 -0.6
+   m_vStrikeTo 0 -3 1.5
+   m_bAlternate 0
    m_fReach 10
    m_fBladeStart 3
    m_fBladeRadius 2
