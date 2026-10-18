@@ -81,6 +81,18 @@ class BFA_MechWeaponMountDefinition
 	[Attribute("0", UIWidgets.Auto, "ANIM_IK_TARGET: seconds for the hand to glide most of the way to a new target (0 = instant). 0.3-0.6 stops arms snapping when the target changes.", category: "Aim Driver")]
 	float m_fIkSmoothTime;
 
+	[Attribute("", UIWidgets.EditBox, "ANIM_IK_TARGET: HAND AIM. Float variable in the arm's anim graph that turns the hand bone left/right (degrees). The IK only moves the hand, it never turns it, so a weapon on the hand stays pointing straight ahead and the wrist looks twisted. Add the variable + a bone rotation node on the hand in the graph, then name it here. Empty = off.", category: "Aim Driver")]
+	string m_sIkHandYawVariable;
+
+	[Attribute("", UIWidgets.EditBox, "ANIM_IK_TARGET: HAND AIM. Float variable that tilts the hand bone up/down (degrees). Empty = off.", category: "Aim Driver")]
+	string m_sIkHandPitchVariable;
+
+	[Attribute("false", UIWidgets.CheckBox, "ANIM_IK_TARGET: flip the hand pitch sign (turn on if the hand tilts up when it should tilt down).", category: "Aim Driver")]
+	bool m_bIkHandInvertPitch;
+
+	[Attribute("80", UIWidgets.Auto, "ANIM_IK_TARGET: most the hand may turn from its rest direction, in degrees.", category: "Aim Driver")]
+	float m_fIkHandMaxAngle;
+
 	[Attribute("", UIWidgets.EditBox, "FOLLOW ARM: Mount Id of an IK arm (e.g. ARM_L). This weapon rides on that arm: it moves with the arm and still aims on top of it. Empty = fixed to the body.", category: "Follow Arm")]
 	string m_sFollowArmMount;
 
@@ -103,6 +115,13 @@ class BFA_MechWeaponMountDefinition
 	vector m_vIkEndRest;               // hand bone rest position in the arm's model space
 	bool m_bIkEndRestKnown;
 	vector m_vIkSmoothed;              // smoothed target sent to the IK graph
+	int m_iHandYawVar = -1;
+	int m_iHandPitchVar = -1;
+	bool m_bHandBindTried;
+	bool m_bHandRestKnown;
+	vector m_vHandRestRight;           // hand bone rest axes in the arm's model space
+	vector m_vHandRestUp;
+	vector m_vHandRestFwd;
 	bool m_bIkSmoothInit;
 	float m_fIkSmoothLastTime;
 
@@ -950,6 +969,8 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 			mount.m_pAnimController.SetFloatVariable(mount.m_iAnimVarB, targetLocal[1]);
 			mount.m_pAnimController.SetFloatVariable(mount.m_iAnimVarC, targetLocal[2]);
 
+			AimIkHand(mount, aimWorld);
+
 			if (m_bDebugAim)
 				DebugIkArm(mount, yaw, pitch, aimWorld, targetLocal);
 			return;
@@ -958,6 +979,71 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 		// ENTITY_ROTATION: rigid gun.
 		mount.m_pEntity.SetLocalTransform(finalMat);
 		mount.m_pEntity.Update();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! HAND AIM: turns the hand bone (through two anim-graph variables) so a weapon on the hand
+	//! points along the aim line instead of staying level while the IK moves the wrist.
+	protected void AimIkHand(BFA_MechWeaponMountDefinition mount, vector aimWorld)
+	{
+		if (mount.m_sIkHandYawVariable.IsEmpty() && mount.m_sIkHandPitchVariable.IsEmpty())
+			return;
+		if (!mount.m_pAnimController || !mount.m_pEntity)
+			return;
+
+		if (!mount.m_bHandBindTried)
+		{
+			mount.m_bHandBindTried = true;
+			if (!mount.m_sIkHandYawVariable.IsEmpty())
+				mount.m_iHandYawVar = mount.m_pAnimController.BindFloatVariable(mount.m_sIkHandYawVariable);
+			if (!mount.m_sIkHandPitchVariable.IsEmpty())
+				mount.m_iHandPitchVar = mount.m_pAnimController.BindFloatVariable(mount.m_sIkHandPitchVariable);
+
+			if (mount.m_iHandYawVar == -1 && mount.m_iHandPitchVar == -1)
+				BFA_MechLog.Log(string.Format("[BFA MOUNT] %1: hand aim variables '%2' / '%3' not found in the arm's anim graph - hand aim off", mount.m_sMountId, mount.m_sIkHandYawVariable, mount.m_sIkHandPitchVariable), LogLevel.WARNING);
+
+			// Rest direction of the hand. The IK never turns the hand and our variables are
+			// still 0 here, so the bone's current axes are its rest axes.
+			Animation anim = mount.m_pEntity.GetAnimation();
+			if (anim)
+			{
+				TNodeId handId = anim.GetBoneIndex(mount.m_sIkEndBone);
+				vector handMat[4];
+				if (handId != -1 && anim.GetBoneMatrix(handId, handMat))
+				{
+					mount.m_vHandRestRight = handMat[0].Normalized();
+					mount.m_vHandRestUp = handMat[1].Normalized();
+					mount.m_vHandRestFwd = handMat[2].Normalized();
+					mount.m_bHandRestKnown = true;
+				}
+			}
+			if (!mount.m_bHandRestKnown)
+				BFA_MechLog.Log(string.Format("[BFA MOUNT] %1: hand bone '%2' not found - hand aim off", mount.m_sMountId, mount.m_sIkEndBone), LogLevel.WARNING);
+		}
+
+		if (!mount.m_bHandRestKnown)
+			return;
+
+		// Aim direction in the hand's rest frame.
+		vector right = mount.m_pEntity.VectorToParent(mount.m_vHandRestRight);
+		vector up = mount.m_pEntity.VectorToParent(mount.m_vHandRestUp);
+		vector fwd = mount.m_pEntity.VectorToParent(mount.m_vHandRestFwd);
+
+		float x = vector.Dot(aimWorld, right);
+		float y = vector.Dot(aimWorld, up);
+		float z = vector.Dot(aimWorld, fwd);
+
+		float limit = Math.Max(mount.m_fIkHandMaxAngle, 0);
+		float handYaw = Math.Clamp(Math.Atan2(x, z) * Math.RAD2DEG, -limit, limit);
+		float flat = Math.Sqrt(x * x + z * z);
+		float handPitch = Math.Clamp(Math.Atan2(y, flat) * Math.RAD2DEG, -limit, limit);
+		if (mount.m_bIkHandInvertPitch)
+			handPitch = -handPitch;
+
+		if (mount.m_iHandYawVar != -1)
+			mount.m_pAnimController.SetFloatVariable(mount.m_iHandYawVar, handYaw);
+		if (mount.m_iHandPitchVar != -1)
+			mount.m_pAnimController.SetFloatVariable(mount.m_iHandPitchVar, handPitch);
 	}
 
 	//------------------------------------------------------------------------------------------------

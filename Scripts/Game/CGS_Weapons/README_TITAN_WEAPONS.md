@@ -275,6 +275,11 @@ On the mech's `BFA_MechWeaponMountComponent`:
 | Ik Swing From Rest | ON | Aiming straight ahead keeps the modelled rest pose; other aims swing the hand from there. Stops arms folding up |
 | Ik Swing Radius | about shoulder-to-hand distance | How far the hand swings per radian of aim (Red Titan: right 40, left 35). 0 = Ik Reach |
 | Ik Smooth Time | 0.4 | Seconds to glide to a new target, so arms don't snap |
+| Ik Hand Yaw / Pitch Variable | `HandYaw` / `HandPitch` | Turns the hand toward the target so the weapon doesn't stay level with a twisted wrist. Needs the graph setup below. Empty = off |
+| Ik Hand Max Angle | 80 | Most the hand may turn, in degrees |
+| Ik Hand Invert Pitch | off | Turn on if the hand tilts the wrong way |
+
+**Hand aim in the anim graph** (`IK_Titan_Arm.agr`): add two float variables `HandYaw` and `HandPitch` (range -90 to 90). After the IK node, add a bone rotation node (ProcTransform) on the hand bone `J3` that rotates it by `HandYaw` around its up axis and by `HandPitch` around its right axis, in local space. The mount writes the angles every frame.
 
 On the arm part prefab: **AnimationController** = `IK_Titan_Arm.agr` / `.asi`, **Start Node** = `IK Chain to IK Target`.
 
