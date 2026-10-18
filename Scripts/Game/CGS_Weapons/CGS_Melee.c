@@ -97,10 +97,16 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 	protected float m_fAIArc;
 
 	// ---- Effects -----------------------------------------------------------------------------
-	[Attribute("", UIWidgets.EditBox, "Swoosh sound event at the start of the strike (in Effects > Sound Project). Empty = the Fire Sound Event.", category: "Effects")]
+	[Attribute("", UIWidgets.ResourceNamePicker, "SWING sound file (.acp): the whoosh at the start of the strike. Empty = Effects > Sound Project.", params: "acp", category: "Effects")]
+	protected ResourceName m_sSwingSoundProject;
+
+	[Attribute("", UIWidgets.EditBox, "Swing sound event inside that .acp (open the .acp to see its events). Empty = the Fire Sound Event.", category: "Effects")]
 	protected string m_sSwingSoundEvent;
 
-	[Attribute("", UIWidgets.EditBox, "Sound event when the blade hits something. Empty = silent.", category: "Effects")]
+	[Attribute("", UIWidgets.ResourceNamePicker, "HIT sound file (.acp): plays where the blade / fist hits. Empty = the Swing sound file, then Effects > Sound Project.", params: "acp", category: "Effects")]
+	protected ResourceName m_sHitSoundProject;
+
+	[Attribute("", UIWidgets.EditBox, "Hit sound event inside that .acp. Empty = no hit sound.", category: "Effects")]
 	protected string m_sHitSoundEvent;
 
 	[Attribute("", UIWidgets.ResourcePickerThumbnail, "Particle where the blade hits (sparks, blood). Empty = none.", "ptc", category: "Effects")]
@@ -442,8 +448,7 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 			string sound = m_sSwingSoundEvent;
 			if (sound.IsEmpty() && m_FX)
 				sound = m_FX.m_sFireSoundEvent;
-			if (!sound.IsEmpty())
-				PlayModuleSound(sound);
+			PlayMeleeSound(m_sSwingSoundProject, sound, GetOwner().GetOrigin());
 		}
 	}
 
@@ -670,8 +675,29 @@ class CGS_MeleeModuleComponent : BFA_MechWeaponModuleComponent
 			ParticleEffectEntity.SpawnParticleEffect(m_sHitParticle, spawnParams);
 		}
 
-		if (!m_sHitSoundEvent.IsEmpty())
-			PlayModuleSound(m_sHitSoundEvent);
+		ResourceName hitProject = m_sHitSoundProject;
+		if (hitProject.IsEmpty())
+			hitProject = m_sSwingSoundProject;
+		PlayMeleeSound(hitProject, m_sHitSoundEvent, end);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Plays one event from a picked .acp at a position; falls back to the weapon's own sound setup.
+	protected void PlayMeleeSound(ResourceName project, string eventName, vector position)
+	{
+		if (eventName.IsEmpty() || System.IsConsoleApp())
+			return;
+
+		if (project.IsEmpty())
+		{
+			PlayModuleSound(eventName); // Effects > Sound Project, at the weapon
+			return;
+		}
+
+		vector mat[4];
+		Math3D.MatrixIdentity4(mat);
+		mat[3] = position;
+		BFA_MechPlaySound(project, eventName, mat);
 	}
 
 	//==================================================================================================

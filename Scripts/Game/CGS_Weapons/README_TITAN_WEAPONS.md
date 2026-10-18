@@ -261,7 +261,9 @@ A melee weapon on a mech arm. Module Id defaults to `MELEE`.
 | | Knock Down, Knockback | on, 10 m/s | |
 | AI | Auto Swing AI | on | |
 | | AI Arc | 60 degrees | Only swings at targets this far left/right of where the arm faces |
-| Effects | Swing / Hit Sound Event, Hit Particle | | Swing sound plays at the start of the strike (empty = Fire Sound Event) |
+| Effects | Swing Sound Project + Event | | Whoosh at the start of the strike. Pick any .acp; empty = Effects > Sound Project / Fire Sound Event |
+| | Hit Sound Project + Event | | Plays where the hit lands. Empty project = the swing .acp |
+| | Hit Particle | | Sparks / blood where the hit lands |
 
 **For a Titan-sized arm:** Reach about 70, Blade Start 35, Blade Radius 5, Vehicle Damage 2000+.
 
