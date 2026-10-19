@@ -162,6 +162,18 @@ class BFA_MechCrewStationControllerComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! X: selected weapon group chain fire <-> group fire.
+	void OnChainFireInput()
+	{
+		if (!m_bLocalStationActive || m_bFireHeld)
+			return;
+
+		SCR_PlayerController pc = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		if (pc)
+			pc.BFA_Mech_RequestToggleChainFire(GetOwner(), m_sLocalStation);
+	}
+
+	//------------------------------------------------------------------------------------------------
 	void OnAuxFireInput()
 	{
 		if (!m_bLocalStationActive || !m_pCore)
@@ -234,6 +246,8 @@ class BFA_MechCrewStationControllerComponent : ScriptGameComponent
 			if (!m_sLoadoutAction.IsEmpty())
 				input.AddActionListener(m_sLoadoutAction, EActionTrigger.DOWN, OnLoadoutInput);
 		}
+		if (input)
+			input.AddActionListener("MechChainFire", EActionTrigger.DOWN, OnChainFireInput);
 
 		ScriptCallQueue queue = GetGame().GetCallqueue();
 		if (queue)
@@ -267,6 +281,7 @@ class BFA_MechCrewStationControllerComponent : ScriptGameComponent
 			input.RemoveActionListener("MechNextGroup", EActionTrigger.DOWN, OnCycleWeaponInput);
 			input.RemoveActionListener("MechFire2", EActionTrigger.DOWN, OnAuxFireInput);
 			input.RemoveActionListener("MechLoadout", EActionTrigger.DOWN, OnLoadoutInput);
+			input.RemoveActionListener("MechChainFire", EActionTrigger.DOWN, OnChainFireInput);
 
 			input.RemoveActionListener("CharacterFire", EActionTrigger.VALUE, OnFireInput);
 			input.RemoveActionListener("Freelook", EActionTrigger.VALUE, OnFreelookInput);

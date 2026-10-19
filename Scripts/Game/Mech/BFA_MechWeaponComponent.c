@@ -83,8 +83,38 @@ class BFA_MechTracerVisual
 	float m_fThickness;
 }
 
+//! One running chain fire (server): a station holding the trigger on a chain-fire group.
+class BFA_MechChainState
+{
+	string m_sStation;
+	int m_iGroup;
+	IEntity m_pInstigator;
+	BFA_MechWeaponModuleComponent m_pCurrent;  // weapon whose turn it is (holds the trigger)
+	int m_iLastIndex = -1;
+	int m_iShotsAtStart;
+	int m_iTurnStartMs;
+	int m_iNextTurnMs;
+	int m_iNextRetapMs;
+}
+
 class BFA_MechWeaponComponent : ScriptGameComponent
 {
+	[Attribute("", UIWidgets.Auto, "CHAIN FIRE: weapon groups that start in chain fire. Chain = the weapons in the group take turns (left, right, left ...). Not listed = group fire (all at once). Players switch the selected group in game with 'Mech: chain / group fire' (X).", category: "Chain Fire")]
+	protected ref array<int> m_aChainFireGroups;
+
+	[Attribute("0.25", UIWidgets.Auto, "Chain fire: seconds after one weapon fires before the next one takes its turn.", category: "Chain Fire")]
+	protected float m_fChainDelay;
+
+	[Attribute("3", UIWidgets.Auto, "Chain fire: a weapon that cannot fire for this many seconds (heat, jammed ...) is skipped.", category: "Chain Fire")]
+	protected float m_fChainSkipAfter;
+
+	// Bit (group - 1) set = that group is in chain fire. Server owned, replicated for the HUD.
+	[RplProp()]
+	protected int m_iChainMask;
+
+	protected ref array<ref BFA_MechChainState> m_aChains = {};
+	protected bool m_bChainTickRunning;
+
 	[Attribute("", UIWidgets.Object, "LEGACY - leave empty for new mechs. Old built-in weapon list from before hardpoints; an entry is switched off automatically when a hardpoint uses its mount. New mechs: Hardpoints + weapon parts (see MECH_WEAPONS_SETUP).", category: "Weapons")]
 	ref array<ref BFA_MechWeaponDefinition> m_aWeapons;
 
@@ -829,6 +859,12 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		if (!Replication.IsServer())
 			return;
 
+		// Chain fire: weapons take turns. Releasing always ends any chain and lets every weapon go.
+		if (!held)
+			StopChain(stationId, weaponGroup);
+		else if (IsChainFire(weaponGroup) && StartChain(stationId, weaponGroup))
+			return;
+
 		int moduleMatchedCount = RouteHeldFireToModules(stationId, weaponGroup, held);
 		if (moduleMatchedCount > 0)
 		{
@@ -1376,6 +1412,203 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		m_iLastTracerTickMs = 0;
 	}
 
+	//==================================================================================================
+	// CHAIN FIRE (server): the weapons of a group take turns instead of all firing together.
+	//==================================================================================================
+
+	//------------------------------------------------------------------------------------------------
+	//! True when this weapon group fires in chain (works on every machine, for the HUD too).
+	bool IsChainFire(int weaponGroup)
+	{
+		if (weaponGroup < 1 || weaponGroup > 31)
+			return false;
+		return (m_iChainMask & (1 << (weaponGroup - 1))) != 0;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Server: switch a group between chain and group fire. Stops anything that group is firing.
+	bool ServerToggleChainFire(string stationId, int weaponGroup)
+	{
+		if (!Replication.IsServer() || weaponGroup < 1 || weaponGroup > 31)
+			return false;
+
+		StopChain(stationId, weaponGroup);
+		RouteHeldFireToModules(stationId, weaponGroup, false);
+
+		m_iChainMask = m_iChainMask ^ (1 << (weaponGroup - 1));
+		Replication.BumpMe();
+		BFA_MechLog.Log(string.Format("[BFA CHAIN] station=%1 group=%2 chain=%3", stationId, weaponGroup, IsChainFire(weaponGroup)));
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void GetGroupModules(string stationId, int weaponGroup, notnull array<BFA_MechWeaponModuleComponent> outModules)
+	{
+		outModules.Clear();
+		BFA_MechHardpointComponent hardpoints = BFA_MechHardpointComponent.Cast(GetOwner().FindComponent(BFA_MechHardpointComponent));
+		if (!hardpoints)
+			return;
+
+		int count = hardpoints.GetHardpointCount();
+		for (int hp = 0; hp < count; hp++)
+		{
+			BFA_MechWeaponModuleComponent module = hardpoints.GetWeaponModuleAt(hp);
+			if (module && module.MatchesFireRoute(stationId, weaponGroup))
+				outModules.Insert(module);
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected BFA_MechChainState FindChain(string stationId, int weaponGroup)
+	{
+		foreach (BFA_MechChainState state : m_aChains)
+		{
+			if (state && state.m_sStation == stationId && state.m_iGroup == weaponGroup)
+				return state;
+		}
+		return null;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! False = fewer than two weapons in the group: fire normally (one weapon is the same either way).
+	protected bool StartChain(string stationId, int weaponGroup)
+	{
+		array<BFA_MechWeaponModuleComponent> modules = {};
+		GetGroupModules(stationId, weaponGroup, modules);
+		if (modules.Count() < 2)
+			return false;
+
+		BFA_MechChainState state = FindChain(stationId, weaponGroup);
+		if (!state)
+		{
+			state = new BFA_MechChainState();
+			state.m_sStation = stationId;
+			state.m_iGroup = weaponGroup;
+			m_aChains.Insert(state);
+			BFA_MechLog.Log(string.Format("[BFA CHAIN] start station=%1 group=%2 weapons=%3", stationId, weaponGroup, modules.Count()));
+		}
+		state.m_pInstigator = ResolveStationInstigator(stationId);
+
+		ChainStep(state, GetWorldTimeMs());
+		StartChainTick();
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void StopChain(string stationId, int weaponGroup)
+	{
+		for (int i = m_aChains.Count() - 1; i >= 0; i--)
+		{
+			BFA_MechChainState state = m_aChains[i];
+			if (!state || (state.m_sStation == stationId && state.m_iGroup == weaponGroup))
+			{
+				if (state && state.m_pCurrent)
+					state.m_pCurrent.ServerTriggerUp(state.m_pInstigator);
+				m_aChains.Remove(i);
+			}
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void StartChainTick()
+	{
+		if (m_bChainTickRunning || !GetGame() || !GetGame().GetCallqueue())
+			return;
+		m_bChainTickRunning = true;
+		GetGame().GetCallqueue().CallLater(ChainTick, 20, true);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void ChainTick()
+	{
+		if (!Replication.IsServer() || m_aChains.IsEmpty())
+		{
+			if (GetGame() && GetGame().GetCallqueue())
+				GetGame().GetCallqueue().Remove(ChainTick);
+			m_bChainTickRunning = false;
+			return;
+		}
+
+		int nowMs = GetWorldTimeMs();
+		for (int i = m_aChains.Count() - 1; i >= 0; i--)
+		{
+			BFA_MechChainState state = m_aChains[i];
+			if (!state)
+			{
+				m_aChains.Remove(i);
+				continue;
+			}
+			ChainStep(state, nowMs);
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! One weapon holds the trigger until it has fired one shot, then lets go; after the chain
+	//! delay the next weapon (that is not reloading) gets the trigger.
+	protected void ChainStep(BFA_MechChainState state, int nowMs)
+	{
+		array<BFA_MechWeaponModuleComponent> modules = {};
+		GetGroupModules(state.m_sStation, state.m_iGroup, modules);
+		if (modules.IsEmpty())
+			return;
+
+		if (state.m_pCurrent)
+		{
+			bool valid = modules.Contains(state.m_pCurrent);
+			bool fired = valid && state.m_pCurrent.GetShotsFired() != state.m_iShotsAtStart;
+			bool stuck = nowMs - state.m_iTurnStartMs > (int)(Math.Max(m_fChainSkipAfter, 0.5) * 1000.0);
+			if (valid && !fired && !stuck)
+			{
+				// Weapons without held auto-fire only try once per pull: pull again until it fires.
+				if (!state.m_pCurrent.SupportsHeldFire() && nowMs >= state.m_iNextRetapMs)
+				{
+					state.m_iNextRetapMs = nowMs + 100;
+					state.m_pCurrent.ServerTriggerUp(state.m_pInstigator);
+					state.m_pCurrent.ServerTriggerDown(state.m_pInstigator);
+				}
+				return;
+			}
+
+			if (valid)
+				state.m_pCurrent.ServerTriggerUp(state.m_pInstigator);
+			state.m_pCurrent = null;
+			state.m_iNextTurnMs = nowMs;
+			if (fired)
+				state.m_iNextTurnMs = nowMs + (int)(Math.Max(m_fChainDelay, 0) * 1000.0);
+		}
+
+		if (nowMs < state.m_iNextTurnMs)
+			return;
+
+		// Next weapon in order that can shoot (skips ones reloading or empty).
+		int n = modules.Count();
+		int start = state.m_iLastIndex;
+		if (start >= n)
+			start = -1;
+		BFA_MechWeaponModuleComponent pick;
+		int pickIndex = -1;
+		for (int step = 1; step <= n; step++)
+		{
+			int index = (start + step) % n;
+			BFA_MechWeaponModuleComponent candidate = modules[index];
+			if (candidate && !candidate.IsReloading() && candidate.HasAmmo())
+			{
+				pick = candidate;
+				pickIndex = index;
+				break;
+			}
+		}
+		if (!pick)
+			return; // all reloading: wait
+
+		state.m_iLastIndex = pickIndex;
+		state.m_pCurrent = pick;
+		state.m_iShotsAtStart = pick.GetShotsFired();
+		state.m_iTurnStartMs = nowMs;
+		state.m_iNextRetapMs = nowMs + 100;
+		pick.ServerTriggerDown(state.m_pInstigator);
+	}
+
 	//------------------------------------------------------------------------------------------------
 	override void OnPostInit(IEntity owner)
 	{
@@ -1384,6 +1617,16 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		m_bServerFireTickRunning = false;
 		m_bTracerTickRunning = false;
 		m_iLastTracerTickMs = 0;
+
+		m_iChainMask = 0;
+		if (m_aChainFireGroups)
+		{
+			foreach (int chainGroup : m_aChainFireGroups)
+			{
+				if (chainGroup >= 1 && chainGroup <= 31)
+					m_iChainMask = m_iChainMask | (1 << (chainGroup - 1));
+			}
+		}
 
 		int weaponCount = 0;
 		if (m_aWeapons)
@@ -1415,6 +1658,7 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 			if (queue)
 			{
 				queue.Remove(ServerFireTick);
+				queue.Remove(ChainTick);
 				queue.Remove(TracerVisualTick);
 				queue.Remove(ProjectileTick);
 				queue.Remove(DeleteLocalEntity);

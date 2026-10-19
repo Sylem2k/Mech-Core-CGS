@@ -98,6 +98,7 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	protected int m_iBarrelIndex;
 	protected bool m_bEmptyNotified;
 	protected int m_iNextShotReadyMs;
+	protected int m_iShotsFired;       // server: shots that passed ConsumeRound (chain fire uses it)
 	protected IEntity m_pAutoFireInstigator;
 	protected bool m_bAutoFireRunning;
 	protected ref array<IEntity> m_aSplashCollect = {};
@@ -221,6 +222,7 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 
 		if (m_iMagazineSize <= 0)
 		{
+			m_iShotsFired++;
 			if (m_pMechOwner)
 				BFA_MechExtension.Get().OnModuleFired(m_pMechOwner, this);
 			return true;
@@ -242,6 +244,7 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 		}
 
 		m_iRoundsInMagazine--;
+		m_iShotsFired++;
 		if (m_iRoundsInMagazine <= 0 && m_bAutoReload)
 			StartReload();
 
@@ -249,6 +252,14 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 			BFA_MechExtension.Get().OnModuleFired(m_pMechOwner, this);
 
 		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Server: how many shots this weapon has fired (counts up forever). Chain fire watches it to
+	//! know when a weapon has taken its turn.
+	int GetShotsFired()
+	{
+		return m_iShotsFired;
 	}
 
 	//------------------------------------------------------------------------------------------------

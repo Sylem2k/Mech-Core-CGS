@@ -216,7 +216,15 @@ class BFA_MechHUDDisplay
 			FrameSlot.SetSize(m_wWeaponsBg, PANEL_W, panelH);
 		Place(m_wWeaponsBg, px, py);
 		Place(m_wWeaponsTitle, px + 8, py + 6);
-		SetText(m_wWeaponsTitle, string.Format("%1  -  GROUP %2", station, group));
+		string fireMode;
+		if (m_aWeapons.Count() > 1)
+		{
+			fireMode = "   [GROUP]";
+			BFA_MechWeaponComponent router = BFA_MechWeaponComponent.Cast(mech.FindComponent(BFA_MechWeaponComponent));
+			if (router && router.IsChainFire(group))
+				fireMode = "   [CHAIN]";
+		}
+		SetText(m_wWeaponsTitle, string.Format("%1  -  GROUP %2", station, group) + fireMode);
 
 		for (int i = 0; i < MAX_WEAPON_ROWS; i++)
 		{

@@ -386,6 +386,52 @@ modded class SCR_PlayerController
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Switch the station's selected weapon group between chain fire and group fire.
+	void BFA_Mech_RequestToggleChainFire(IEntity mech, string stationId)
+	{
+		if (!mech || stationId.IsEmpty())
+			return;
+
+		RplComponent rpl = RplComponent.Cast(mech.FindComponent(RplComponent));
+		if (!rpl)
+			return;
+
+		if (Replication.IsServer())
+		{
+			BFA_Mech_ServerToggleChainFire(rpl.Id(), stationId);
+			return;
+		}
+
+		Rpc(BFA_Mech_RpcAsk_ToggleChainFire, rpl.Id(), stationId);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+	protected void BFA_Mech_RpcAsk_ToggleChainFire(RplId mechId, string stationId)
+	{
+		BFA_Mech_ServerToggleChainFire(mechId, stationId);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void BFA_Mech_ServerToggleChainFire(RplId mechId, string stationId)
+	{
+		IEntity mech = BFA_Mech_ResolveEntity(mechId);
+		if (!mech || !BFA_Mech_IsStationController(mech, stationId))
+			return;
+
+		BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(mech.FindComponent(BFA_MechCoreComponent));
+		BFA_MechWeaponComponent router = BFA_MechWeaponComponent.Cast(mech.FindComponent(BFA_MechWeaponComponent));
+		if (!core || !router)
+			return;
+
+		int group = core.GetSelectedWeaponGroup(stationId);
+		if (group < 1 || !core.CanStationFireGroup(stationId, group))
+			return;
+
+		router.ServerToggleChainFire(stationId, group);
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! Reliable one-shot auxiliary fire, intended for shoulders/missiles/utility weapons.
 	void BFA_Mech_RequestFirePulse(IEntity mech, string stationId, int weaponGroup)
 	{
