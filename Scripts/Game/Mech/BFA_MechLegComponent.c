@@ -81,6 +81,9 @@ class BFA_MechLegComponent : ScriptComponent
 	[Attribute("0.1", UIWidgets.Auto, "Camera shake per footstep (0 = none). Small walkers / spiders: 0.", category: "Leg Rig")]
 	float m_fStepCameraShake;
 
+	[Attribute("1", UIWidgets.Slider, "LIMP: how much this leg limps when damaged (shorter, lower, dragging steps). 0 = never limps. Needs a LEG hit zone on the leg (Mech_Leg_Base.et has one).", "0 2 0.1", category: "Leg Rig")]
+	protected float m_fLimpStrength;
+
 	[Attribute("0.0", UIWidgets.EditBox, "Optional visual sole trim in metres. Leave at 0 unless a specific leg model has a known IK-marker-to-sole offset.")]
 	float m_fFootSoleDrop;
 
@@ -102,6 +105,57 @@ class BFA_MechLegComponent : ScriptComponent
 	// Child legs no longer run their own EOnFrame/fallback loop.
 	protected int m_iRootDrivenTicks;
 
+	// Limp: 0 healthy .. 1 destroyed (times Limp Strength). Re-read twice a second.
+	protected float m_fLimp;
+	protected int m_iNextLimpCheckMs;
+
+
+	//------------------------------------------------------------------------------------------------
+	//! 0 = healthy, 1 = destroyed leg (more with Limp Strength above 1).
+	float GetLimp()
+	{
+		return m_fLimp;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	float GetSwingFraction()
+	{
+		return Math.Clamp(m_fSwingFraction, 0.2, 0.49);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void UpdateLimp()
+	{
+		BaseWorld world = GetOwner().GetWorld();
+		if (!world)
+			return;
+		int now = world.GetWorldTime();
+		if (now < m_iNextLimpCheckMs && m_iNextLimpCheckMs - now < 1000)
+			return;
+		m_iNextLimpCheckMs = now + 500;
+
+		m_fLimp = 0;
+		if (m_fLimpStrength <= 0)
+			return;
+
+		if (m_BodyEntity)
+		{
+			BFA_MechMovementComponent movement = BFA_MechMovementComponent.Cast(m_BodyEntity.FindComponent(BFA_MechMovementComponent));
+			if (movement && !movement.LegDamageSlows())
+				return; // boss
+		}
+
+		BFA_MechPartHitZone zone = BFA_MechPartHitZone.FindOn(GetOwner());
+		if (!zone || zone.GetPartType() != BFA_EMechPart.LEG)
+			return;
+
+		float limp = 0;
+		if (zone.GetDamageState() == EDamageState.DESTROYED)
+			limp = 1.0;
+		else if (zone.GetMaxHealth() > 0)
+			limp = Math.Clamp(1.0 - zone.GetHealth() / zone.GetMaxHealth(), 0, 1) * 0.6; // hurt: a lighter limp
+		m_fLimp = limp * m_fLimpStrength;
+	}
 
 	//------------------------------------------------------------------------------------------------
 	float GetHeight()
@@ -289,6 +343,9 @@ class BFA_MechLegComponent : ScriptComponent
 		vector lead = m_Pair.GetMeasuredVelocity() * tau;
 		lead[1] = 0;
 
+		// Limp: a hurt leg reaches less far.
+		lead = lead * Math.Clamp(1.0 - 0.55 * m_fLimp, 0.2, 1.0);
+
 		IEntity body = m_BodyEntity;
 		if (!body)
 			body = GetOwner().GetRootParent();
@@ -352,7 +409,8 @@ class BFA_MechLegComponent : ScriptComponent
 		float swingFraction = Math.Clamp(m_fSwingFraction, 0.2, 0.49);
 		float s = Math.Clamp(legPhase / swingFraction, 0.0, 1.0);
 		float eased = s * s * (3.0 - 2.0 * s);
-		float arc = 4.0 * s * (1.0 - s) * m_fStepHeight;
+		// Limp: a hurt leg barely lifts its foot (drags).
+		float arc = 4.0 * s * (1.0 - s) * m_fStepHeight * Math.Clamp(1.0 - 0.65 * m_fLimp, 0.15, 1.0);
 
 		m_vCurrentIK = vector.Lerp(m_vSwingFrom, m_vSwingTarget, eased);
 		m_vCurrentIK[1] = m_vCurrentIK[1] + arc;
@@ -382,6 +440,7 @@ class BFA_MechLegComponent : ScriptComponent
 		if (!m_bLegInitialized || !owner || !m_Pair || timeSlice <= 0)
 			return;
 
+		UpdateLimp();
 		m_Pair.UpdateObservedMotion(timeSlice);
 
 		float legPhase = m_Pair.GetLegPhase(m_bIsLeftLeg);

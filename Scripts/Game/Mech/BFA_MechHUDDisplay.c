@@ -3,7 +3,8 @@
 //!
 //!   bottom right  WEAPONS: station + selected group, one row per weapon in that group
 //!                 (name, rounds / magazine, spare magazines, reload bar), other groups listed
-//!   bottom left   MECH: hull bar + %, speed, anti-missile charges, jump jets, swap status
+//!   bottom left   MECH: hull bar + %, speed, leg status, anti-missile charges, jump jets, swap status
+//!   above it      DAMAGE: MechWarrior-style picture of the mech, coloured by part health - CGS_MechPartsPanel
 //!
 //! Turn it off per mech (BFA_MechAimComponent > Show HUD) or globally from a HUD mod:
 //!   BFA_MechHUD.SetBuiltInHUDEnabled(false);
@@ -35,6 +36,7 @@ class BFA_MechHUDDisplay
 	protected TextWidget m_wStatusText;
 
 	protected bool m_bBuilt;
+	protected ref CGS_MechPartsPanel m_PartsPanel;
 	protected ref array<BFA_MechWeaponModuleComponent> m_aWeapons = {};
 	protected ref array<int> m_aGroups = {};
 
@@ -110,6 +112,21 @@ class BFA_MechHUDDisplay
 		m_wHullBar = MakeRect(244, 8, new Color(0.35, 0.85, 0.4, 0.95));
 		m_wHullText = MakeText(244, 20, 14, white);
 		m_wStatusText = MakeText(244, 40, 14, white);
+
+		m_PartsPanel = new CGS_MechPartsPanel();
+		m_PartsPanel.Build(this);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! For extra panels (CGS_MechPartsPanel): widgets that are removed together with this HUD.
+	ImageWidget PanelRect(float w, float h, Color color)
+	{
+		return MakeRect(w, h, color);
+	}
+
+	TextWidget PanelText(float w, float h, int fontSize, Color color)
+	{
+		return MakeText(w, h, fontSize, color);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -126,6 +143,7 @@ class BFA_MechHUDDisplay
 		m_aRowAmmo.Clear();
 		m_aRowBarBg.Clear();
 		m_aRowBar.Clear();
+		m_PartsPanel = null;
 		m_bBuilt = false;
 	}
 
@@ -297,6 +315,9 @@ class BFA_MechHUDDisplay
 
 		SetText(m_wMechTitle, ShortName(station, 24));
 
+		if (m_PartsPanel)
+			m_PartsPanel.Update(mech, mx, my - 8);
+
 		float hull = BFA_MechHUD.GetHealth01(mech);
 		if (hull < 0)
 			hull = 1;
@@ -315,10 +336,25 @@ class BFA_MechHUDDisplay
 		SetText(m_wHullText, string.Format("HULL %1", Math.Round(hull * 100)) + "%" + string.Format("   SPEED %1 km/h", Math.Round(kmh)));
 
 		string status;
+		CGS_MechLegStatus legs = CGS_MechLegStatus.Get(mech);
+		if (legs && !legs.m_bIgnored)
+		{
+			if (legs.IsImmobile())
+				status = "LEGS DESTROYED - IMMOBILE";
+			else if (legs.m_iDestroyed > 0)
+				status = "LEG DESTROYED";
+			else if (legs.m_fWorstHealth < 0.75)
+				status = string.Format("LEG DAMAGED %1", Math.Round(legs.m_fWorstHealth * 100)) + "%";
+		}
+
 		int maxCharges;
 		int charges = BFA_MechHUD.GetPointDefenseCharges(mech, maxCharges);
 		if (charges >= 0)
-			status = string.Format("AMS %1/%2", charges, maxCharges);
+		{
+			if (!status.IsEmpty())
+				status = status + "   ";
+			status = status + string.Format("AMS %1/%2", charges, maxCharges);
+		}
 
 		int jets = BFA_MechHUD.GetJumpJetCharges(mech);
 		if (jets >= 0)

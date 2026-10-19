@@ -110,6 +110,10 @@ class BFA_SentinelJumpJetComponent : ScriptComponent
 		if (m_bBurstLocked || m_iRemainingCharges <= 0)
 			return;
 
+		// Destroyed leg, overheated ... (BFA_MechExtension hooks).
+		if (!BFA_MechExtension.Get().CanMechJump(GetOwner()))
+			return;
+
 		m_iRemainingCharges = Math.Max(m_iRemainingCharges - 1, 0);
 		m_iJumpCounter++;
 		m_bBurstLocked = true;

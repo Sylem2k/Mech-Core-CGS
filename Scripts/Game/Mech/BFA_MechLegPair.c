@@ -168,7 +168,7 @@ class BFA_MechLegPair
 				m_LeftLegComp.GetMaxCadence()
 			);
 
-			m_fPhase = Wrap01(m_fPhase + m_fCadence * dt);
+			m_fPhase = Wrap01(m_fPhase + m_fCadence * dt * LimpRate());
 			m_bHadMotion = true;
 		}
 		else
@@ -182,6 +182,26 @@ class BFA_MechLegPair
 				m_bHadMotion = false;
 			}
 		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Limping rhythm: the hurt leg's step is slow (drag), the good leg's step is quick (hop).
+	protected float LimpRate()
+	{
+		if (!m_LeftLegComp || !m_RightLegComp)
+			return 1;
+
+		float limpL = m_LeftLegComp.GetLimp();
+		float limpR = m_RightLegComp.GetLimp();
+		if (limpL <= 0 && limpR <= 0)
+			return 1;
+
+		float rate = 1;
+		if (GetLegPhase(true) < m_LeftLegComp.GetSwingFraction())
+			rate *= (1.0 - 0.45 * Math.Min(limpL, 1.5)) * (1.0 + 0.3 * Math.Min(limpR, 1.5));
+		if (GetLegPhase(false) < m_RightLegComp.GetSwingFraction())
+			rate *= (1.0 - 0.45 * Math.Min(limpR, 1.5)) * (1.0 + 0.3 * Math.Min(limpL, 1.5));
+		return Math.Clamp(rate, 0.3, 1.6);
 	}
 
 	//------------------------------------------------------------------------------------------------

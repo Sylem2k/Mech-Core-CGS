@@ -116,6 +116,13 @@ class BFA_MechExtension
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! [Server] May the mech use its jump jets right now? (a crippled leg says no)
+	bool CanMechJump(IEntity mech)
+	{
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! [All machines] A mech finished spawning / is being deleted. Spawn local visuals, register it.
 	void OnMechInit(IEntity mech)
 	{
@@ -165,7 +172,7 @@ class BFA_MechHitZone : SCR_FlammableHitZone
 enum BFA_EMechPart
 {
 	ARMOR = 0,	// plating / decoration: only passes damage to the hull
-	LEG = 1,	// destroyed = mech slows down and cannot sprint
+	LEG = 1,	// damaged = slower + limps; destroyed = no sprint / jump; all destroyed = immobile
 	WEAPON = 2,	// destroyed = the weapon on this part stops firing
 }
 
@@ -177,13 +184,40 @@ class BFA_MechPartHitZone : SCR_HitZone
 	[Attribute("1", UIWidgets.Auto, "Share of the damage (after this part's multipliers) that reaches the mech's hull. 0.5 = legs are half as vulnerable as the body.")]
 	protected float m_fHullShare;
 
-	[Attribute("0.4", UIWidgets.Slider, "LEG only: share of the mech's speed lost while this leg is destroyed (losses of several legs add up; the mech never drops below 15%).", "0 1 0.05")]
+	[Attribute("0.4", UIWidgets.Slider, "LEG only: share of the mech's speed this leg costs when destroyed. It is lost gradually as the leg takes damage (half health = half of it). Losses of several legs add up; the mech never drops below 15% unless every leg is destroyed (then it cannot walk).", "0 1 0.05")]
 	protected float m_fSpeedLoss;
+
+	[Attribute("", UIWidgets.EditBox, "Name of this part (e.g. LEFT LEG, RIGHT ARM). Also helps AUTO pick its place on the HUD damage picture. Empty = the part's prefab name.")]
+	protected string m_sDisplayName;
+
+	[Attribute("true", UIWidgets.CheckBox, "Show this part on the HUD's damage picture.")]
+	protected bool m_bShowOnHUD;
+
+	[Attribute("0", UIWidgets.ComboBox, "Which piece of the HUD's damage picture this part colours. AUTO = guessed from the part type and its name (e.g. LEG + 'Left' = left leg, weapon/arm + 'R' = right arm).", enums: ParamEnumArray.FromEnum(CGS_EMechHudSection))]
+	protected CGS_EMechHudSection m_eHudSection;
 
 	//------------------------------------------------------------------------------------------------
 	float GetSpeedLoss()
 	{
 		return m_fSpeedLoss;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	string GetDisplayName()
+	{
+		return m_sDisplayName;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	bool ShowOnHUD()
+	{
+		return m_bShowOnHUD;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	CGS_EMechHudSection GetHudSection()
+	{
+		return m_eHudSection;
 	}
 
 	//------------------------------------------------------------------------------------------------
