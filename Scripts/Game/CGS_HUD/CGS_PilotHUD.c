@@ -596,7 +596,8 @@ class CGS_PilotHUD
 		BaseWorld world = GetGame().GetWorld();
 		vector mechPos = mech.GetOrigin();
 		m_aCollect.Clear();
-		world.QueryEntitiesBySphere(mechPos, 300, CollectEntity, null, EQueryEntitiesFlags.ALL);
+		// DYNAMIC only: projectiles move. ALL would also list every rock and tree around the mech.
+		world.QueryEntitiesBySphere(mechPos, 300, CollectEntity, null, EQueryEntitiesFlags.DYNAMIC);
 
 		map<IEntity, vector> seen = new map<IEntity, vector>();
 		foreach (IEntity e : m_aCollect)
@@ -738,10 +739,10 @@ class CGS_PilotHUD
 		bool warn = !cfg || cfg.m_bMissileWarning;
 		if (warn && now >= m_fNextThreatScan)
 		{
-			float threatDt = 0.15;
+			float threatDt = 0.25;
 			if (m_fNextThreatScan > 0)
-				threatDt = now - (m_fNextThreatScan - 0.15);
-			m_fNextThreatScan = now + 0.15;
+				threatDt = now - (m_fNextThreatScan - 0.25);
+			m_fNextThreatScan = now + 0.25;
 			ScanThreats(mech, Math.Max(threatDt, 0.05));
 		}
 
