@@ -56,6 +56,13 @@ class CGS_TubeGrid
 
 class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 {
+	//------------------------------------------------------------------------------------------------
+	//! Homing: no lead needed.
+	override float GetLeadSpeed()
+	{
+		return m_fHudLeadSpeed;
+	}
+
 	// ---- Tubes -----------------------------------------------------------------------------
 	[Attribute(desc: "TUBE GRIDS (rocket pods): one entry per block of tubes. Each missile leaves a different tube, so a salvo comes out all over the pod. Empty = uses Muzzle Point / Barrel Points like any weapon.", category: "Tubes")]
 	protected ref array<ref CGS_TubeGrid> m_aTubeGrids;

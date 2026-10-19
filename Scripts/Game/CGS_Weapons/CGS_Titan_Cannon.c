@@ -253,4 +253,14 @@ class CGS_Titan_Cannon : BFA_MechWeaponModuleComponent
 	{
 		return m_fRange;
 	}
+
+	//------------------------------------------------------------------------------------------------
+	override float GetLeadSpeed()
+	{
+		if (m_fHudLeadSpeed > 0)
+			return m_fHudLeadSpeed;
+		if (m_bTravelTime)
+			return Math.Max(m_fShellSpeed, 1.0);
+		return 0;
+	}
 }

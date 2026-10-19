@@ -193,6 +193,14 @@ class BFA_MechRocketLauncherModuleComponent : BFA_MechWeaponModuleComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	override float GetLeadSpeed()
+	{
+		if (m_fHudLeadSpeed > 0)
+			return m_fHudLeadSpeed;
+		return GetRocketSpeed();
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! Destroy a rocket mid-air. No damage is applied; a small effect plays where it died.
 	bool ServerInterceptRocket(BFA_MechRocketInFlight rocket)
 	{

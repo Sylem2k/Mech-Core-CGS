@@ -31,6 +31,10 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	[Attribute("1", UIWidgets.Auto, "Heat added to the mech per shot / rocket (needs CGS_MechHeatComponent on the mech). MG ~0.5, cannon ~3, missile ~8.", category: "Heat")]
 	protected float m_fHeatPerShot;
 
+	// ---- Pilot HUD ---------------------------------------------------------------------------
+	[Attribute("0", UIWidgets.Auto, "Shot speed (m/s) for the pilot HUD's lead pip on a locked target. 0 = automatic: rockets and travelling shells use their own speed, instant-hit weapons show no pip.", category: "HUD")]
+	protected float m_fHudLeadSpeed;
+
 	// ---- Damage kind (read by add-ons such as shields) ------------------------------------------
 	[Attribute("0", UIWidgets.ComboBox, "What kind of damage this weapon deals. Add-ons (e.g. energy shields) treat kinds differently.", enums: ParamEnumArray.FromEnum(BFA_EMechDamageKind), category: "Damage")]
 	protected BFA_EMechDamageKind m_eDamageKind;
@@ -959,6 +963,13 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	BFA_MechCrosshair GetCrosshair()
 	{
 		return m_Crosshair;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Shot speed for the pilot HUD's lead pip (0 = instant hit, no pip). Override per weapon.
+	float GetLeadSpeed()
+	{
+		return m_fHudLeadSpeed;
 	}
 
 	//------------------------------------------------------------------------------------------------
