@@ -163,6 +163,8 @@ class BFA_MechAICrewComponent : ScriptGameComponent
 	override void OnPostInit(IEntity owner)
 	{
 		super.OnPostInit(owner);
+		// Staggered first target search (see TickDriver).
+		m_fCombatScanTimer = Math.RandomFloat(0, Math.Max(m_fScanInterval, 0.1));
 
 		if (!Replication.IsServer())
 			return;
@@ -827,6 +829,8 @@ class BFA_MechAICrewComponent : ScriptGameComponent
 
 		BFA_MechAIStationState created = new BFA_MechAIStationState();
 		created.m_sStationId = stationId;
+		// Staggered: many AI mechs do not all search for targets on the same frame.
+		created.m_fRescanTimer = Math.RandomFloat(0, Math.Max(m_fScanInterval, 0.1));
 		m_aStations.Insert(created);
 		return created;
 	}

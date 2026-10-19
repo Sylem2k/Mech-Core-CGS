@@ -35,7 +35,7 @@ class BFA_MechPointDefenseModuleComponent : BFA_MechWeaponModuleComponent
 	[Attribute("2.0", UIWidgets.Auto, "Only engage threats expected to arrive within this many seconds.", category: "Point Defense")]
 	protected float m_fMaxTimeToImpact;
 
-	[Attribute("50", UIWidgets.Auto, "Milliseconds between automatic scans.", category: "Point Defense")]
+	[Attribute("100", UIWidgets.Auto, "Milliseconds between automatic scans (never faster than 100: each scan searches the area around the mech).", category: "Point Defense")]
 	protected int m_iScanIntervalMs;
 
 	// ---- Charges ---------------------------------------------------------------------------
@@ -228,7 +228,7 @@ class BFA_MechPointDefenseModuleComponent : BFA_MechWeaponModuleComponent
 
 		m_bScanRunning = true;
 		m_iLastScanMs = GetWorldTimeMs();
-		queue.CallLater(ScanTick, Math.Max(m_iScanIntervalMs, 20), true);
+		queue.CallLater(ScanTick, Math.Max(m_iScanIntervalMs, 100), true);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -474,7 +474,8 @@ class BFA_MechPointDefenseModuleComponent : BFA_MechWeaponModuleComponent
 			return;
 
 		m_aQuery.Clear();
-		world.QueryEntitiesBySphere(GetDefenseCenter(), Math.Max(radius, 1.0), CollectQueryEntity, null, EQueryEntitiesFlags.ALL);
+		// DYNAMIC only: missiles move. ALL would also list every rock, tree and building around the mech.
+		world.QueryEntitiesBySphere(GetDefenseCenter(), Math.Max(radius, 1.0), CollectQueryEntity, null, EQueryEntitiesFlags.DYNAMIC);
 
 		map<IEntity, vector> seen = new map<IEntity, vector>();
 		map<IEntity, vector> seenVel = new map<IEntity, vector>();
@@ -610,7 +611,7 @@ class BFA_MechPointDefenseModuleComponent : BFA_MechWeaponModuleComponent
 			if (world)
 			{
 				m_aQuery.Clear();
-				world.QueryEntitiesBySphere(center, radius, CollectQueryEntity, null, EQueryEntitiesFlags.ALL);
+				world.QueryEntitiesBySphere(center, radius, CollectQueryEntity, null, EQueryEntitiesFlags.DYNAMIC);
 
 				array<IEntity> targets = {};
 				foreach (IEntity entity : m_aQuery)
