@@ -7,6 +7,8 @@
 //!  - STATUS STRIP: heat bar, torso twist gauge, speed, and a flashing MISSILE INCOMING warning.
 //! Optional per-mech settings: CGS_PilotHUDComponent on the mech. Without it, defaults are used.
 //! Client only: nothing here is replicated.
+//! The target sweep is spread over several frames so a busy area never makes one frame slow.
+//! "Pilot HUD Parts" on CGS_PilotHUDComponent turns single parts off (for testing).
 
 //------------------------------------------------------------------------------------------------
 [ComponentEditorProps(category: "CGS MechCore/HUD", description: "Pilot HUD settings for this mech: sensor range, radar, brackets.")]
@@ -38,6 +40,18 @@ class CGS_PilotHUDComponent : ScriptComponent
 	[Attribute("true", UIWidgets.CheckBox, "Warn when rockets / missiles are flying at this mech.", category: "Pilot HUD")]
 	bool m_bMissileWarning;
 
+	[Attribute("true", UIWidgets.CheckBox, "Show the boxes around targets.", category: "Pilot HUD Parts")]
+	bool m_bShowBrackets;
+
+	[Attribute("true", UIWidgets.CheckBox, "Show the radar.", category: "Pilot HUD Parts")]
+	bool m_bShowRadar;
+
+	[Attribute("true", UIWidgets.CheckBox, "Show the heat / twist / speed strip.", category: "Pilot HUD Parts")]
+	bool m_bShowStatus;
+
+	[Attribute("false", UIWidgets.CheckBox, "Print how long the HUD takes each frame (look for [CGS HUD] in the log).", category: "Pilot HUD Parts")]
+	bool m_bDebugTiming;
+
 	static CGS_PilotHUDComponent Find(IEntity mech)
 	{
 		if (!mech)
@@ -59,7 +73,9 @@ class CGS_HudContact
 	vector m_vLastPos;
 	float m_fLastTime;
 	vector m_vVelocity;
-	bool m_bSeen;         // passed the sensor checks on the last scan
+	bool m_bSeen;         // passed the sensor checks on the last finished scan
+	bool m_bSeenNext;     // passed them in the scan running now
+	bool m_bHandled;      // already looked at in the scan running now
 }
 
 //------------------------------------------------------------------------------------------------
@@ -104,6 +120,11 @@ class CGS_PilotHUD
 	protected ref array<ref CGS_HudContact> m_aContacts = {};
 	protected ref array<IEntity> m_aCollect = {};
 	protected float m_fNextScan;
+	protected ref array<IEntity> m_aScanList = {};
+	protected int m_iScanIndex = -1;   // -1 = no scan running
+	protected int m_iWorstMs;
+	protected int m_iScanSize;
+	protected float m_fNextTimingLog;
 	protected float m_fNextThreatScan;
 	protected float m_fWarningUntil;
 	protected ref map<IEntity, vector> m_mThreatPos = new map<IEntity, vector>();
@@ -317,115 +338,147 @@ class CGS_PilotHUD
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected void Scan(IEntity mech, CGS_PilotHUDComponent cfg, vector camPos, vector camForward)
+	//! Starts a sensor sweep: lists what is in range. The list is then worked through a few
+	//! things per frame (ScanStep), so a busy area never makes one frame slow.
+	protected void StartScan(IEntity mech, CGS_PilotHUDComponent cfg)
 	{
 		BaseWorld world = GetGame().GetWorld();
 		if (!world)
 			return;
 
 		float range = 800;
+		if (cfg)
+			range = cfg.m_fSensorRange;
+
+		m_aCollect.Clear();
+		world.QueryEntitiesBySphere(mech.GetOrigin(), Math.Max(range, 10), CollectEntity, null, EQueryEntitiesFlags.DYNAMIC);
+		m_aScanList.Clear();
+		m_aScanList.Copy(m_aCollect);
+		m_aCollect.Clear();
+		m_iScanSize = m_aScanList.Count();
+
+		foreach (CGS_HudContact old : m_aContacts)
+		{
+			if (!old)
+				continue;
+			old.m_bSeenNext = false;
+			old.m_bHandled = false;
+		}
+		m_iScanIndex = 0;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void ScanStep(IEntity mech, CGS_PilotHUDComponent cfg, vector camPos, int budget)
+	{
+		if (m_iScanIndex < 0)
+			return;
+
+		Faction mechFaction = FactionOf(mech);
+		int count = m_aScanList.Count();
+		int stop = Math.Min(m_iScanIndex + budget, count);
+		for (int i = m_iScanIndex; i < stop; i++)
+			CheckEntity(mech, cfg, mechFaction, camPos, m_aScanList[i]);
+		m_iScanIndex = stop;
+		if (m_iScanIndex < count)
+			return;
+
+		// Sweep finished: show its result, drop what was not seen.
+		m_aScanList.Clear();
+		m_iScanIndex = -1;
+		for (int c = m_aContacts.Count() - 1; c >= 0; c--)
+		{
+			CGS_HudContact c2 = m_aContacts[c];
+			if (!c2 || !c2.m_pEntity || !c2.m_bSeenNext)
+			{
+				m_aContacts.Remove(c);
+				continue;
+			}
+			c2.m_bSeen = true;
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void CheckEntity(IEntity mech, CGS_PilotHUDComponent cfg, Faction mechFaction, vector camPos, IEntity hit)
+	{
+		if (!hit)
+			return;
+
 		float infantryRange = 250;
 		bool needSight = true;
 		bool neutral = false;
 		if (cfg)
 		{
-			range = cfg.m_fSensorRange;
 			infantryRange = cfg.m_fInfantryRange;
 			needSight = cfg.m_bNeedLineOfSight;
 			neutral = cfg.m_bShowNeutral;
 		}
-
 		float now = Now();
 		vector mechPos = mech.GetOrigin();
-		Faction mechFaction = FactionOf(mech);
 
-		m_aCollect.Clear();
-		world.QueryEntitiesBySphere(mechPos, Math.Max(range, 10), CollectEntity, null, EQueryEntitiesFlags.DYNAMIC);
-
-		foreach (CGS_HudContact old : m_aContacts)
+		IEntity target;
+		bool infantry;
+		ChimeraCharacter character = ChimeraCharacter.Cast(hit);
+		if (character)
 		{
-			if (old)
-				old.m_bSeen = false;
+			if (character.GetParent())
+				return; // crew: the vehicle is the contact
+			target = character;
+			infantry = true;
+		}
+		else
+		{
+			IEntity root = hit.GetRootParent();
+			if (!root)
+				root = hit;
+			if (!Vehicle.Cast(root))
+				return;
+			target = root;
 		}
 
-		foreach (IEntity hit : m_aCollect)
-		{
-			if (!hit)
-				continue;
+		if (target == mech || target.GetRootParent() == mech)
+			return;
 
-			IEntity target;
-			bool infantry;
-			ChimeraCharacter character = ChimeraCharacter.Cast(hit);
-			if (character)
-			{
-				if (character.GetParent())
-					continue; // crew: the vehicle is the contact
-				target = character;
-				infantry = true;
-			}
+		CGS_HudContact contact = FindContact(target);
+		if (contact && contact.m_bHandled)
+			return; // already handled this scan (several parts of one vehicle)
+
+		float dist = vector.Distance(target.GetOrigin(), mechPos);
+		if (infantry && dist > infantryRange)
+			return;
+		if (!IsAlive(target))
+			return;
+
+		int side = 0;
+		Faction faction = FactionOf(target);
+		if (faction && mechFaction)
+		{
+			if (mechFaction.IsFactionEnemy(faction))
+				side = 2;
 			else
-			{
-				IEntity root = hit.GetRootParent();
-				if (!root)
-					root = hit;
-				if (!Vehicle.Cast(root))
-					continue;
-				target = root;
-			}
-
-			if (target == mech || target.GetRootParent() == mech)
-				continue;
-
-			CGS_HudContact contact = FindContact(target);
-			if (contact && contact.m_bSeen)
-				continue; // already handled this scan (several parts of one vehicle)
-
-			float dist = vector.Distance(target.GetOrigin(), mechPos);
-			if (infantry && dist > infantryRange)
-				continue;
-			if (!IsAlive(target))
-				continue;
-
-			int side = 0;
-			Faction faction = FactionOf(target);
-			if (faction && mechFaction)
-			{
-				if (mechFaction.IsFactionEnemy(faction))
-					side = 2;
-				else
-					side = 1;
-			}
-			if (side == 0 && !neutral)
-				continue;
-
-			if (!contact)
-			{
-				contact = new CGS_HudContact();
-				contact.m_pEntity = target;
-				contact.m_bInfantry = infantry;
-				contact.m_fRadius = 0.9;
-				if (!infantry)
-					contact.m_fRadius = BoundRadius(target);
-				contact.m_vLastPos = target.GetOrigin();
-				contact.m_fLastTime = now;
-				m_aContacts.Insert(contact);
-			}
-			contact.m_iSide = side;
-
-			if (side == 2 && needSight && !InSight(camPos, CentreOf(contact)))
-				continue;
-
-			contact.m_bSeen = true;
+				side = 1;
 		}
-		m_aCollect.Clear();
+		if (side == 0 && !neutral)
+			return;
 
-		// Drop contacts not seen any more.
-		for (int i = m_aContacts.Count() - 1; i >= 0; i--)
+		if (!contact)
 		{
-			CGS_HudContact c2 = m_aContacts[i];
-			if (!c2 || !c2.m_pEntity || !c2.m_bSeen)
-				m_aContacts.Remove(i);
+			contact = new CGS_HudContact();
+			contact.m_pEntity = target;
+			contact.m_bInfantry = infantry;
+			contact.m_fRadius = 0.9;
+			if (!infantry)
+				contact.m_fRadius = BoundRadius(target);
+			contact.m_vLastPos = target.GetOrigin();
+			contact.m_fLastTime = now;
+			m_aContacts.Insert(contact);
 		}
+		contact.m_iSide = side;
+		contact.m_bHandled = true;
+
+		if (side == 2 && needSight && !InSight(camPos, CentreOf(contact)))
+			return;
+
+		contact.m_bSeenNext = true;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -601,13 +654,28 @@ class CGS_PilotHUD
 		vector camForward = cam[2].Normalized();
 		vector camRight = cam[0].Normalized();
 
+		int startMs = System.GetTickCount();
+		bool brackets = !cfg || cfg.m_bShowBrackets;
+		bool radar = !cfg || cfg.m_bShowRadar;
+		bool status = !cfg || cfg.m_bShowStatus;
+
 		float now = Now();
-		if (now >= m_fNextScan)
+		if (brackets || radar)
 		{
-			m_fNextScan = now + 0.5;
-			Scan(mech, cfg, camPos, camForward);
+			if (m_iScanIndex < 0 && now >= m_fNextScan)
+			{
+				m_fNextScan = now + 0.5;
+				StartScan(mech, cfg);
+			}
+			ScanStep(mech, cfg, camPos, 16);
+			TrackVelocities(now);
 		}
-		TrackVelocities(now);
+		else
+		{
+			m_aContacts.Clear();
+			m_aScanList.Clear();
+			m_iScanIndex = -1;
+		}
 
 		bool warn = !cfg || cfg.m_bMissileWarning;
 		if (warn && now >= m_fNextThreatScan)
@@ -619,15 +687,40 @@ class CGS_PilotHUD
 			ScanThreats(mech, Math.Max(threatDt, 0.05));
 		}
 
-		DrawBrackets(mech, camPos, camForward, camRight);
-		DrawRadar(mech, cfg, screenW, screenH);
-		DrawStatus(mech, screenW, screenH, now);
+		DrawBrackets(mech, camPos, camForward, camRight, brackets);
+		DrawRadar(mech, cfg, screenW, screenH, radar);
+		DrawStatus(mech, screenW, screenH, now, status);
+
+		if (cfg && cfg.m_bDebugTiming)
+		{
+			int took = System.GetTickCount() - startMs;
+			if (took > m_iWorstMs)
+				m_iWorstMs = took;
+			if (now >= m_fNextTimingLog)
+			{
+				m_fNextTimingLog = now + 1;
+				Print(string.Format("[CGS HUD] slowest frame last second: %1 ms | things in sensor range: %2 | targets shown: %3", m_iWorstMs, m_iScanSize, m_aContacts.Count()));
+				m_iWorstMs = 0;
+			}
+		}
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected void DrawBrackets(IEntity mech, vector camPos, vector camForward, vector camRight)
+	protected void DrawBrackets(IEntity mech, vector camPos, vector camForward, vector camRight, bool visible)
 	{
 		int used = 0;
+		if (!visible)
+		{
+			for (int h = 0; h < MAX_BRACKETS; h++)
+			{
+				Show(m_aBrTop[h], false);
+				Show(m_aBrBottom[h], false);
+				Show(m_aBrLeft[h], false);
+				Show(m_aBrRight[h], false);
+				Show(m_aBrText[h], false);
+			}
+			return;
+		}
 		vector mechPos = mech.GetOrigin();
 		foreach (CGS_HudContact c : m_aContacts)
 		{
@@ -697,8 +790,21 @@ class CGS_PilotHUD
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected void DrawRadar(IEntity mech, CGS_PilotHUDComponent cfg, float screenW, float screenH)
+	protected void DrawRadar(IEntity mech, CGS_PilotHUDComponent cfg, float screenW, float screenH, bool visible)
 	{
+		Show(m_wRadarBg, visible);
+		Show(m_wRadarH, visible);
+		Show(m_wRadarV, visible);
+		Show(m_wRadarSelf, visible);
+		Show(m_wRadarTorso, visible);
+		Show(m_wRadarRange, visible);
+		if (!visible)
+		{
+			for (int h = 0; h < MAX_BLIPS; h++)
+				Show(m_aBlips[h], false);
+			return;
+		}
+
 		float range = 800;
 		if (cfg)
 		{
@@ -766,13 +872,15 @@ class CGS_PilotHUD
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected void DrawStatus(IEntity mech, float screenW, float screenH, float now)
+	protected void DrawStatus(IEntity mech, float screenW, float screenH, float now, bool visible)
 	{
 		float sx = (screenW - RADAR) * 0.5;
 		float sy = screenH - RADAR - MARGIN - 64;
 
 		// Heat.
-		CGS_MechHeatComponent heat = CGS_MechHeatComponent.Find(mech);
+		CGS_MechHeatComponent heat;
+		if (visible)
+			heat = CGS_MechHeatComponent.Find(mech);
 		bool hasHeat = heat != null;
 		Show(m_wHeatBg, hasHeat);
 		Show(m_wHeatBar, hasHeat);
@@ -801,7 +909,9 @@ class CGS_PilotHUD
 		}
 
 		// Torso twist gauge: centre tick = legs, yellow mark = torso.
-		CGS_TorsoTwistComponent torso = CGS_TorsoTwistComponent.Find(mech);
+		CGS_TorsoTwistComponent torso;
+		if (visible)
+			torso = CGS_TorsoTwistComponent.Find(mech);
 		bool hasTwist = torso != null;
 		Show(m_wTwistBg, hasTwist);
 		Show(m_wTwistCentre, hasTwist);
@@ -816,8 +926,9 @@ class CGS_PilotHUD
 		}
 
 		// Speed.
+		Show(m_wSpeedText, visible);
 		Place(m_wSpeedText, sx, sy + 46);
-		if (m_wSpeedText)
+		if (visible && m_wSpeedText)
 			m_wSpeedText.SetText(string.Format("SPEED %1 km/h", Math.Round(BFA_MechHUD.GetSpeed(mech) * 3.6)));
 
 		// Missile warning (flashing).
