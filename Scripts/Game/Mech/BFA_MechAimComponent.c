@@ -38,9 +38,6 @@ class BFA_MechAimComponent : ScriptGameComponent
 	[Attribute("true", UIWidgets.CheckBox, "Show MechCore's cockpit HUD (weapon ammo + mech status) to the crew. HUD mods can also turn it off with BFA_MechHUD.SetBuiltInHUDEnabled(false).", category: "Crosshair")]
 	protected bool m_bShowHUD;
 
-	[Attribute("false", UIWidgets.CheckBox, "FREE LOOK (hold Left Alt) only moves the camera: guns, arms and the torso twist keep aiming where they were, and catch up when you let go (MechWarrior style). Off = guns follow the camera during free look too.", category: "Crosshair")]
-	protected bool m_bFreeLookHoldsAim;
-
 	protected ref BFA_MechHUDDisplay m_HUDDisplay;
 
 	[Attribute("", UIWidgets.Object, "Crosshair used when the selected weapon has none of its own. Empty = built-in white cross.", category: "Crosshair")]
@@ -341,15 +338,6 @@ class BFA_MechAimComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected bool IsFreeLookKeyHeld()
-	{
-		InputManager input = GetGame().GetInputManager();
-		if (!input)
-			return false;
-		return input.GetActionValue("MechFreelook") > 0.5;
-	}
-
-	//------------------------------------------------------------------------------------------------
 	protected vector LocalDirectionToWorld(vector localDirection)
 	{
 		IEntity owner = GetOwner();
@@ -401,15 +389,6 @@ class BFA_MechAimComponent : ScriptGameComponent
 
 		if (!world)
 			return;
-
-		// Free look (option): keep aiming at the same spot in the world, only the camera moves.
-		// Reads the key itself every frame (hold = held), so a stuck free-look state can
-		// never freeze the guns.
-		if (m_bFreeLookHoldsAim && IsFreeLookKeyHeld() && m_vLocalAimPointWorld != vector.Zero)
-		{
-			ApplyAimPointToMounts(m_sLocalStation, m_vLocalAimPointWorld);
-			return;
-		}
 
 		vector cam[4];
 		world.GetCurrentCamera(cam);
