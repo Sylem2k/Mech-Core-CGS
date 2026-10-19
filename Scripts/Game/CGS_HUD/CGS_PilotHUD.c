@@ -59,6 +59,8 @@ class CGS_HudContact
 	int m_iSide;          // 0 neutral, 1 friendly, 2 hostile
 	bool m_bInfantry;
 	float m_fRadius;
+	vector m_vCentreLocal;  // bounds centre in the entity's own space (read once)
+	bool m_bCentreKnown;
 	vector m_vLastPos;
 	float m_fLastTime;
 	vector m_vVelocity;
@@ -204,6 +206,8 @@ class CGS_PilotHUD
 	protected float m_fNextScan;
 	protected float m_fNextThreatScan;
 	protected float m_fWarningUntil;
+	protected float m_fNextLeadCheck;
+	protected float m_fLeadSpeed;
 	protected ref map<IEntity, vector> m_mThreatPos = new map<IEntity, vector>();
 	protected ref array<typename> m_aThreatTypes;
 
@@ -413,10 +417,15 @@ class CGS_PilotHUD
 	{
 		if (c.m_bInfantry)
 			return c.m_pEntity.GetOrigin() + vector.Up * 1.0;
-		vector mins;
-		vector maxs;
-		c.m_pEntity.GetBounds(mins, maxs);
-		return c.m_pEntity.CoordToParent((mins + maxs) * 0.5);
+		if (!c.m_bCentreKnown)
+		{
+			vector mins;
+			vector maxs;
+			c.m_pEntity.GetBounds(mins, maxs);
+			c.m_vCentreLocal = (mins + maxs) * 0.5;
+			c.m_bCentreKnown = true;
+		}
+		return c.m_pEntity.CoordToParent(c.m_vCentreLocal);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -731,7 +740,7 @@ class CGS_PilotHUD
 		float now = Now();
 		if (now >= m_fNextScan)
 		{
-			m_fNextScan = now + 0.25;
+			m_fNextScan = now + 0.5;
 			Scan(mech, cfg, camPos, camForward);
 		}
 		TrackVelocities(now);
@@ -887,7 +896,13 @@ class CGS_PilotHUD
 			m_wTgtInfo.SetText(info);
 
 		// Lead pip.
-		float speed = LeadSpeed(mech, station);
+		float leadNow = Now();
+		if (leadNow >= m_fNextLeadCheck)
+		{
+			m_fNextLeadCheck = leadNow + 0.5;
+			m_fLeadSpeed = LeadSpeed(mech, station);
+		}
+		float speed = m_fLeadSpeed;
 		float lx, ly;
 		bool pip = false;
 		if (speed > 0 && c.m_vVelocity.LengthSq() > 0.25)

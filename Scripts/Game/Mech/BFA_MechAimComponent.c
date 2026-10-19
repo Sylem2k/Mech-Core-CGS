@@ -38,7 +38,7 @@ class BFA_MechAimComponent : ScriptGameComponent
 	[Attribute("true", UIWidgets.CheckBox, "Show MechCore's cockpit HUD (weapon ammo + mech status) to the crew. HUD mods can also turn it off with BFA_MechHUD.SetBuiltInHUDEnabled(false).", category: "Crosshair")]
 	protected bool m_bShowHUD;
 
-	[Attribute("true", UIWidgets.CheckBox, "FREE LOOK (hold Left Alt) only moves the camera: guns, arms and the torso twist keep aiming where they were, and catch up when you let go (MechWarrior style). Off = guns follow the camera during free look too.", category: "Crosshair")]
+	[Attribute("false", UIWidgets.CheckBox, "FREE LOOK (hold Left Alt) only moves the camera: guns, arms and the torso twist keep aiming where they were, and catch up when you let go (MechWarrior style). Off = guns follow the camera during free look too.", category: "Crosshair")]
 	protected bool m_bFreeLookHoldsAim;
 
 	protected ref BFA_MechHUDDisplay m_HUDDisplay;
