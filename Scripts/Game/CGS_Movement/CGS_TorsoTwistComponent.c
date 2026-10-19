@@ -38,7 +38,7 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	[Attribute("", UIWidgets.Auto, "Weapon mount Ids (BFA_MechWeaponMountComponent) that turn with the torso: the arms. They still aim on top of the twist. Rigid arms: list the mount only. IK / animated arms: list the mount AND the arm's slot above.", category: "Parts")]
 	protected ref array<string> m_aTwistMounts;
 
-	[Attribute("false", UIWidgets.CheckBox, "Hide the mech root's own mesh (its slots stay visible). Use it when the root mesh is the whole body: put the same body model in a twisting 'Torso' slot instead.", category: "Parts")]
+	[Attribute("false", UIWidgets.CheckBox, "Remove the mech root's own model (its slots stay visible). Use it when the root mesh is the whole body: put the same body model in a twisting 'Torso' slot instead.", category: "Parts")]
 	protected bool m_bHideRootMesh;
 
 	[Attribute("false", UIWidgets.CheckBox, "Print the twist once a second.", category: "Diagnostics")]
@@ -248,12 +248,14 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! Root mesh off, children on (not recursive). The death sequence shows it again for the wreck.
+	//! Takes the root's own model away (slots, legs and arms stay visible - hiding the root entity
+	//! itself would hide all of its children too). The death sequence puts it back for the wreck.
 	protected void HideRoot(IEntity owner)
 	{
 		if (!m_bHideRootMesh || System.IsConsoleApp() || BFA_MechExtension.IsMechDestroyed(owner))
 			return;
-		owner.ClearFlags(EntityFlags.VISIBLE, false);
+		if (owner.GetVObject())
+			owner.SetObject(null, "");
 	}
 
 	//------------------------------------------------------------------------------------------------

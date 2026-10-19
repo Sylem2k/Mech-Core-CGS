@@ -31,6 +31,11 @@ class BFA_MechLegPair
 	protected float m_fCadence;
 	protected bool m_bHadMotion;
 	protected int m_iLastMotionUpdateMs = -1;
+	protected float m_fLastYaw;
+	protected bool m_bHasLastYaw;
+	protected float m_fYawRate;        // body turn rate, radians per second (+ = right)
+	protected float m_fHipRadius = -1; // average distance from the body origin to the hips (flat)
+	protected float m_fGaitSpeed;      // max(walking speed, hip speed from turning)
 
 	//------------------------------------------------------------------------------------------------
 	protected float Wrap01(float value)
@@ -122,6 +127,25 @@ class BFA_MechLegPair
 
 		m_fSignedForwardSpeed = vector.Dot(m_vMeasuredVelocity, forward);
 
+		// Turning in place moves the hips around the body: count that as walking too, so the
+		// legs step round instead of twisting on planted feet.
+		float yaw = Math.Atan2(forward[0], forward[2]);
+		if (m_bHasLastYaw)
+		{
+			float dYaw = yaw - m_fLastYaw;
+			if (dYaw > Math.PI)
+				dYaw -= Math.PI2;
+			else if (dYaw < -Math.PI)
+				dYaw += Math.PI2;
+			float rawYawRate = dYaw / dt;
+			float yawAlpha = Math.Clamp(dt / 0.15, 0.0, 1.0);
+			m_fYawRate = m_fYawRate + (rawYawRate - m_fYawRate) * yawAlpha;
+		}
+		m_fLastYaw = yaw;
+		m_bHasLastYaw = true;
+
+		float turnSpeed = Math.AbsFloat(m_fYawRate) * Math.Max(GetHipRadius(), 0.5);
+
 		float deadZone = Math.Max(m_LeftLegComp.GetMotionDeadZone(), 0.0);
 		if (m_fMeasuredSpeed < deadZone)
 		{
@@ -129,12 +153,17 @@ class BFA_MechLegPair
 			m_fMeasuredSpeed = 0;
 			m_fSignedForwardSpeed = 0;
 		}
+		if (turnSpeed < deadZone)
+			turnSpeed = 0;
 
-		if (m_fMeasuredSpeed > 0)
+		float gaitSpeed = Math.Max(m_fMeasuredSpeed, turnSpeed);
+		m_fGaitSpeed = gaitSpeed;
+
+		if (gaitSpeed > 0)
 		{
-			float stride = m_LeftLegComp.StrideAt(m_fMeasuredSpeed);
+			float stride = m_LeftLegComp.StrideAt(gaitSpeed);
 			m_fCadence = Math.Clamp(
-				m_fMeasuredSpeed / Math.Max(stride, 0.01),
+				gaitSpeed / Math.Max(stride, 0.01),
 				m_LeftLegComp.GetMinCadence(),
 				m_LeftLegComp.GetMaxCadence()
 			);
@@ -187,9 +216,32 @@ class BFA_MechLegPair
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Speed that drives the gait: walking OR turning in place (> 0 = legs step).
 	float GetMeasuredSpeed()
 	{
-		return m_fMeasuredSpeed;
+		return m_fGaitSpeed;
+	}
+
+	//! Body turn rate in radians per second (+ = right).
+	float GetYawRate()
+	{
+		return m_fYawRate;
+	}
+
+	//! Average flat distance from the body origin to the hips.
+	float GetHipRadius()
+	{
+		if (m_fHipRadius >= 0)
+			return m_fHipRadius;
+		if (!m_BodyEntity || !m_LeftLegComp || !m_RightLegComp)
+			return 0;
+
+		vector l = m_BodyEntity.CoordToLocal(m_LeftLegComp.GetOwner().GetOrigin());
+		vector r = m_BodyEntity.CoordToLocal(m_RightLegComp.GetOwner().GetOrigin());
+		l[1] = 0;
+		r[1] = 0;
+		m_fHipRadius = (l.Length() + r.Length()) * 0.5;
+		return m_fHipRadius;
 	}
 
 	//------------------------------------------------------------------------------------------------

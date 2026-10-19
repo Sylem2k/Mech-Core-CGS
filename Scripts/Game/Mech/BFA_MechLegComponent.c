@@ -44,6 +44,12 @@ class BFA_MechLegComponent : ScriptComponent
 	[Attribute("3.0", UIWidgets.EditBox, "Maximum forward/back prediction for a foot target")]
 	float m_fMaxFootLead;
 
+	[Attribute("0.8", UIWidgets.EditBox, "Most a foot steps SIDEWAYS ahead of its rest spot when strafing, in metres (scaled by Size Scale). Lower = no wide side steps.")]
+	protected float m_fMaxSideLead;
+
+	[Attribute("0.35", UIWidgets.Slider, "Feet never cross: a foot stays at least this share of its rest distance on its own side of the body (0 = may reach the centre line).", "0 1 0.05")]
+	protected float m_fNoCrossMargin;
+
 	[Attribute("12.0", UIWidgets.EditBox, "Clamp measured root speed used by the visual rig")]
 	float m_fMaxMeasuredSpeed;
 
@@ -236,6 +242,7 @@ class BFA_MechLegComponent : ScriptComponent
 		m_fStrideMin *= k;
 		m_fStrideMax *= k;
 		m_fMaxFootLead *= k;
+		m_fMaxSideLead *= k;
 		m_fMotionDeadZone *= k;
 		m_fMaxMeasuredSpeed *= k;
 	}
@@ -282,12 +289,50 @@ class BFA_MechLegComponent : ScriptComponent
 		vector lead = m_Pair.GetMeasuredVelocity() * tau;
 		lead[1] = 0;
 
-		float leadLen = lead.Length();
-		float maxLead = Math.Max(m_fMaxFootLead, 0.1);
-		if (leadLen > maxLead)
-			lead = lead * (maxLead / leadLen);
+		IEntity body = m_BodyEntity;
+		if (!body)
+			body = GetOwner().GetRootParent();
 
-		return TraceGroundFromPos(neutral + lead);
+		// Turning: the rest spot swings round the body, so aim where it will be.
+		vector target = neutral;
+		float turn = m_Pair.GetYawRate() * tau;
+		if (body && Math.AbsFloat(turn) > 0.001)
+		{
+			vector centre = body.GetOrigin();
+			vector arm = neutral - centre;
+			float c = Math.Cos(-turn);
+			float sn = Math.Sin(-turn);
+			// Rotate around world up (yaw + = right = clockwise seen from above).
+			vector rotated = Vector(arm[0] * c - arm[2] * sn, arm[1], arm[0] * sn + arm[2] * c);
+			target = centre + rotated;
+		}
+
+		if (!body)
+		{
+			float leadLen = lead.Length();
+			float maxLead = Math.Max(m_fMaxFootLead, 0.1);
+			if (leadLen > maxLead)
+				lead = lead * (maxLead / leadLen);
+			return TraceGroundFromPos(target + lead);
+		}
+
+		// Lead in the body's own directions: forward/back up to Max Foot Lead, sideways much less.
+		vector leadLocal = body.VectorToLocal(lead);
+		leadLocal[0] = Math.Clamp(leadLocal[0], -Math.Max(m_fMaxSideLead, 0.0), Math.Max(m_fMaxSideLead, 0.0));
+		leadLocal[2] = Math.Clamp(leadLocal[2], -Math.Max(m_fMaxFootLead, 0.1), Math.Max(m_fMaxFootLead, 0.1));
+		leadLocal[1] = 0;
+
+		// Never cross over to the other leg's side.
+		vector targetLocal = body.CoordToLocal(target) + leadLocal;
+		vector restLocal = body.CoordToLocal(neutral);
+		float restSide = restLocal[0];
+		float minSide = Math.AbsFloat(restSide) * Math.Clamp(m_fNoCrossMargin, 0, 1);
+		if (restSide >= 0)
+			targetLocal[0] = Math.Max(targetLocal[0], minSide);
+		else
+			targetLocal[0] = Math.Min(targetLocal[0], -minSide);
+
+		return TraceGroundFromPos(body.CoordToParent(targetLocal));
 	}
 
 	//------------------------------------------------------------------------------------------------
