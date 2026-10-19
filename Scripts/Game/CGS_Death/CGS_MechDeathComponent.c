@@ -540,6 +540,7 @@ class CGS_MechDeathComponent : ScriptComponent
 		CGS_MechDebris piece = new CGS_MechDebris();
 		piece.m_pEntity = debris;
 		piece.m_vPosition = mat[3];
+		piece.m_fStartY = mat[3][1];
 		piece.m_vAngles = Math3D.MatrixToAngles(mat);
 		piece.m_vVelocity = velocity;
 		piece.m_vSpin = Vector(rng.RandFloatXY(-1, 1), rng.RandFloatXY(-1, 1), rng.RandFloatXY(-1, 1)) * m_fSpinSpeed * spinScale;
@@ -560,6 +561,17 @@ class CGS_MechDeathComponent : ScriptComponent
 		{
 			if (!piece || !piece.m_pEntity || piece.m_bLanded)
 				continue;
+
+			// Safety net: a piece that never finds ground (no terrain under it, e.g. in the prefab
+			// editor, or a bad spawn spot) is removed before it falls out of the world.
+			piece.m_fAge = piece.m_fAge + dt;
+			if (piece.m_fAge > 12 || piece.m_vPosition[1] < piece.m_fStartY - 150)
+			{
+				SCR_EntityHelper.DeleteEntityAndChildren(piece.m_pEntity);
+				piece.m_pEntity = null;
+				piece.m_bLanded = true;
+				continue;
+			}
 
 			piece.m_vVelocity = piece.m_vVelocity + vector.Up * (-m_fGravity * dt);
 			piece.m_vPosition = piece.m_vPosition + piece.m_vVelocity * dt;
@@ -789,6 +801,8 @@ class CGS_MechDebris
 	vector m_vSpin;
 	float m_fScale = 1;
 	bool m_bLanded;
+	float m_fStartY;   // height it started falling from
+	float m_fAge;      // seconds falling
 
 	void Apply()
 	{
