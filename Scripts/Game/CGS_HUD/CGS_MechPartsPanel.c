@@ -2,7 +2,7 @@
 //! DAMAGE PICTURE of the built-in HUD (left side, above the MECH panel), MechWarrior style:
 //! a blocky front view of the mech - head, center / left / right torso, arms, legs - each piece
 //! coloured by the health of the part(s) in it:
-//!   brown = fine   yellow = damaged   orange = badly damaged   red = critical   black = destroyed
+//!   green = fine   yellow = damaged   orange = badly damaged   red = critical   black = destroyed
 //! The center torso shows the hull (and any part placed there). Pieces with no part are left
 //! out, so a mech without arm parts simply has no arms on the picture.
 //! Parts = entities with a BFA_MechPartHitZone. Its "Hud Section" says where it goes (AUTO =
@@ -52,6 +52,8 @@ class CGS_MechPartsPanel
 
 	protected ref array<IEntity> m_aParts = {};
 	protected ref array<int> m_aPartSection = {};
+	protected ref array<IEntity> m_aLeftLegs = {};   // from the mech's leg pairs (exact sides)
+	protected ref array<IEntity> m_aRightLegs = {};
 	protected IEntity m_pMech;
 	protected string m_sMechName;
 	protected float m_fNextList;
@@ -70,7 +72,7 @@ class CGS_MechPartsPanel
 		m_wTitle = hud.PanelText(W - 16, 20, 14, new Color(0.95, 0.75, 0.35, 1));
 		m_wLeft = hud.PanelText(20, 24, 20, new Color(0.95, 0.9, 0.2, 1));
 		m_wRight = hud.PanelText(20, 24, 20, new Color(0.95, 0.9, 0.2, 1));
-		m_wName = hud.PanelText(W - 16, 22, 15, new Color(0.85, 0.7, 0.4, 1));
+		m_wName = hud.PanelText(W - 16, 22, 13, new Color(0.85, 0.7, 0.4, 1));
 
 		m_aPieces.Clear();
 		// Head + center torso (with waist).
@@ -215,7 +217,7 @@ class CGS_MechPartsPanel
 		if (dead)
 			return new Color(0.04, 0.04, 0.04, 0.9);
 		if (health > 0.75)
-			return new Color(0.35, 0.28, 0.12, 0.9);  // fine: dark brown
+			return new Color(0.15, 0.5, 0.2, 0.9);    // fine: green
 		if (health > 0.5)
 			return new Color(0.95, 0.9, 0.1, 0.95);   // damaged: yellow
 		if (health > 0.25)
@@ -228,7 +230,7 @@ class CGS_MechPartsPanel
 		if (dead)
 			return new Color(0.45, 0.45, 0.45, 0.9);
 		if (health > 0.75)
-			return new Color(0.6, 0.5, 0.25, 1);
+			return new Color(0.35, 0.85, 0.4, 1);
 		return new Color(1, 0.95, 0.4, 1);
 	}
 
@@ -278,7 +280,48 @@ class CGS_MechPartsPanel
 	{
 		m_aParts.Clear();
 		m_aPartSection.Clear();
+		CollectLegSides(mech);
 		AddParts(mech, mech, 0);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! The mech's Leg Pairs (Movement component) say exactly which leg is left and which right.
+	protected void CollectLegSides(IEntity mech)
+	{
+		m_aLeftLegs.Clear();
+		m_aRightLegs.Clear();
+		BFA_MechMovementComponent movement = BFA_MechMovementComponent.Cast(mech.FindComponent(BFA_MechMovementComponent));
+		SlotManagerComponent slots = SlotManagerComponent.Cast(mech.FindComponent(SlotManagerComponent));
+		if (!movement || !slots || !movement.m_aLegPairs)
+			return;
+
+		foreach (BFA_MechLegPair pair : movement.m_aLegPairs)
+		{
+			if (!pair)
+				continue;
+			EntitySlotInfo left = slots.GetSlotByName(pair.m_sLeftLegSlotName);
+			EntitySlotInfo right = slots.GetSlotByName(pair.m_sRightLegSlotName);
+			if (left && left.GetAttachedEntity())
+				m_aLeftLegs.Insert(left.GetAttachedEntity());
+			if (right && right.GetAttachedEntity())
+				m_aRightLegs.Insert(right.GetAttachedEntity());
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! -1 = on a left leg, 1 = on a right leg, 0 = not on a leg (checks the part and what it sits on).
+	protected int LegSide(IEntity mech, IEntity part)
+	{
+		IEntity e = part;
+		while (e && e != mech)
+		{
+			if (m_aLeftLegs.Contains(e))
+				return -1;
+			if (m_aRightLegs.Contains(e))
+				return 1;
+			e = e.GetParent();
+		}
+		return 0;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -313,9 +356,21 @@ class CGS_MechPartsPanel
 	//! from the name (LEFT / RIGHT, _L / _R) or else from where the part sits on the mech.
 	protected int GuessSection(IEntity mech, IEntity part, BFA_MechPartHitZone zone)
 	{
+		// Legs from the leg pairs: always the right side.
+		int legSide = LegSide(mech, part);
+		if (legSide < 0)
+			return CGS_EMechHudSection.LEFT_LEG;
+		if (legSide > 0)
+			return CGS_EMechHudSection.RIGHT_LEG;
+
 		string name = zone.GetDisplayName();
 		if (name.IsEmpty() && part.GetPrefabData())
+		{
 			name = part.GetPrefabData().GetPrefabName();
+			int slash = name.LastIndexOf("/");
+			if (slash >= 0)
+				name = name.Substring(slash + 1, name.Length() - slash - 1);
+		}
 		name.ToUpper();
 		name.Replace(".ET", "");
 
@@ -379,8 +434,8 @@ class CGS_MechPartsPanel
 		}
 
 		name.ToUpper();
-		if (name.Length() > 20)
-			name = name.Substring(0, 20);
+		if (name.Length() > 24)
+			name = name.Substring(0, 24);
 		return name;
 	}
 }
