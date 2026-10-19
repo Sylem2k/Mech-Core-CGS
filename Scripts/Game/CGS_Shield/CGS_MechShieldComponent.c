@@ -207,6 +207,18 @@ class CGS_MechShieldComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Shield points now / at most (HUDs).
+	float GetShield()
+	{
+		return m_fShield;
+	}
+
+	float GetMaxShield()
+	{
+		return m_fMaxShield;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! 0..1 for HUDs.
 	float GetShield01()
 	{
