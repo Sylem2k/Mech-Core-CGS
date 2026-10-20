@@ -369,13 +369,11 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 			float dt = Math.Clamp((nowMs - lastMs) * 0.001, 0.001, 0.1);
 			m_iLastSteerMs = nowMs;
 
-			float maxTurnRad = Math.Max(m_fTurnRate, 0) * Math.DEG2RAD * dt;
-
 			foreach (BFA_MechRocketInFlight rocket : m_aRockets)
 			{
 				CGS_TitanMissileInFlight missile = CGS_TitanMissileInFlight.Cast(rocket);
 				if (missile)
-					Steer(missile, maxTurnRad);
+					Steer(missile, dt);
 			}
 		}
 
@@ -420,9 +418,9 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected void Steer(CGS_TitanMissileInFlight missile, float maxTurnRad)
+	protected void Steer(CGS_TitanMissileInFlight missile, float dt)
 	{
-		if (missile.m_fTravelled < m_fArmingDistance || maxTurnRad <= 0)
+		if (missile.m_fTravelled < m_fArmingDistance || m_fTurnRate <= 0 || dt <= 0)
 			return;
 
 		// Follow Aim: the target is wherever the crosshair points right now.
@@ -466,12 +464,28 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 		if (angle < 0.0001)
 			return;
 
-		// Turn toward the target, at most maxTurnRad this tick.
-		float t = Math.Min(maxTurnRad / angle, 1.0);
-		vector steered = current * (1.0 - t) + desired * t;
-		if (steered.LengthSq() < 0.000001)
-			steered = desired;
+		// Turn rate. Close in, a missile can need a tighter turn than its rate allows and would
+		// circle the target forever; raise the rate just enough to come around onto it
+		// (turn radius = speed / rate, and it must fit inside half the distance).
+		float turnRate = m_fTurnRate * Math.DEG2RAD;
+		float needed = 2.0 * Math.Max(m_fRocketSpeed, 1.0) / distance;
+		if (needed > turnRate)
+			turnRate = needed;
+		float turn = Math.Min(turnRate * dt, angle);
 
+		// Rotate the heading toward the target by 'turn' radians (a true rotation, so it turns
+		// at full rate even when the target is behind it).
+		vector side = desired - current * cosAngle;
+		if (side.LengthSq() < 0.000001)
+		{
+			// Target straight behind: pick any sideways direction (prefer turning over the top).
+			side = vector.Up - current * vector.Dot(vector.Up, current);
+			if (side.LengthSq() < 0.000001)
+				side = vector.Right - current * vector.Dot(vector.Right, current);
+		}
+		side.Normalize();
+
+		vector steered = current * Math.Cos(turn) + side * Math.Sin(turn);
 		steered.Normalize();
 		missile.m_vDirection = steered;
 	}
