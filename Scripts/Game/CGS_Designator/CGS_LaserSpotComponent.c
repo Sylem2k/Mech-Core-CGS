@@ -197,6 +197,40 @@ class CGS_LaserSpotComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Debug: one line per laser explaining why a missile would or would not take it.
+	static string DescribeSpots(Faction faction, vector from, vector forward, float maxDistance, float coneDeg)
+	{
+		string text = "";
+		float minCos = Math.Cos(Math.Clamp(coneDeg * 0.5, 1, 180) * Math.DEG2RAD);
+		vector dir = forward.Normalized();
+		int n = 0;
+		foreach (CGS_LaserSpotComponent spot : GetAll())
+		{
+			if (!spot)
+				continue;
+			n++;
+			string why = "OK";
+			vector to = spot.GetSpot() - from;
+			float distance = to.Length();
+			float angle = 0;
+			if (distance > 0.01)
+				angle = Math.Acos(Math.Clamp(vector.Dot(to * (1.0 / distance), dir), -1, 1)) * Math.RAD2DEG;
+			if (!spot.IsLasing())
+				why = "laser off";
+			else if (!spot.IsFriendlyTo(faction))
+				why = "not friendly";
+			else if (distance > maxDistance)
+				why = "too far (" + Math.Round(distance).ToString() + " m > " + Math.Round(maxDistance).ToString() + ")";
+			else if (vector.Dot(to * (1.0 / Math.Max(distance, 0.01)), dir) < minCos)
+				why = "outside cone (" + Math.Round(angle).ToString() + " deg > " + Math.Round(coneDeg * 0.5).ToString() + ")";
+			text = text + string.Format("\n   laser on %1: %2 m, %3 deg -> %4", spot.GetOwner(), Math.Round(distance), Math.Round(angle), why);
+		}
+		if (n == 0)
+			text = "\n   no designators in the world (no CGS_LaserSpotComponent)";
+		return text;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! Best live spot for a missile: friendly to 'faction', within maxDistance of 'from' and inside
 	//! a cone of coneDeg (full angle) around 'forward'. Nearest to the cone centre wins.
 	static CGS_LaserSpotComponent FindBestSpot(Faction faction, vector from, vector forward, float maxDistance, float coneDeg)

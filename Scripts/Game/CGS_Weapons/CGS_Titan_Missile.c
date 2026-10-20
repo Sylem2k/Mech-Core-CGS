@@ -141,6 +141,13 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 		CGS_LaserSpotComponent laserSpot;
 		if (m_bHoming && m_eGuidance != CGS_EMissileGuidance.CROSSHAIR)
 			laserSpot = CGS_LaserSpotComponent.FindBestSpot(CGS_LaserSpotComponent.FactionOf(m_pMechOwner), start, aimDirection, LaserRange(), m_fLaserConeDeg);
+		if (m_bDebug)
+		{
+			string picked = "none";
+			if (laserSpot)
+				picked = laserSpot.GetOwner().ToString();
+			Print(string.Format("[CGS LASER MISSILE] %1 guidance=%2 homing=%3 range=%4 cone=%5 -> laser picked: %6%7", m_sModuleId, typename.EnumToString(CGS_EMissileGuidance, m_eGuidance), m_bHoming, LaserRange(), m_fLaserConeDeg, picked, CGS_LaserSpotComponent.DescribeSpots(CGS_LaserSpotComponent.FactionOf(m_pMechOwner), start, aimDirection, LaserRange(), m_fLaserConeDeg)));
+		}
 
 		if (laserSpot)
 		{
