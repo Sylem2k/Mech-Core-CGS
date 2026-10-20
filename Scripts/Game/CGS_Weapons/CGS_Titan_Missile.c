@@ -9,6 +9,8 @@
 //!  - LOFT: missiles can leave the tubes pointing up and then turn down onto the target
 //!    (top attack), like a big missile rack.
 //!  - Turn rate decides how hard it can steer; slow missiles with low turn rate can be dodged.
+//!  - GUIDANCE: Crosshair (lock what is aimed at), Laser (fly to a friendly target designator
+//!    spot, even one the shooter can't see) or Both (laser spot if there is one, else crosshair).
 //------------------------------------------------------------------------------------------------
 [ComponentEditorProps(category: "CGS MechCore/Weapons", description: "CGS Titan Missile: homing missiles that lock what the crosshair is on, optional top-attack loft. Point defense can shoot them down.")]
 class CGS_Titan_MissileClass : BFA_MechRocketLauncherModuleComponentClass
@@ -16,9 +18,18 @@ class CGS_Titan_MissileClass : BFA_MechRocketLauncherModuleComponentClass
 }
 
 //------------------------------------------------------------------------------------------------
+enum CGS_EMissileGuidance
+{
+	CROSSHAIR = 0,  // lock what the crosshair is on at launch
+	LASER = 1,      // fly to a friendly laser spot (CGS Target Designator)
+	BOTH = 2        // laser spot when there is one, otherwise the crosshair lock
+}
+
+//------------------------------------------------------------------------------------------------
 //! One homing missile in flight. Server only.
 class CGS_TitanMissileInFlight : BFA_MechRocketInFlight
 {
+	CGS_LaserSpotComponent m_pSpot;  // laser spot it follows (null = none)
 	IEntity m_pTarget;        // locked object (root), null = fly to m_vTargetPoint
 	vector m_vTargetLocal;    // aim spot on the target, in the target's own space
 	vector m_vTargetPoint;    // world aim point when nothing is locked
@@ -85,6 +96,12 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 	[Attribute("20", UIWidgets.Auto, "Metres flown straight out of the tube before it starts steering.", category: "Homing")]
 	protected float m_fArmingDistance;
 
+	[Attribute("0", UIWidgets.ComboBox, "What the missiles fly to. CROSSHAIR = lock what is aimed at. LASER = a friendly target designator spot in front of the mech (it can be behind a hill). BOTH = the laser spot if there is one, otherwise the crosshair lock.", enums: ParamEnumArray.FromEnum(CGS_EMissileGuidance), category: "Homing")]
+	protected CGS_EMissileGuidance m_eGuidance;
+
+	[Attribute("90", UIWidgets.Auto, "Laser: a spot must be inside this cone (full angle, degrees) in front of the launcher / the missile to be picked up.", category: "Homing")]
+	protected float m_fLaserConeDeg;
+
 	[Attribute("0", UIWidgets.Auto, "LOFT: missiles leave the tube this many degrees upward, then dive onto the target (top attack). 0 = straight at it. 30-45 looks good on a back rack.", category: "Homing")]
 	protected float m_fLoftAngle;
 
@@ -119,7 +136,20 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 
 		CGS_TitanMissileInFlight missile = new CGS_TitanMissileInFlight();
 		missile.m_vTargetPoint = lockPoint;
-		if (m_bLockTargets && lockHit)
+
+		// Laser guidance: a friendly spot in front of the launcher wins.
+		CGS_LaserSpotComponent laserSpot;
+		if (m_bHoming && m_eGuidance != CGS_EMissileGuidance.CROSSHAIR)
+			laserSpot = CGS_LaserSpotComponent.FindBestSpot(CGS_LaserSpotComponent.FactionOf(m_pMechOwner), start, aimDirection, LaserRange(), m_fLaserConeDeg);
+
+		if (laserSpot)
+		{
+			missile.m_pSpot = laserSpot;
+			lockPoint = laserSpot.GetSpot();
+			missile.m_vTargetPoint = lockPoint;
+			lockHit = laserSpot.GetTarget();
+		}
+		else if (m_bLockTargets && lockHit && m_eGuidance != CGS_EMissileGuidance.LASER)
 		{
 			IEntity root = lockHit.GetRootParent();
 			if (!root)
@@ -153,6 +183,30 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 			Print(string.Format("[CGS TITAN MISSILE] LAUNCH %1 lock=%2 point=%3 rounds=%4", m_sHardpointName, missile.m_pTarget, lockPoint, m_iRoundsInMagazine));
 
 		StartFlightTick();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected float LaserRange()
+	{
+		return Math.Max(m_fRange, 100.0);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! For the HUD: does this launcher use laser spots?
+	bool UsesLaser()
+	{
+		return m_bHoming && m_eGuidance != CGS_EMissileGuidance.CROSSHAIR;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! For the HUD: the spot this launcher would fly to right now (null = none).
+	CGS_LaserSpotComponent FindLaserSpotNow()
+	{
+		if (!UsesLaser() || !m_pMechOwner)
+			return null;
+		vector direction;
+		vector start = GetMuzzleRaw(direction, false);
+		return CGS_LaserSpotComponent.FindBestSpot(CGS_LaserSpotComponent.FactionOf(m_pMechOwner), start, direction, LaserRange(), m_fLaserConeDeg);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -303,6 +357,21 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 	{
 		if (missile.m_fTravelled < m_fArmingDistance || maxTurnRad <= 0)
 			return;
+
+		// Laser: follow the spot while it is on; laser off = keep flying to where it last was.
+		if (m_eGuidance != CGS_EMissileGuidance.CROSSHAIR)
+		{
+			if (missile.m_pSpot && !missile.m_pSpot.IsLasing())
+				missile.m_pSpot = null;
+			// No spot yet (and no crosshair lock): look for one ahead of the missile.
+			if (!missile.m_pSpot && !missile.m_pTarget)
+				missile.m_pSpot = CGS_LaserSpotComponent.FindBestSpot(CGS_LaserSpotComponent.FactionOf(missile.m_pMechOwner), missile.m_vPosition, missile.m_vDirection, LaserRange(), m_fLaserConeDeg);
+			if (missile.m_pSpot)
+			{
+				missile.m_vTargetPoint = missile.m_pSpot.GetSpot();
+				missile.m_pTarget = null;
+			}
+		}
 
 		vector targetPos = missile.m_vTargetPoint;
 		if (missile.m_pTarget)

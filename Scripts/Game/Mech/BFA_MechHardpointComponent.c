@@ -531,6 +531,13 @@ class BFA_MechHardpointComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Module entry by id (null for 0 / unknown). For add-ons and gameplay mods.
+	BFA_MechModuleDefinition GetModuleDefinition(int moduleId)
+	{
+		return FindModule(moduleId);
+	}
+
+	//------------------------------------------------------------------------------------------------
 	protected BFA_MechModuleDefinition FindModule(int moduleId)
 	{
 		if (!m_aModules)
@@ -543,6 +550,15 @@ class BFA_MechHardpointComponent : ScriptComponent
 		}
 
 		return null;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Can this module go on this hardpoint (class check)? For loadout screens and add-ons.
+	bool CanModuleFit(int hardpointIndex, int moduleId)
+	{
+		if (moduleId == 0)
+			return hardpointIndex >= 0 && hardpointIndex < GetHardpointCount();
+		return ModuleFitsHardpoint(hardpointIndex, moduleId);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -1042,10 +1058,54 @@ class BFA_MechHardpointComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Server: change several hardpoints in one swap (loadout screens, mech bays).
+	//! modules[i] = module id for hardpoint i (0 = empty, -1 = leave as it is).
+	bool ServerRequestLoadout(string stationId, notnull array<int> modules)
+	{
+		if (!Replication.IsServer())
+			return false;
+
+		int w0 = m_iLoadout0;
+		int w1 = m_iLoadout1;
+		int w2 = m_iLoadout2;
+		int count = Math.Min(modules.Count(), GetHardpointCount());
+		for (int hp = 0; hp < count; hp++)
+		{
+			int moduleId = modules[hp];
+			if (moduleId < 0)
+				continue;
+			if (moduleId > 31 || (moduleId != 0 && !ModuleFitsHardpoint(hp, moduleId)))
+				return false;
+
+			int wordIndex = hp / BFA_HARDPOINTS_PER_WORD;
+			int shift = Math.Mod(hp, BFA_HARDPOINTS_PER_WORD) * BFA_MODULE_BITS;
+			int mask = 31 << shift;
+			if (wordIndex == 0)
+				w0 = (w0 & ~mask) | (moduleId << shift);
+			else if (wordIndex == 1)
+				w1 = (w1 & ~mask) | (moduleId << shift);
+			else
+				w2 = (w2 & ~mask) | (moduleId << shift);
+		}
+
+		return ServerBeginSwap(stationId, w0, w1, w2, -1);
+	}
+
+	//------------------------------------------------------------------------------------------------
 	protected bool ServerBeginSwap(string stationId, int w0, int w1, int w2, int presetIndex)
 	{
 		string reason;
 		if (!CanSwapNow(stationId, reason))
+		{
+			BFA_MechLog.Log(string.Format("[BFA LOADOUT] swap refused station=%1 reason=%2", stationId, reason));
+			return false;
+		}
+
+		// Add-ons / gameplay mods may refuse the new loadout (too heavy, wrong hardpoint type ...).
+		array<int> targets = {};
+		for (int t = 0; t < GetHardpointCount(); t++)
+			targets.Insert(ModuleFromWords(w0, w1, w2, t));
+		if (!BFA_MechExtension.Get().CanApplyLoadout(GetOwner(), this, targets, reason))
 		{
 			BFA_MechLog.Log(string.Format("[BFA LOADOUT] swap refused station=%1 reason=%2", stationId, reason));
 			return false;

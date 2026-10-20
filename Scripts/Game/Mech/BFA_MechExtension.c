@@ -123,6 +123,25 @@ class BFA_MechExtension
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! [Server, every heat tick] Extra heat lost per second on top of the heat component's own
+	//! Cooling Per Second (gameplay mods: heatsinks). Default 0.
+	float GetExtraCooling(IEntity mech)
+	{
+		return 0;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! [Server] A loadout change is about to start (field swap, preset, mech bay ...).
+	//! targetModules[i] = module id hardpoint i will carry (0 = empty); look modules up with
+	//! hardpoints.GetModuleDefinition(id) and hardpoint names with hardpoints.GetHardpointName(i).
+	//! Return false and set reason to refuse it (gameplay mods: tonnage, hardpoint types ...).
+	bool CanApplyLoadout(IEntity mech, BFA_MechHardpointComponent hardpoints, notnull array<int> targetModules, out string reason)
+	{
+		reason = string.Empty;
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! [All machines] A mech finished spawning / is being deleted. Spawn local visuals, register it.
 	void OnMechInit(IEntity mech)
 	{

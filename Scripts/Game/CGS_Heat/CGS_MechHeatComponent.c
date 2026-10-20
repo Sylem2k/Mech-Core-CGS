@@ -137,6 +137,19 @@ class CGS_MechHeatComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! The heat component's own cooling (heat lost per second), without add-on bonuses.
+	float GetCoolingPerSecond()
+	{
+		return m_fCoolingPerSecond;
+	}
+
+	//! Max Heat (100% on the gauge).
+	float GetMaxHeat()
+	{
+		return m_fMaxHeat;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! 0..1 of Max Heat (can go above 1 while overridden: up to Override Heat Cap).
 	float GetHeat01()
 	{
@@ -316,7 +329,8 @@ class CGS_MechHeatComponent : ScriptComponent
 
 		if (m_fHeat > 0)
 		{
-			float cooling = m_fCoolingPerSecond;
+			// Add-ons may add cooling (gameplay mods: installed heatsinks ...).
+			float cooling = m_fCoolingPerSecond + Math.Max(BFA_MechExtension.Get().GetExtraCooling(GetOwner()), 0);
 			if (m_bOverheated)
 				cooling *= Math.Max(m_fOverheatCoolingMultiplier, 0);
 			m_fHeat = Math.Max(m_fHeat - cooling * timeSlice, 0);
