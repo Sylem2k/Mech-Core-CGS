@@ -73,7 +73,7 @@ class BFA_MechLoadoutPreset
 [BaseContainerProps()]
 class BFA_MechModuleDefinition
 {
-	[Attribute("1", UIWidgets.EditBox, "Module ID. 1-31. 0 is reserved for empty.", category: "Module")]
+	[Attribute("1", UIWidgets.EditBox, "Module ID. 1-1023. 0 is reserved for empty.", category: "Module")]
 	int m_iId;
 
 	[Attribute("Module", UIWidgets.EditBox, "Display/debug name.", category: "Module")]
@@ -105,11 +105,12 @@ class BFA_MechHardpointComponentClass : ScriptComponentClass
 
 class BFA_MechHardpointComponent : ScriptComponent
 {
-	static const int BFA_MODULE_BITS = 5;
-	static const int BFA_HARDPOINTS_PER_WORD = 6;
+	static const int BFA_MODULE_BITS = 10;
+	static const int BFA_MODULE_MASK = 1023;
+	static const int BFA_HARDPOINTS_PER_WORD = 3;
 	static const int BFA_MAX_HARDPOINTS = 18;
 
-	[Attribute("", UIWidgets.Object, "Hardpoints available on this mech. Up to 18 are supported by the three replicated loadout words.", category: "Hardpoints")]
+	[Attribute("", UIWidgets.Object, "Hardpoints available on this mech. Up to 18 are supported by the six replicated loadout words.", category: "Hardpoints")]
 	ref array<ref BFA_MechHardpointDefinition> m_aHardpoints;
 
 	[Attribute("", UIWidgets.Object, "Modules this mech is allowed to mount.", category: "Modules")]
@@ -123,6 +124,13 @@ class BFA_MechHardpointComponent : ScriptComponent
 
 	[RplProp(onRplName: "OnLoadoutReplicated")]
 	protected int m_iLoadout2;
+
+	[RplProp(onRplName: "OnLoadoutReplicated")]
+	protected int m_iLoadout3;
+	[RplProp(onRplName: "OnLoadoutReplicated")]
+	protected int m_iLoadout4;
+	[RplProp(onRplName: "OnLoadoutReplicated")]
+	protected int m_iLoadout5;
 
 	[Attribute("", UIWidgets.Object, "Field loadouts the crew can cycle through. Optional.", category: "Swapping")]
 	ref array<ref BFA_MechLoadoutPreset> m_aLoadoutPresets;
@@ -151,6 +159,9 @@ class BFA_MechHardpointComponent : ScriptComponent
 	protected int m_iPendingLoadout0;
 	protected int m_iPendingLoadout1;
 	protected int m_iPendingLoadout2;
+	protected int m_iPendingLoadout3;
+	protected int m_iPendingLoadout4;
+	protected int m_iPendingLoadout5;
 	protected int m_iPendingPreset = -1;
 
 	protected ref array<int> m_aMountedIds = {};
@@ -346,7 +357,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 			return;
 
 		// A non-zero replicated loadout means this mech already has an authored/runtime loadout.
-		if (m_iLoadout0 != 0 || m_iLoadout1 != 0 || m_iLoadout2 != 0)
+		if (m_iLoadout0 != 0 || m_iLoadout1 != 0 || m_iLoadout2 != 0 || m_iLoadout3 != 0 || m_iLoadout4 != 0 || m_iLoadout5 != 0)
 			return;
 
 		bool changed = false;
@@ -359,7 +370,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 				continue;
 
 			int moduleId = hardpoint.m_iDefaultModuleId;
-			if (moduleId <= 0 || moduleId > 31)
+			if (moduleId <= 0 || moduleId > BFA_MODULE_MASK)
 				continue;
 
 			if (!ModuleFitsHardpoint(hp, moduleId))
@@ -368,7 +379,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 			int wordIndex = hp / BFA_HARDPOINTS_PER_WORD;
 			int slotInWord = Math.Mod(hp, BFA_HARDPOINTS_PER_WORD);
 			int shift = slotInWord * BFA_MODULE_BITS;
-			int mask = 31 << shift;
+			int mask = BFA_MODULE_MASK << shift;
 			int word = GetLoadoutWord(wordIndex);
 
 			word = (word & ~mask) | (moduleId << shift);
@@ -400,7 +411,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 		int shift = slotInWord * BFA_MODULE_BITS;
 		int word = GetLoadoutWord(wordIndex);
 
-		return (word >> shift) & 31;
+		return (word >> shift) & BFA_MODULE_MASK;
 	}
 
 
@@ -487,7 +498,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 		if (hardpointIndex < 0 || hardpointIndex >= GetHardpointCount())
 			return;
 
-		if (moduleId < 0 || moduleId > 31)
+		if (moduleId < 0 || moduleId > BFA_MODULE_MASK)
 			return;
 
 		if (moduleId != 0 && !ModuleFitsHardpoint(hardpointIndex, moduleId))
@@ -496,7 +507,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 		int wordIndex = hardpointIndex / BFA_HARDPOINTS_PER_WORD;
 		int slotInWord = Math.Mod(hardpointIndex, BFA_HARDPOINTS_PER_WORD);
 		int shift = slotInWord * BFA_MODULE_BITS;
-		int mask = 31 << shift;
+		int mask = BFA_MODULE_MASK << shift;
 		int word = GetLoadoutWord(wordIndex);
 
 		word = (word & ~mask) | (moduleId << shift);
@@ -514,9 +525,11 @@ class BFA_MechHardpointComponent : ScriptComponent
 	{
 		if (wordIndex == 0)
 			return m_iLoadout0;
-		if (wordIndex == 1)
-			return m_iLoadout1;
-		return m_iLoadout2;
+		if (wordIndex == 1) return m_iLoadout1;
+		if (wordIndex == 2) return m_iLoadout2;
+		if (wordIndex == 3) return m_iLoadout3;
+		if (wordIndex == 4) return m_iLoadout4;
+		return m_iLoadout5;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -526,8 +539,10 @@ class BFA_MechHardpointComponent : ScriptComponent
 			m_iLoadout0 = value;
 		else if (wordIndex == 1)
 			m_iLoadout1 = value;
-		else
-			m_iLoadout2 = value;
+		else if (wordIndex == 2) m_iLoadout2 = value;
+		else if (wordIndex == 3) m_iLoadout3 = value;
+		else if (wordIndex == 4) m_iLoadout4 = value;
+		else m_iLoadout5 = value;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -922,21 +937,23 @@ class BFA_MechHardpointComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected int GetWordFrom(int w0, int w1, int w2, int wordIndex)
+	protected int GetWordFrom(int w0, int w1, int w2, int w3, int w4, int w5, int wordIndex)
 	{
 		if (wordIndex == 0)
 			return w0;
-		if (wordIndex == 1)
-			return w1;
-		return w2;
+		if (wordIndex == 1) return w1;
+		if (wordIndex == 2) return w2;
+		if (wordIndex == 3) return w3;
+		if (wordIndex == 4) return w4;
+		return w5;
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected int ModuleFromWords(int w0, int w1, int w2, int hardpointIndex)
+	protected int ModuleFromWords(int w0, int w1, int w2, int w3, int w4, int w5, int hardpointIndex)
 	{
 		int wordIndex = hardpointIndex / BFA_HARDPOINTS_PER_WORD;
 		int shift = Math.Mod(hardpointIndex, BFA_HARDPOINTS_PER_WORD) * BFA_MODULE_BITS;
-		return (GetWordFrom(w0, w1, w2, wordIndex) >> shift) & 31;
+		return (GetWordFrom(w0, w1, w2, w3, w4, w5, wordIndex) >> shift) & BFA_MODULE_MASK;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -956,31 +973,34 @@ class BFA_MechHardpointComponent : ScriptComponent
 			for (int step = 1; step <= count; step++)
 			{
 				int candidate = Math.Mod(m_iActivePreset + step + count, count);
-				int c0, c1, c2;
-				if (!BuildPresetWords(candidate, c0, c1, c2))
+				int c0, c1, c2, c3, c4, c5;
+				if (!BuildPresetWords(candidate, c0, c1, c2, c3, c4, c5))
 					continue;
 
-				if (c0 != m_iLoadout0 || c1 != m_iLoadout1 || c2 != m_iLoadout2)
-					return ServerBeginSwap(stationId, c0, c1, c2, candidate);
+				if (c0 != m_iLoadout0 || c1 != m_iLoadout1 || c2 != m_iLoadout2 || c3 != m_iLoadout3 || c4 != m_iLoadout4 || c5 != m_iLoadout5)
+					return ServerBeginSwap(stationId, c0, c1, c2, c3, c4, c5, candidate);
 			}
 
 			return false;
 		}
 
-		int b0, b1, b2;
-		if (!BuildPresetWords(presetIndex, b0, b1, b2))
+		int b0, b1, b2, b3, b4, b5;
+		if (!BuildPresetWords(presetIndex, b0, b1, b2, b3, b4, b5))
 			return false;
 
-		return ServerBeginSwap(stationId, b0, b1, b2, presetIndex);
+		return ServerBeginSwap(stationId, b0, b1, b2, b3, b4, b5, presetIndex);
 	}
 
 	//------------------------------------------------------------------------------------------------
 	//! Resulting loadout words if a preset were applied on top of the current loadout.
-	protected bool BuildPresetWords(int presetIndex, out int w0, out int w1, out int w2)
+	protected bool BuildPresetWords(int presetIndex, out int w0, out int w1, out int w2, out int w3, out int w4, out int w5)
 	{
 		w0 = m_iLoadout0;
 		w1 = m_iLoadout1;
 		w2 = m_iLoadout2;
+		w3 = m_iLoadout3;
+		w4 = m_iLoadout4;
+		w5 = m_iLoadout5;
 
 		if (!m_aLoadoutPresets || presetIndex < 0 || presetIndex >= m_aLoadoutPresets.Count())
 			return false;
@@ -1004,7 +1024,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 				}
 
 				int moduleId = slot.m_iModuleId;
-				if (moduleId < 0 || moduleId > 31 || (moduleId != 0 && !ModuleFitsHardpoint(hp, moduleId)))
+				if (moduleId < 0 || moduleId > BFA_MODULE_MASK || (moduleId != 0 && !ModuleFitsHardpoint(hp, moduleId)))
 				{
 					BFA_MechLog.Log(string.Format("[BFA LOADOUT] preset '%1': module %2 does not fit %3", preset.m_sName, moduleId, slot.m_sHardpoint), LogLevel.WARNING);
 					continue;
@@ -1012,14 +1032,16 @@ class BFA_MechHardpointComponent : ScriptComponent
 
 				int wordIndex = hp / BFA_HARDPOINTS_PER_WORD;
 				int shift = Math.Mod(hp, BFA_HARDPOINTS_PER_WORD) * BFA_MODULE_BITS;
-				int mask = 31 << shift;
+				int mask = BFA_MODULE_MASK << shift;
 
 				if (wordIndex == 0)
 					w0 = (w0 & ~mask) | (moduleId << shift);
 				else if (wordIndex == 1)
 					w1 = (w1 & ~mask) | (moduleId << shift);
-				else
-					w2 = (w2 & ~mask) | (moduleId << shift);
+				else if (wordIndex == 2) w2 = (w2 & ~mask) | (moduleId << shift);
+				else if (wordIndex == 3) w3 = (w3 & ~mask) | (moduleId << shift);
+				else if (wordIndex == 4) w4 = (w4 & ~mask) | (moduleId << shift);
+				else w5 = (w5 & ~mask) | (moduleId << shift);
 			}
 		}
 
@@ -1036,25 +1058,30 @@ class BFA_MechHardpointComponent : ScriptComponent
 		if (hardpointIndex < 0 || hardpointIndex >= GetHardpointCount())
 			return false;
 
-		if (moduleId < 0 || moduleId > 31 || (moduleId != 0 && !ModuleFitsHardpoint(hardpointIndex, moduleId)))
+		if (moduleId < 0 || moduleId > BFA_MODULE_MASK || (moduleId != 0 && !ModuleFitsHardpoint(hardpointIndex, moduleId)))
 			return false;
 
 		int w0 = m_iLoadout0;
 		int w1 = m_iLoadout1;
 		int w2 = m_iLoadout2;
+		int w3 = m_iLoadout3;
+		int w4 = m_iLoadout4;
+		int w5 = m_iLoadout5;
 
 		int wordIndex = hardpointIndex / BFA_HARDPOINTS_PER_WORD;
 		int shift = Math.Mod(hardpointIndex, BFA_HARDPOINTS_PER_WORD) * BFA_MODULE_BITS;
-		int mask = 31 << shift;
+		int mask = BFA_MODULE_MASK << shift;
 
 		if (wordIndex == 0)
 			w0 = (w0 & ~mask) | (moduleId << shift);
 		else if (wordIndex == 1)
 			w1 = (w1 & ~mask) | (moduleId << shift);
-		else
-			w2 = (w2 & ~mask) | (moduleId << shift);
+		else if (wordIndex == 2) w2 = (w2 & ~mask) | (moduleId << shift);
+		else if (wordIndex == 3) w3 = (w3 & ~mask) | (moduleId << shift);
+		else if (wordIndex == 4) w4 = (w4 & ~mask) | (moduleId << shift);
+		else w5 = (w5 & ~mask) | (moduleId << shift);
 
-		return ServerBeginSwap(stationId, w0, w1, w2, -1);
+		return ServerBeginSwap(stationId, w0, w1, w2, w3, w4, w5, -1);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -1068,31 +1095,36 @@ class BFA_MechHardpointComponent : ScriptComponent
 		int w0 = m_iLoadout0;
 		int w1 = m_iLoadout1;
 		int w2 = m_iLoadout2;
+		int w3 = m_iLoadout3;
+		int w4 = m_iLoadout4;
+		int w5 = m_iLoadout5;
 		int count = Math.Min(modules.Count(), GetHardpointCount());
 		for (int hp = 0; hp < count; hp++)
 		{
 			int moduleId = modules[hp];
 			if (moduleId < 0)
 				continue;
-			if (moduleId > 31 || (moduleId != 0 && !ModuleFitsHardpoint(hp, moduleId)))
+			if (moduleId > BFA_MODULE_MASK || (moduleId != 0 && !ModuleFitsHardpoint(hp, moduleId)))
 				return false;
 
 			int wordIndex = hp / BFA_HARDPOINTS_PER_WORD;
 			int shift = Math.Mod(hp, BFA_HARDPOINTS_PER_WORD) * BFA_MODULE_BITS;
-			int mask = 31 << shift;
+			int mask = BFA_MODULE_MASK << shift;
 			if (wordIndex == 0)
 				w0 = (w0 & ~mask) | (moduleId << shift);
 			else if (wordIndex == 1)
 				w1 = (w1 & ~mask) | (moduleId << shift);
-			else
-				w2 = (w2 & ~mask) | (moduleId << shift);
+			else if (wordIndex == 2) w2 = (w2 & ~mask) | (moduleId << shift);
+			else if (wordIndex == 3) w3 = (w3 & ~mask) | (moduleId << shift);
+			else if (wordIndex == 4) w4 = (w4 & ~mask) | (moduleId << shift);
+			else w5 = (w5 & ~mask) | (moduleId << shift);
 		}
 
-		return ServerBeginSwap(stationId, w0, w1, w2, -1);
+		return ServerBeginSwap(stationId, w0, w1, w2, w3, w4, w5, -1);
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected bool ServerBeginSwap(string stationId, int w0, int w1, int w2, int presetIndex)
+	protected bool ServerBeginSwap(string stationId, int w0, int w1, int w2, int w3, int w4, int w5, int presetIndex)
 	{
 		string reason;
 		if (!CanSwapNow(stationId, reason))
@@ -1104,7 +1136,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 		// Add-ons / gameplay mods may refuse the new loadout (too heavy, wrong hardpoint type ...).
 		array<int> targets = {};
 		for (int t = 0; t < GetHardpointCount(); t++)
-			targets.Insert(ModuleFromWords(w0, w1, w2, t));
+			targets.Insert(ModuleFromWords(w0, w1, w2, w3, w4, w5, t));
 		if (!BFA_MechExtension.Get().CanApplyLoadout(GetOwner(), this, targets, reason))
 		{
 			BFA_MechLog.Log(string.Format("[BFA LOADOUT] swap refused station=%1 reason=%2", stationId, reason));
@@ -1118,7 +1150,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 		for (int hp = 0; hp < count; hp++)
 		{
 			int current = GetModuleAt(hp);
-			int target = ModuleFromWords(w0, w1, w2, hp);
+			int target = ModuleFromWords(w0, w1, w2, w3, w4, w5, hp);
 			if (current == target)
 				continue;
 
@@ -1160,6 +1192,9 @@ class BFA_MechHardpointComponent : ScriptComponent
 		m_iPendingLoadout0 = w0;
 		m_iPendingLoadout1 = w1;
 		m_iPendingLoadout2 = w2;
+		m_iPendingLoadout3 = w3;
+		m_iPendingLoadout4 = w4;
+		m_iPendingLoadout5 = w5;
 		m_iPendingPreset = presetIndex;
 		m_iSwappingMask = swappingMask;
 		Replication.BumpMe();
@@ -1188,6 +1223,9 @@ class BFA_MechHardpointComponent : ScriptComponent
 		m_iLoadout0 = m_iPendingLoadout0;
 		m_iLoadout1 = m_iPendingLoadout1;
 		m_iLoadout2 = m_iPendingLoadout2;
+		m_iLoadout3 = m_iPendingLoadout3;
+		m_iLoadout4 = m_iPendingLoadout4;
+		m_iLoadout5 = m_iPendingLoadout5;
 
 		if (m_iPendingPreset >= 0)
 			m_iActivePreset = m_iPendingPreset;
