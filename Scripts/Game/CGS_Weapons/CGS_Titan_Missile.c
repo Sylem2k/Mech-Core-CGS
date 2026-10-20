@@ -10,7 +10,8 @@
 //!    (top attack), like a big missile rack.
 //!  - Turn rate decides how hard it can steer; slow missiles with low turn rate can be dodged.
 //!  - GUIDANCE: Crosshair (lock what is aimed at), Laser (fly to a friendly target designator
-//!    spot, even one the shooter can't see) or Both (laser spot if there is one, else crosshair).
+//!    spot, even one the shooter can't see), Both (laser spot if there is one, else crosshair)
+//!    or Follow Aim (the missiles keep turning toward wherever the crosshair points right now).
 //------------------------------------------------------------------------------------------------
 [ComponentEditorProps(category: "CGS MechCore/Weapons", description: "CGS Titan Missile: homing missiles that lock what the crosshair is on, optional top-attack loft. Point defense can shoot them down.")]
 class CGS_Titan_MissileClass : BFA_MechRocketLauncherModuleComponentClass
@@ -22,7 +23,8 @@ enum CGS_EMissileGuidance
 {
 	CROSSHAIR = 0,  // lock what the crosshair is on at launch
 	LASER = 1,      // fly to a friendly laser spot (CGS Target Designator)
-	BOTH = 2        // laser spot when there is one, otherwise the crosshair lock
+	BOTH = 2,       // laser spot when there is one, otherwise the crosshair lock
+	FOLLOW_AIM = 3  // steer to wherever the crosshair is pointing right now, the whole flight
 }
 
 //------------------------------------------------------------------------------------------------
@@ -96,7 +98,7 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 	[Attribute("20", UIWidgets.Auto, "Metres flown straight out of the tube before it starts steering.", category: "Homing")]
 	protected float m_fArmingDistance;
 
-	[Attribute("0", UIWidgets.ComboBox, "What the missiles fly to. CROSSHAIR = lock what is aimed at. LASER = a friendly target designator spot in front of the mech (it can be behind a hill). BOTH = the laser spot if there is one, otherwise the crosshair lock.", enums: ParamEnumArray.FromEnum(CGS_EMissileGuidance), category: "Homing")]
+	[Attribute("0", UIWidgets.ComboBox, "What the missiles fly to. CROSSHAIR = lock what is aimed at. LASER = a friendly target designator spot in front of the mech (it can be behind a hill). BOTH = the laser spot if there is one, otherwise the crosshair lock. FOLLOW_AIM = the missiles keep steering to wherever the crosshair points while they fly (move the mouse and they follow).", enums: ParamEnumArray.FromEnum(CGS_EMissileGuidance), category: "Homing")]
 	protected CGS_EMissileGuidance m_eGuidance;
 
 	[Attribute("90", UIWidgets.Auto, "Laser: a spot must be inside this cone (full angle, degrees) in front of the launcher / the missile to be picked up.", category: "Homing")]
@@ -105,8 +107,12 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 	[Attribute("0", UIWidgets.Auto, "LOFT: missiles leave the tube this many degrees upward, then dive onto the target (top attack). 0 = straight at it. 30-45 looks good on a back rack.", category: "Homing")]
 	protected float m_fLoftAngle;
 
+	[Attribute("100", UIWidgets.Auto, "How often (ms) the server sends each missile's real course to the players, so the visible missile curves the way the real one steers. 0 = never (visible missile flies straight to the launch aim point).", category: "Homing")]
+	protected int m_iCourseSyncMs;
+
 	// ---- Runtime ---------------------------------------------------------------------------
 	protected int m_iLastSteerMs;
+	protected int m_iLastCourseSyncMs;
 
 	//------------------------------------------------------------------------------------------------
 	override void OnPostInit(IEntity owner)
@@ -139,7 +145,7 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 
 		// Laser guidance: a friendly spot in front of the launcher wins.
 		CGS_LaserSpotComponent laserSpot;
-		if (m_bHoming && m_eGuidance != CGS_EMissileGuidance.CROSSHAIR)
+		if (m_bHoming && GuidanceUsesLaser())
 			laserSpot = CGS_LaserSpotComponent.FindBestSpot(CGS_LaserSpotComponent.FactionOf(m_pMechOwner), start, aimDirection, LaserRange(), m_fLaserConeDeg);
 		if (m_bDebug)
 		{
@@ -156,7 +162,7 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 			missile.m_vTargetPoint = lockPoint;
 			lockHit = laserSpot.GetTarget();
 		}
-		else if (m_bLockTargets && lockHit && m_eGuidance != CGS_EMissileGuidance.LASER)
+		else if (m_bLockTargets && lockHit && (m_eGuidance == CGS_EMissileGuidance.CROSSHAIR || m_eGuidance == CGS_EMissileGuidance.BOTH))
 		{
 			IEntity root = lockHit.GetRootParent();
 			if (!root)
@@ -202,7 +208,32 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 	//! For the HUD: does this launcher use laser spots?
 	bool UsesLaser()
 	{
-		return m_bHoming && m_eGuidance != CGS_EMissileGuidance.CROSSHAIR;
+		return m_bHoming && GuidanceUsesLaser();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected bool GuidanceUsesLaser()
+	{
+		return m_eGuidance == CGS_EMissileGuidance.LASER || m_eGuidance == CGS_EMissileGuidance.BOTH;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Where the crew of this weapon's station is aiming right now (world space). Uses the
+	//! replicated station aim, so it is live on the server while the missiles fly.
+	protected bool GetLiveAimPoint(out vector aimPoint)
+	{
+		if (!m_pMechOwner)
+			return false;
+
+		BFA_MechAimComponent aim = BFA_MechAimComponent.Cast(m_pMechOwner.FindComponent(BFA_MechAimComponent));
+		if (aim)
+		{
+			aimPoint = m_pMechOwner.CoordToParent(aim.GetAimLocalPointForStation(GetControlStation()));
+			return true;
+		}
+
+		BFA_MechWeaponMountComponent mounts = BFA_MechWeaponMountComponent.Cast(m_pMechOwner.FindComponent(BFA_MechWeaponMountComponent));
+		return mounts && mounts.GetAimPointForEntity(GetOwner(), aimPoint);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -310,6 +341,7 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 		m_bFlightTickRunning = true;
 		m_iLastFlightTickMs = GetWorldTimeMs();
 		m_iLastSteerMs = 0;
+		m_iLastCourseSyncMs = 0;
 		queue.CallLater(MissileFlightTick, 16, true);
 	}
 
@@ -348,6 +380,34 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 		}
 
 		FlightTick();
+
+		if (Replication.IsServer() && m_bHoming)
+			SyncCourses();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Send every steering missile's real position and heading to the players' visible missiles.
+	protected void SyncCourses()
+	{
+		if (m_iCourseSyncMs <= 0 || m_aRockets.IsEmpty() || !m_pMechOwner)
+			return;
+
+		int nowMs = GetWorldTimeMs();
+		if (m_iLastCourseSyncMs > 0 && nowMs >= m_iLastCourseSyncMs && nowMs - m_iLastCourseSyncMs < m_iCourseSyncMs)
+			return;
+		m_iLastCourseSyncMs = nowMs;
+
+		BFA_MechWeaponComponent router = BFA_MechWeaponComponent.Cast(m_pMechOwner.FindComponent(BFA_MechWeaponComponent));
+		if (!router)
+			return;
+
+		foreach (BFA_MechRocketInFlight rocket : m_aRockets)
+		{
+			if (!rocket || rocket.m_iShotId <= 0)
+				continue;
+
+			router.ServerBroadcastShotCourse(rocket.m_iShotId, rocket.m_vPosition, rocket.m_vDirection, Math.Max(m_fRange - rocket.m_fTravelled, 1.0));
+		}
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -365,8 +425,17 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 		if (missile.m_fTravelled < m_fArmingDistance || maxTurnRad <= 0)
 			return;
 
+		// Follow Aim: the target is wherever the crosshair points right now.
+		if (m_eGuidance == CGS_EMissileGuidance.FOLLOW_AIM)
+		{
+			vector livePoint;
+			if (GetLiveAimPoint(livePoint))
+				missile.m_vTargetPoint = livePoint;
+			missile.m_pTarget = null;
+		}
+
 		// Laser: follow the spot while it is on; laser off = keep flying to where it last was.
-		if (m_eGuidance != CGS_EMissileGuidance.CROSSHAIR)
+		if (GuidanceUsesLaser())
 		{
 			if (missile.m_pSpot && !missile.m_pSpot.IsLasing())
 				missile.m_pSpot = null;

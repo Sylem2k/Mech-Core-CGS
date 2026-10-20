@@ -794,6 +794,68 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Steering missiles: the server sends where a missile really is and where it is heading, so
+	//! the visible projectile curves with it instead of flying straight to the launch aim point.
+	//! Unreliable on purpose: the next update replaces a lost one.
+	void ServerBroadcastShotCourse(int shotId, vector position, vector direction, float remaining)
+	{
+		if (!Replication.IsServer() || shotId <= 0)
+			return;
+
+		if (!System.IsConsoleApp())
+			ShotCourseLocal(shotId, position, direction, remaining);
+
+		Rpc(RpcDo_ShotCourse, shotId, position, direction, remaining);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	[RplRpc(RplChannel.Unreliable, RplRcver.Broadcast)]
+	protected void RpcDo_ShotCourse(int shotId, vector position, vector direction, float remaining)
+	{
+		if (!System.IsConsoleApp())
+			ShotCourseLocal(shotId, position, direction, remaining);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void ShotCourseLocal(int shotId, vector position, vector direction, float remaining)
+	{
+		if (direction.LengthSq() < 0.000001)
+			return;
+		direction.Normalize();
+
+		foreach (BFA_MechProjectileVisual visual : m_aProjectiles)
+		{
+			if (!visual || visual.m_iShotId != shotId || visual.m_bArrived)
+				continue;
+
+			// Where the visible missile is now; ease toward the real one instead of snapping
+			// (updates arrive a little late), but snap when it is far off.
+			float shown = Math.Min(visual.m_fAge * visual.m_fSpeed, visual.m_fDistance);
+			vector current = visual.m_vStart + visual.m_vDir * shown;
+			vector start = position;
+			if (vector.DistanceSq(current, position) < 25.0 * 25.0)
+				start = vector.Lerp(current, position, 0.35);
+
+			visual.m_vStart = start;
+			visual.m_vDir = direction;
+			visual.m_fAge = 0;
+			visual.m_fDistance = Math.Max(remaining, 1.0);
+			visual.m_vEnd = start + direction * visual.m_fDistance;
+
+			// Point the missile model along its new heading.
+			if (visual.m_pEntity)
+			{
+				vector mat[4];
+				Math3D.DirectionAndUpMatrix(direction, vector.Up, mat);
+				mat[3] = start;
+				visual.m_pEntity.SetWorldTransform(mat);
+			}
+			MoveProjectileVisual(visual, start);
+			break;
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! Reload / empty / rearm events for effects and the client ammo mirror.
 	void ServerBroadcastModuleEvent(BFA_MechWeaponModuleComponent module, int eventType, int value = 0)
 	{
