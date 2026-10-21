@@ -631,6 +631,9 @@ class CGS_MechBrainComponent : ScriptComponent
 				float distance = toOwner.Length();
 				if (m_fCompanionMaxFollowDistance <= 0 || distance <= m_fCompanionMaxFollowDistance)
 				{
+					// If the owner dies or disconnects, stand guard near the mech's last position.
+					m_vCompanionGuardPoint = position;
+					m_bCompanionGuardSet = true;
 					destination = follow.GetOrigin();
 					arrive = Math.Max(m_fCompanionFollowDistance, 5);
 					label = "following player";
