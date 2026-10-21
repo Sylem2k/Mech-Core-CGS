@@ -184,7 +184,13 @@ class CGS_MechBrainComponent : ScriptComponent
 	{
 		if (m_iCompanionOwnerId <= 0 || !GetGame() || !GetGame().GetPlayerManager())
 			return null;
-		return GetGame().GetPlayerManager().GetPlayerControlledEntity(m_iCompanionOwnerId);
+		IEntity user = GetGame().GetPlayerManager().GetPlayerControlledEntity(m_iCompanionOwnerId);
+		if (!user)
+			return null;
+		SCR_DamageManagerComponent damage = SCR_DamageManagerComponent.Cast(user.FindComponent(SCR_DamageManagerComponent));
+		if (damage && damage.GetState() == EDamageState.DESTROYED)
+			return null;
+		return user;
 	}
 
 	//! Can be called for client prompt visibility. The server always repeats the full check.
