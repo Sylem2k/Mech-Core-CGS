@@ -13,6 +13,13 @@ enum CGS_EMechBrainMode
 	HUNT = 2,		// go looking for enemies within Hunt Radius, patrol when none
 }
 
+// Optional player-bound companion orders. These override the autonomous movement mode only.
+enum CGS_EMechCompanionOrder
+{
+	FOLLOW = 0,
+	GUARD = 1
+}
+
 enum CGS_EMechFireMode
 {
 	FIRE_AT_WILL = 0,	// shoot any enemy it sees
@@ -41,6 +48,19 @@ class CGS_MechBrainComponent : ScriptComponent
 
 	[Attribute("", UIWidgets.EditBox, "Faction key the brain fights for (e.g. US, USSR, FIA). Empty = the pilot's side (or the vehicle's default with no pilot). Set = overrides the pilot too, so one pilot prefab works for every side.", category: "Brain")]
 	protected string m_sFaction;
+
+	// ---- Companion (optional, off for all existing mechs) ---------------------------------------
+	[Attribute("false", UIWidgets.CheckBox, "Allow a nearby friendly player to claim and order this mech. Pilot takeover uses the existing crew station.", category: "Companion")]
+	protected bool m_bCompanionEnabled;
+
+	[Attribute("18", UIWidgets.Auto, "FOLLOW: stop this many metres from the owner.", category: "Companion")]
+	protected float m_fCompanionFollowDistance;
+
+	[Attribute("25", UIWidgets.Auto, "Player must be within this distance to claim or change orders.", category: "Companion")]
+	protected float m_fCompanionCommandDistance;
+
+	[Attribute("600", UIWidgets.Auto, "If owner is farther than this, hold instead of traveling across the map. 0 disables limit.", category: "Companion")]
+	protected float m_fCompanionMaxFollowDistance;
 
 	// ---- Weapons -------------------------------------------------------------------------------
 	[Attribute("0", UIWidgets.ComboBox, "FIRE AT WILL = shoot enemies on sight. RETURN FIRE = shoot only after being hit. HOLD FIRE = aim but never shoot.", category: "Weapons", enums: ParamEnumArray.FromEnum(CGS_EMechFireMode))]
@@ -95,6 +115,12 @@ class CGS_MechBrainComponent : ScriptComponent
 	protected bool m_bPilotSeated;
 	protected Faction m_pBrainFaction;
 
+	// Owner is a server-validated player ID, never accepted from the client/action arguments.
+	protected int m_iCompanionOwnerId;
+	protected int m_eCompanionOrder = CGS_EMechCompanionOrder.GUARD;
+	protected vector m_vCompanionGuardPoint;
+	protected bool m_bCompanionGuardSet;
+
 	//------------------------------------------------------------------------------------------------
 	static CGS_MechBrainComponent Find(IEntity mech)
 	{
@@ -134,6 +160,92 @@ class CGS_MechBrainComponent : ScriptComponent
 		return m_fReturnFireTime;
 	}
 
+	//==================================================================================================
+	// PLAYER COMPANION (server owns orders and the owner-player binding)
+	//==================================================================================================
+
+	bool IsCompanionEnabled()
+	{
+		return m_bEnabled && m_bCompanionEnabled;
+	}
+
+	bool IsCompanionFollowing()
+	{
+		return IsCompanionEnabled() && m_iCompanionOwnerId > 0 && m_eCompanionOrder == CGS_EMechCompanionOrder.FOLLOW;
+	}
+
+	//! Companion FOLLOW and GUARD override combat chasing, NOT combat aiming or firing.
+	bool CompanionOwnsMovement()
+	{
+		return IsCompanionEnabled() && Replication.IsServer();
+	}
+
+	protected IEntity CompanionOwnerCharacter()
+	{
+		if (m_iCompanionOwnerId <= 0 || !GetGame() || !GetGame().GetPlayerManager())
+			return null;
+		return GetGame().GetPlayerManager().GetPlayerControlledEntity(m_iCompanionOwnerId);
+	}
+
+	//! Can be called for client prompt visibility. The server always repeats the full check.
+	bool CanShowCompanionAction(IEntity user)
+	{
+		if (!IsCompanionEnabled() || !user || !GetOwner())
+			return false;
+		float maxDistance = Math.Max(m_fCompanionCommandDistance, 2);
+		return vector.DistanceSq(user.GetOrigin(), GetOwner().GetOrigin()) <= maxDistance * maxDistance;
+	}
+
+	//! Called only by server-side context actions. Never trust a player ID sent by a client.
+	bool ServerCommandCompanion(IEntity user, int order)
+	{
+		if (!Replication.IsServer() || !CanShowCompanionAction(user) || !ChimeraCharacter.Cast(user))
+			return false;
+		if (order != CGS_EMechCompanionOrder.FOLLOW && order != CGS_EMechCompanionOrder.GUARD)
+			return false;
+		PlayerManager manager = GetGame().GetPlayerManager();
+		if (!manager)
+			return false;
+		int playerId = manager.GetPlayerIdFromControlledEntity(user);
+		if (playerId <= 0 || manager.GetPlayerControlledEntity(playerId) != user)
+			return false;
+		if (m_iCompanionOwnerId > 0 && m_iCompanionOwnerId != playerId)
+			return false;
+
+		Faction playerFaction = CgsCharacterFaction(user);
+		Faction mechFaction = ResolveFaction();
+		if (!playerFaction || !mechFaction || mechFaction.IsFactionEnemy(playerFaction))
+			return false;
+		SCR_DamageManagerComponent damage = SCR_DamageManagerComponent.Cast(GetOwner().FindComponent(SCR_DamageManagerComponent));
+		if (damage && damage.GetState() == EDamageState.DESTROYED)
+			return false;
+
+		m_iCompanionOwnerId = playerId;
+		m_eCompanionOrder = order;
+		if (order == CGS_EMechCompanionOrder.GUARD)
+		{
+			m_vCompanionGuardPoint = GetOwner().GetOrigin();
+			m_bCompanionGuardSet = true;
+		}
+		m_bHasPatrolPoint = false;
+		Print(string.Format("[CGS COMPANION] %1 player=%2 order=%3", GetOwner(), playerId, typename.EnumToString(CGS_EMechCompanionOrder, order)));
+		return true;
+	}
+
+	//! Disconnected owners release their claim so another friendly player can use the mech.
+	protected void WatchCompanionOwner()
+	{
+		if (!IsCompanionEnabled() || m_iCompanionOwnerId <= 0 || !GetGame() || !GetGame().GetPlayerManager())
+			return;
+		PlayerManager manager = GetGame().GetPlayerManager();
+		if (manager.GetPlayerController(m_iCompanionOwnerId))
+			return;
+		m_iCompanionOwnerId = 0;
+		m_eCompanionOrder = CGS_EMechCompanionOrder.GUARD;
+		m_vCompanionGuardPoint = GetOwner().GetOrigin();
+		m_bCompanionGuardSet = true;
+	}
+
 	//------------------------------------------------------------------------------------------------
 	override void OnPostInit(IEntity owner)
 	{
@@ -157,7 +269,7 @@ class CGS_MechBrainComponent : ScriptComponent
 				return;
 
 			m_bStarted = true;
-			if (m_bEnabled)
+			if (m_bEnabled && !m_bCompanionEnabled)
 				SpawnPilot();
 			ApplyFaction();
 		}
@@ -171,7 +283,10 @@ class CGS_MechBrainComponent : ScriptComponent
 			return;
 
 		UpdateFaction();
-		WatchPilot();
+		if (m_bCompanionEnabled)
+			WatchCompanionOwner();
+		else
+			WatchPilot();
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -498,6 +613,36 @@ class CGS_MechBrainComponent : ScriptComponent
 	{
 		UpdateHome(position);
 		arrive = 10;
+
+		// Companion orders take precedence over patrol, hunt and the static home leash.
+		// Owner movement does not affect AI gunner target acquisition.
+		if (IsCompanionEnabled())
+		{
+			if (!m_bCompanionGuardSet)
+			{
+				m_vCompanionGuardPoint = position;
+				m_bCompanionGuardSet = true;
+			}
+			IEntity follow = CompanionOwnerCharacter();
+			if (IsCompanionFollowing() && follow && ChimeraCharacter.Cast(follow))
+			{
+				vector toOwner = follow.GetOrigin() - position;
+				toOwner[1] = 0;
+				float distance = toOwner.Length();
+				if (m_fCompanionMaxFollowDistance <= 0 || distance <= m_fCompanionMaxFollowDistance)
+				{
+					destination = follow.GetOrigin();
+					arrive = Math.Max(m_fCompanionFollowDistance, 5);
+					label = "following player";
+					return true;
+				}
+			}
+			// A missing/dead/too-distant owner means HOLD at the last guard point.
+			destination = m_vCompanionGuardPoint;
+			arrive = 8;
+			label = "companion guard";
+			return true;
+		}
 
 		if (IsBeyondLeash(position))
 		{
