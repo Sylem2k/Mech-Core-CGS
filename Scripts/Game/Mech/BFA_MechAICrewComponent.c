@@ -1159,34 +1159,87 @@ class BFA_MechAICrewComponent : ScriptGameComponent
 		target.GetWorldBounds(mins, maxs);
 		return (mins + maxs) * 0.5;
 	}
+	//------------------------------------------------------------------------------------------------
+	//! Terrain fallback for AI visibility. Some static terrain does not produce a usable TraceEnt
+	//! with the projectile physics preset; sample the straight sight line as a conservative guard.
+	//! The normal physics ray below still provides precise collision against walls and other cover.
+	protected bool AITerrainClear(vector from, vector to)
+	{
+		BaseWorld world = GetGame().GetWorld();
+		if (!world)
+			return false;
+
+		vector delta = to - from;
+		int steps = (int)(delta.Length() / 6.0);
+		if (steps <= 1)
+			return true;
+		steps = Math.Min(steps, 80);
+
+		for (int i = 1; i < steps; i++)
+		{
+			float fraction = (float)i / (float)steps;
+			vector point = from + delta * fraction;
+			// A ridge higher than the segment between the muzzle/eye and target blocks fire.
+			if (point[1] <= world.GetSurfaceY(point[0], point[2]) + 0.2)
+				return false;
+		}
+		return true;
+	}
 
 	//------------------------------------------------------------------------------------------------
+	//! AI must have an unobstructed view to fire. Our own mech's child collision may be hit
+	//! before a hill: skip that child and retry, NEVER interpret a self-hit as visibility.
 	protected bool HasLineOfSight(vector targetPoint, IEntity target)
 	{
 		BaseWorld world = GetGame().GetWorld();
 		IEntity owner = GetOwner();
-		if (!world || !owner)
+		if (!world || !owner || !target)
 			return false;
 
-		TraceParam param = new TraceParam();
-		param.Start = owner.GetOrigin() + vector.Up * 2.0;
-		param.End = targetPoint;
-		param.Flags = TraceFlags.WORLD | TraceFlags.ENTS;
-		param.LayerMask = EPhysicsLayerPresets.Projectile;
+		vector from = owner.GetOrigin() + vector.Up * 2.0;
+		if (vector.DistanceSq(from, targetPoint) <= 0.01)
+			return false;
+
+		IEntity targetRoot = target.GetRootParent();
+		if (!targetRoot)
+			targetRoot = target;
+
 		array<IEntity> excludes = { owner };
-		param.ExcludeArray = excludes;
+		// A mech may have several nested physics parts. After 16 ignored self-parts,
+		// fail closed instead of permitting a shot through unknown geometry.
+		for (int tries = 0; tries < 16; tries++)
+		{
+			TraceParam param = new TraceParam();
+			param.Start = from;
+			param.End = targetPoint;
+			param.Flags = TraceFlags.WORLD | TraceFlags.ENTS;
+			param.LayerMask = EPhysicsLayerPresets.Projectile;
+			param.ExcludeArray = excludes;
 
-		float fraction = world.TraceMove(param, null);
-		if (fraction >= 1.0)
-			return true;
+			float fraction = world.TraceMove(param, null);
+			if (fraction >= 1.0)
+				return AITerrainClear(from, targetPoint);
 
-		IEntity hit = param.TraceEnt;
-		if (!hit)
-			return false;
+			IEntity hit = param.TraceEnt;
+			if (!hit)
+				return false; // WORLD hit: terrain or other non-entity obstruction
 
-		if (hit.GetRootParent() == owner)
-			return true; // our own parts; good enough for a simple check
+			IEntity hitRoot = hit.GetRootParent();
+			if (hit == owner || hitRoot == owner)
+			{
+				// Trace the entire line again, excluding only the offending mech child.
+				// Do not advance the start beyond an obstacle or accept self-collision.
+				if (excludes.Find(hit) >= 0)
+					return false;
+				excludes.Insert(hit);
+				continue;
+			}
 
-		return hit == target || hit.GetRootParent() == target;
+			if (hit == target || hit == targetRoot || hitRoot == target || hitRoot == targetRoot)
+				return AITerrainClear(from, targetPoint);
+
+			return false; // another vehicle, building, tree or other entity blocks the shot
+		}
+		return false;
 	}
 }
