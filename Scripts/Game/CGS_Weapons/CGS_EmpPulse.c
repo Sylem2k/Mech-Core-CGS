@@ -116,6 +116,7 @@ class CGS_EmpPulseModuleComponent : BFA_MechWeaponModuleComponent
 	override void OnPostInit(IEntity owner)
 	{
 		super.OnPostInit(owner);
+		m_eDamageKind = BFA_EMechDamageKind.EMP;
 
 		if (m_sModuleId == "WEAPON_MODULE")
 			m_sModuleId = "EMP_PULSE";
@@ -499,7 +500,9 @@ class CGS_EmpPulseModuleComponent : BFA_MechWeaponModuleComponent
 				continue;
 
 			SCR_DamageContext context = new SCR_DamageContext(EDamageType.TRUE, m_fEngineDamage, empty, vehicle, engine, Instigator.CreateInstigator(m_pInstigator), null, -1, -1);
+			BeginDamage();
 			manager.HandleDamage(context);
+			EndDamage();
 		}
 	}
 

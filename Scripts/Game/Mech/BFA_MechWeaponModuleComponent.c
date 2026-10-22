@@ -39,6 +39,17 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	[Attribute("0", UIWidgets.ComboBox, "What kind of damage this weapon deals. Add-ons (e.g. energy shields) treat kinds differently.", enums: ParamEnumArray.FromEnum(BFA_EMechDamageKind), category: "Damage")]
 	protected BFA_EMechDamageKind m_eDamageKind;
 
+	// Weapon-specific effectiveness against different classes, independent of engine EDamageType.
+	[Attribute("1", UIWidgets.Auto, "Damage multiplier against infantry (AI or player).", category: "Damage")]
+	protected float m_fDamageVsInfantry;
+
+	[Attribute("1", UIWidgets.Auto, "Damage multiplier against vehicles and mechs.", category: "Damage")]
+	protected float m_fDamageVsVehicles;
+
+	[Attribute("0.3", UIWidgets.Auto, "Minimum share of a DIRECT infantry hit that reaches health despite armour. 0 = normal armour handling. This does not change shield/vehicle damage.", category: "Damage")]
+	protected float m_fInfantryArmourFloor;
+
+
 	// ---- Crosshair -----------------------------------------------------------------------------
 	[Attribute("", UIWidgets.Object, "This weapon's own crosshair. Empty = the mech's default crosshair.", category: "Crosshair")]
 	protected ref BFA_MechCrosshair m_Crosshair;
@@ -1137,7 +1148,22 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	//------------------------------------------------------------------------------------------------
 	//! Deal damage to whatever was hit. Returns the health actually removed.
 	//! type: EDamageType.KINETIC (bullets), EXPLOSIVE, INCENDIARY, TRUE (ignores armour) ...
-	protected float DealDamage(IEntity hitEntity, float amount, EDamageType type, vector hitPos, vector direction, IEntity instigator)
+	protected float AdjustDamageForTarget(IEntity target, float amount)
+	{
+		if (!target)
+			return amount;
+		IEntity root = target.GetRootParent();
+		if (!root)
+			root = target;
+		if (ChimeraCharacter.Cast(root))
+			return amount * Math.Max(m_fDamageVsInfantry, 0.0);
+		if (Vehicle.Cast(root))
+			return amount * Math.Max(m_fDamageVsVehicles, 0.0);
+		return amount;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected float DealDamage(IEntity hitEntity, float amount, EDamageType type, vector hitPos, vector direction, IEntity instigator, IEntity shooterOverride = null)
 	{
 		if (!Replication.IsServer() || !hitEntity || amount <= 0)
 			return 0;
@@ -1150,21 +1176,49 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 		if (!hitZone)
 			return 0;
 
-		float healthBefore = hitZone.GetHealth();
+		amount = AdjustDamageForTarget(hitEntity, amount);
+		if (amount <= 0)
+			return 0;
 
+		float healthBefore = hitZone.GetHealth();
 		vector hitTransform[3];
 		hitTransform[0] = hitPos;
 		hitTransform[1] = direction;
 		hitTransform[2] = direction * -1.0;
 
-		instigator = BFA_MechCoreComponent.BFA_ResolveKiller(m_pMechOwner, instigator);
-
-		SCR_DamageContext context = new SCR_DamageContext(type, amount, hitTransform, m_pMechOwner, hitZone, Instigator.CreateInstigator(instigator), null, -1, -1);
+		IEntity shooter = shooterOverride;
+		if (!shooter)
+			shooter = m_pMechOwner;
+		instigator = BFA_MechCoreComponent.BFA_ResolveKiller(shooter, instigator);
+		Instigator damageInstigator = Instigator.CreateInstigator(instigator);
+		SCR_DamageContext context = new SCR_DamageContext(type, amount, hitTransform, shooter, hitZone, damageInstigator, null, -1, -1);
 		BeginDamage();
+		BFA_MechExtension.s_pCurrentShooterMech = shooter;
+		// A kinetic shell's blast is EXPLOSIVE, even if its direct hit is KINETIC.
+		// ENERGY splash (such as a PPC) remains ENERGY for shield interactions.
+		if (type == EDamageType.EXPLOSIVE && m_eDamageKind == BFA_EMechDamageKind.KINETIC)
+			BFA_MechExtension.s_iCurrentDamageKind = BFA_EMechDamageKind.EXPLOSIVE;
 		damageManager.HandleDamage(context);
 		EndDamage();
 
-		return healthBefore - hitZone.GetHealth();
+		float lost = Math.Max(healthBefore - hitZone.GetHealth(), 0.0);
+		IEntity root = hitEntity.GetRootParent();
+		if (!root)
+			root = hitEntity;
+		if (type != EDamageType.TRUE && ChimeraCharacter.Cast(root) && m_fInfantryArmourFloor > 0 && healthBefore > 0)
+		{
+			float minimumLost = Math.Min(healthBefore, amount * Math.Clamp(m_fInfantryArmourFloor, 0.0, 1.0));
+			float shortfall = minimumLost - lost;
+			if (shortfall > 0.001)
+			{
+				SCR_DamageContext floorContext = new SCR_DamageContext(EDamageType.TRUE, shortfall, hitTransform, shooter, hitZone, damageInstigator, null, -1, -1);
+				BeginDamage();
+		BFA_MechExtension.s_pCurrentShooterMech = shooter;
+				damageManager.HandleDamage(floorContext);
+				EndDamage();
+			}
+		}
+		return Math.Max(healthBefore - hitZone.GetHealth(), 0.0);
 	}
 
 	//------------------------------------------------------------------------------------------------

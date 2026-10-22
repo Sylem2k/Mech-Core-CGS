@@ -484,41 +484,11 @@ class BFA_MechRocketLauncherModuleComponent : BFA_MechWeaponModuleComponent
 	//------------------------------------------------------------------------------------------------
 	protected float ApplyExplosiveDamage(SCR_DamageManagerComponent damageManager, float amount, vector position, vector direction, IEntity instigatorEntity, IEntity mechOwner)
 	{
-		if (!damageManager || amount <= 0.0)
+		if (!damageManager || amount <= 0)
 			return 0;
-
-		HitZone hitZone = damageManager.GetDefaultHitZone();
-		if (!hitZone)
-			return 0;
-
-		float healthBefore = hitZone.GetHealth();
-
-		vector hitTransform[3];
-		hitTransform[0] = position;
-		hitTransform[1] = direction;
-		hitTransform[2] = direction * -1.0;
-
-		instigatorEntity = BFA_MechCoreComponent.BFA_ResolveKiller(mechOwner, instigatorEntity);
-
-		Instigator instigator = Instigator.CreateInstigator(instigatorEntity);
-
-		SCR_DamageContext context = new SCR_DamageContext(
-			EDamageType.EXPLOSIVE,
-			amount,
-			hitTransform,
-			mechOwner,
-			hitZone,
-			instigator,
-			null,
-			-1,
-			-1
-		);
-
-		BeginDamage();
-		damageManager.HandleDamage(context);
-		EndDamage();
-
-		return healthBefore - hitZone.GetHealth();
+		// Route direct and splash hits through the same tuned damage system.
+		// This preserves the existing physics hit checks and single-hit-per-object splash logic.
+		return DealDamage(damageManager.GetOwner(), amount, EDamageType.EXPLOSIVE, position, direction, instigatorEntity, mechOwner);
 	}
 
 	//------------------------------------------------------------------------------------------------

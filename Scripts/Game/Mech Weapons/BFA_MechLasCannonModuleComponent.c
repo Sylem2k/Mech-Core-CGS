@@ -147,91 +147,20 @@ class BFA_MechLasCannonModuleComponent : BFA_MechWeaponModuleComponent
 
 
 	//------------------------------------------------------------------------------------------------
-	protected void ApplyDamage(IEntity hitEntity, IEntity instigatorEntity)
+	protected void ApplyDamage(IEntity hitEntity, IEntity instigatorEntity, vector hitPosition, vector hitDirection)
 	{
-		if (!Replication.IsServer() || m_fDamage <= 0.0 || !hitEntity)
+		if (!Replication.IsServer() || m_fDamage <= 0 || !hitEntity)
 			return;
 
-		SCR_DamageManagerComponent damageManager = ResolveDamageManager(hitEntity);
-		if (!damageManager)
-			return;
+		// Shared damage path now applies infantry effectiveness and a tunable armour floor.
+		float dealt = DealDamage(hitEntity, m_fDamage, EDamageType.KINETIC, hitPosition, hitDirection, instigatorEntity);
 
-		HitZone hitZone = damageManager.GetDefaultHitZone();
-		if (!hitZone)
-			return;
-
-		float healthBefore = hitZone.GetHealth();
-
-		vector empty[3];
-		empty[0] = vector.Zero;
-		empty[1] = vector.Zero;
-		empty[2] = vector.Zero;
-
-		instigatorEntity = BFA_MechCoreComponent.BFA_ResolveKiller(m_pMechOwner, instigatorEntity);
-
-		Instigator instigator = Instigator.CreateInstigator(instigatorEntity);
-
-		SCR_DamageContext kineticContext = new SCR_DamageContext(
-			EDamageType.KINETIC,
-			m_fDamage,
-			empty,
-			m_pMechOwner,
-			hitZone,
-			instigator,
-			null,
-			-1,
-			-1
-		);
-
-		BeginDamage();
-		damageManager.HandleDamage(kineticContext);
-		EndDamage();
-
-		float healthAfterKinetic = hitZone.GetHealth();
-		float kineticHealthLost = healthBefore - healthAfterKinetic;
-
-		if (
-			m_bArmorPiercingFallback
-			&& healthBefore > 0.0
-			&& kineticHealthLost <= 0.001
-		)
-		{
-			float apDamage = m_fDamage * Math.Max(m_fArmorPiercingMultiplier, 0.0);
-
-			if (apDamage > 0.0)
-			{
-				SCR_DamageContext apContext = new SCR_DamageContext(
-					EDamageType.TRUE,
-					apDamage,
-					empty,
-					m_pMechOwner,
-					hitZone,
-					instigator,
-					null,
-					-1,
-					-1
-				);
-
-				BeginDamage();
-				damageManager.HandleDamage(apContext);
-				EndDamage();
-			}
-		}
+		// Legacy optional armour-piercing fallback: only when NO health was removed at all.
+		if (m_bArmorPiercingFallback && dealt <= 0.001 && m_fArmorPiercingMultiplier > 0)
+			dealt += DealDamage(hitEntity, m_fDamage * m_fArmorPiercingMultiplier, EDamageType.TRUE, hitPosition, hitDirection, instigatorEntity);
 
 		if (m_bDebug)
-		{
-			float healthAfter = hitZone.GetHealth();
-
-			Print(string.Format(
-				"[BFA LAS MODULE] damage=%1 zone=%2 before=%3 after=%4 lost=%5 target=%6",
-				m_fDamage,
-				hitZone.GetName(),
-				healthBefore,
-				healthAfter,
-				healthBefore - healthAfter,
-				hitEntity
-			));
-		}
+			Print(string.Format("[BFA LAS MODULE] target=%1 applied=%2 requested=%3", hitEntity, dealt, m_fDamage));
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -249,7 +178,7 @@ class BFA_MechLasCannonModuleComponent : BFA_MechWeaponModuleComponent
 		IEntity hitEntity;
 		vector end = TraceShot(start, direction, m_fRange, hitEntity);
 
-		ApplyDamage(hitEntity, instigatorEntity);
+		ApplyDamage(hitEntity, instigatorEntity, end, direction);
 		BroadcastShot(start, end, hitEntity != null, m_fTracerSpeed, m_fTracerLength, m_fTracerThickness);
 
 		if (m_bDebug)

@@ -118,6 +118,7 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 	override void OnPostInit(IEntity owner)
 	{
 		super.OnPostInit(owner);
+		m_eDamageKind = BFA_EMechDamageKind.EXPLOSIVE;
 
 		if (m_sModuleId == "WEAPON_MODULE")
 			m_sModuleId = "TITAN_MISSILE";
