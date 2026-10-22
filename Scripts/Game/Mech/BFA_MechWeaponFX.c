@@ -96,7 +96,7 @@ class BFA_MechProjectileVisual
 	bool m_bServerImpact;
 	bool m_bArrived;
 	IEntity m_pEntity;
-	IEntity m_pBeam;
+	GenericEntity m_pBeam;
 	float m_fBeamRemaining;
 	ParticleEffectEntity m_pTrail;
 }
