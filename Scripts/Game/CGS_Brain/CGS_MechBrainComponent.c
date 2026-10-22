@@ -264,6 +264,32 @@ class CGS_MechBrainComponent : ScriptComponent
 		return true;
 	}
 
+	//! Radio command: the assigned player's mech guards its own current position.
+	bool ServerRadioGuardCompanion(IEntity user)
+	{
+		if (!Replication.IsServer() || !IsCompanionEnabled() || !user || !ChimeraCharacter.Cast(user) || !GetOwner() || !GetGame())
+			return false;
+		PlayerManager manager = GetGame().GetPlayerManager();
+		if (!manager)
+			return false;
+		int id = manager.GetPlayerIdFromControlledEntity(user);
+		if (id <= 0 || id != m_iCompanionOwnerId || manager.GetPlayerControlledEntity(id) != user)
+			return false;
+		Faction playerFaction = CgsCharacterFaction(user);
+		Faction mechFaction = ResolveFaction();
+		if (!playerFaction || !mechFaction || mechFaction.IsFactionEnemy(playerFaction))
+			return false;
+		SCR_DamageManagerComponent damage = SCR_DamageManagerComponent.Cast(GetOwner().FindComponent(SCR_DamageManagerComponent));
+		if (damage && damage.GetState() == EDamageState.DESTROYED)
+			return false;
+		m_eCompanionOrder = CGS_EMechCompanionOrder.GUARD;
+		m_vCompanionGuardPoint = GetOwner().GetOrigin();
+		m_bCompanionGuardSet = true;
+		m_bHasPatrolPoint = false;
+		Print(string.Format("[CGS RADIO] GUARD POSITION accepted owner=%1 point=%2", id, m_vCompanionGuardPoint));
+		return true;
+	}
+
 	//! Disconnected owners release their claim so another friendly player can use the mech.
 	protected void WatchCompanionOwner()
 	{
