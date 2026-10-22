@@ -158,6 +158,7 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		float maxRange = Math.Clamp(m_fMarkMaximumDistance, 5, 100);
 		vector eye = user.GetOrigin() + vector.Up * Math.Max(m_fMarkEyeHeight, 0.5);
 		vector candidate = eye + direction * maxRange;
+		bool hitSurface = false;
 		if (m_bTraceMarkTarget)
 		{
 			TraceParam trace = new TraceParam();
@@ -168,10 +169,15 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 			trace.LayerMask = EPhysicsLayerPresets.Projectile;
 			float fraction = world.TraceMove(trace, null);
 			if (fraction < 1.0)
+			{
 				candidate = eye + (candidate - eye) * fraction;
+				hitSurface = true;
+			}
 		}
-		// Target ground elevation, not a high wall or sky location.
-		candidate[1] = world.GetSurfaceY(candidate[0], candidate[2]);
+		// Keep the actual ray-hit elevation, including cliffs and structures.
+		// Only project to terrain when the ray does not strike anything.
+		if (!hitSurface)
+			candidate[1] = world.GetSurfaceY(candidate[0], candidate[2]);
 		// Use the SAME actual throw socket origin as ServerThrow. The player's
 		// position can be several metres away from that socket, so a 75 m
 		// player-facing mark was previously rejected as 77+ m at launch.
@@ -198,15 +204,16 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		if (socketDistance > maxRange)
 		{
 			deltaFromSocket.Normalize();
+			float intendedHeight = candidate[1];
 			candidate = socket + deltaFromSocket * (maxRange - 0.25);
-			candidate[1] = world.GetSurfaceY(candidate[0], candidate[2]);
+			candidate[1] = intendedHeight;
 			Print(string.Format("[CGS THROW MARK] clamped to socket range from %1 to %2 m", socketDistance, maxRange - 0.25));
 		}
 		m_vMarkedTarget = candidate;
 		m_iMarkedPlayerId = id;
 		m_bHasMarkedTarget = true;
 		ShowMarkEffect(candidate);
-		Print(string.Format("[CGS THROW MARK] owner=%1 landing target=%2 (aim-direction trace with ground projection)", id, candidate));
+		Print(string.Format("[CGS THROW MARK] owner=%1 landing target=%2 (aim-direction trace; surface elevation retained)", id, candidate));
 		return true;
 	}
 
@@ -533,8 +540,9 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 				{
 					forward = markedDelta.Normalized();
 					distance = maxMarkedDistance - 0.25;
+					float markedElevation = m_vMarkedTarget[1];
 					target = from + forward * distance;
-					target[1] = world.GetSurfaceY(target[0], target[2]);
+					target[1] = markedElevation;
 					Print(string.Format("[CGS THROW MARK] minor range overshoot corrected: %1 to %2 m", markedDistance, distance));
 				}
 				else
@@ -570,7 +578,7 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		m_vThrowEnd = target;
 		// End close enough to the ground to prevent a damaging free fall after SetOrigin stops.
 		// Terrain-only first pass: bridges/rooftops need further work.
-		m_vThrowEnd[1] = targetSurface + Math.Max(m_fLandingClearance, 1.0);
+		m_vThrowEnd[1] = Math.Max(targetSurface, target[1]) + Math.Max(m_fLandingClearance, 1.0);
 		m_bLandingStabilizing = false;
 		m_fLandingStabilizeLeft = 0;
 		m_fThrowElapsed = 0;
@@ -591,8 +599,15 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 			Print(string.Format("[CGS THROW V2 DIAG] player=%1 playerPos=%2 terrainY=%3 clearance=%4 mechGap=%5 initialVelocity=%6 socket=%7", playerId, m_vV2StartPos, playerSurface, m_vV2StartPos[1] - playerSurface, mechGap, originalVelocity, from));
 			if (m_vV2StartPos[1] < playerSurface - 0.2)
 				Print("[CGS THROW V2 DIAG] Player is below terrain surface; collision or character-ground state may block native launch", LogLevel.WARNING);
-			m_vV2LaunchVelocity = forward * (distance / Math.Max(airtime, 0.1));
-			m_vV2LaunchVelocity[1] = vertical;
+			// Physics starts at the player's actual location, not the mech socket.
+			// Solve velocity to approach the actual 3D marked point at the selected
+			// airtime. This accounts for high rooftops and cliffs without adding
+			// collision protection or restricting the flight path.
+			vector actualLaunchDelta = target - m_vV2StartPos;
+			actualLaunchDelta[1] = 0;
+			m_vV2LaunchVelocity = actualLaunchDelta / Math.Max(airtime, 0.1);
+			float landingHeight = Math.Max(targetSurface, target[1]) + Math.Max(m_fLandingClearance, 1.0);
+			m_vV2LaunchVelocity[1] = (landingHeight - m_vV2StartPos[1] + 0.5 * gravity * airtime * airtime) / Math.Max(airtime, 0.1);
 			m_fV2Elapsed = 0;
 			m_bV2Probing = true;
 			body.SetVelocity(m_vV2LaunchVelocity);
