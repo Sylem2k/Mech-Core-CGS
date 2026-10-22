@@ -172,9 +172,36 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		}
 		// Target ground elevation, not a high wall or sky location.
 		candidate[1] = world.GetSurfaceY(candidate[0], candidate[2]);
-		vector mechPos = GetOwner().GetOrigin();
-		if (vector.Distance(mechPos, candidate) > Math.Clamp(m_fMarkMaximumDistance, 5, 100) + 10)
+		// Use the SAME actual throw socket origin as ServerThrow. The player's
+		// position can be several metres away from that socket, so a 75 m
+		// player-facing mark was previously rejected as 77+ m at launch.
+		IEntity mech = GetOwner();
+		vector socket = user.GetOrigin();
+		if (m_ThrowPoint)
+		{
+			m_ThrowPoint.Init(mech);
+			vector socketLocal[4];
+			vector mechTransform[4];
+			m_ThrowPoint.GetModelTransform(socketLocal);
+			mech.GetWorldTransform(mechTransform);
+			vector p = socketLocal[3];
+			socket = mechTransform[3] + mechTransform[0] * p[0] + mechTransform[1] * p[1] + mechTransform[2] * p[2];
+		}
+		vector deltaFromSocket = candidate - socket;
+		deltaFromSocket[1] = 0;
+		float socketDistance = deltaFromSocket.Length();
+		if (socketDistance < 5)
+		{
+			Print("[CGS THROW MARK] target too close to throw socket", LogLevel.WARNING);
 			return false;
+		}
+		if (socketDistance > maxRange)
+		{
+			deltaFromSocket.Normalize();
+			candidate = socket + deltaFromSocket * (maxRange - 0.25);
+			candidate[1] = world.GetSurfaceY(candidate[0], candidate[2]);
+			Print(string.Format("[CGS THROW MARK] clamped to socket range from %1 to %2 m", socketDistance, maxRange - 0.25));
+		}
 		m_vMarkedTarget = candidate;
 		m_iMarkedPlayerId = id;
 		m_bHasMarkedTarget = true;
@@ -499,8 +526,22 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 			}
 			else
 			{
-				useMark = false;
-				Print(string.Format("[CGS THROW MARK] destination outside launch range distance=%1 max=%2; using fixed throw", markedDistance, maxMarkedDistance), LogLevel.WARNING);
+				// Player may have walked between MARK and THROW. For a modest
+				// overshoot, retain the chosen heading and cap its distance.
+				// Large or too-close invalid marks still use the fixed throw.
+				if (markedDistance > maxMarkedDistance && markedDistance <= maxMarkedDistance + 10.0)
+				{
+					forward = markedDelta.Normalized();
+					distance = maxMarkedDistance - 0.25;
+					target = from + forward * distance;
+					target[1] = world.GetSurfaceY(target[0], target[2]);
+					Print(string.Format("[CGS THROW MARK] minor range overshoot corrected: %1 to %2 m", markedDistance, distance));
+				}
+				else
+				{
+					useMark = false;
+					Print(string.Format("[CGS THROW MARK] destination outside launch range distance=%1 max=%2; using fixed throw", markedDistance, maxMarkedDistance), LogLevel.WARNING);
+				}
 			}
 		}
 		float targetSurface = world.GetSurfaceY(target[0], target[2]);
