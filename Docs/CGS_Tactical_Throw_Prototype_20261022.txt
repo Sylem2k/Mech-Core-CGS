@@ -1,0 +1,22 @@
+CGS TACTICAL THROW – PROTOTYPE 0 (EXPERIMENTAL)
+
+I created two opt-in scripts in Mech Core:
+- Scripts/Game/CGS_Brain/CGS_MechTacticalThrowComponent.c
+- Scripts/Game/CGS_Brain/CGS_MechTacticalThrowAction.c
+
+I did not change existing Mech Bay frames, weapon hardpoints, AI movement, or loadouts.
+Both 'Enable' and 'Allow Unprotected Test' default to false. No action is installed in
+shipping prefabs. The code uses a candidate server-side character Physics.SetVelocity
+launch; I must confirm the API compiles and actually moves a player character in Workbench.
+Landing damage protection, overhead clearance, obstacle sweeps, animation, and client
+prediction/replication are NOT implemented. This is not ready for normal gameplay.
+
+To test in a disposable world, after compilation I must manually attach the component
+and action to a test mech, opt into both flags, and use a character with physics.
+The companion brain must already allow my friendly character's action.
+The mech changes to FOLLOW after a successful launch. Existing gunner fire-at-will logic
+continues subject to installed weapons and line of sight.
+
+Next: implement safe landing/fall-damage handling, trajectory obstruction checks,
+cooldown feedback, and a reliable character-controller launch if raw Physics velocity
+does not work; then consider adding to friendly frame prefabs disabled by default.
