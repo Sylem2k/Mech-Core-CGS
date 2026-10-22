@@ -5,17 +5,17 @@
 modded class BFA_MechAICrewComponent
 {
 	protected CGS_MechBrainComponent m_pCgsBrain;
-	protected bool m_bCgsBrainLooked;
 	protected bool m_bCgsPlayerDriving;
+	protected float m_fCgsCompanionDiagTimer;
 
 	//------------------------------------------------------------------------------------------------
 	protected CGS_MechBrainComponent CgsBrain()
 	{
-		if (!m_bCgsBrainLooked)
-		{
+		// Re-query while missing. Prefab component initialization can precede
+		// or follow the AI crew's first tick; caching a null here permanently
+		// disables both autonomous movement and weapons for an empty mech.
+		if (!m_pCgsBrain)
 			m_pCgsBrain = CGS_MechBrainComponent.Find(GetOwner());
-			m_bCgsBrainLooked = true;
-		}
 		return m_pCgsBrain;
 	}
 
@@ -81,6 +81,19 @@ modded class BFA_MechAICrewComponent
 			return;
 		}
 
+		if (brain.IsCompanionFollowing() && m_bDebug)
+		{
+			// This path prints at most once every 2 seconds per AI crew component.
+			m_fCgsCompanionDiagTimer -= dt;
+			if (m_fCgsCompanionDiagTimer <= 0)
+			{
+				m_fCgsCompanionDiagTimer = 2.0;
+				float distance = vector.Distance(position, destination);
+				Physics body = owner.GetPhysics();
+				bool dynamicBody = body && body.IsDynamic();
+				Print(string.Format("[CGS FOLLOW DRIVER] distance=%1 arrive=%2 stationOccupant=%3 physicsDynamic=%4 inputBefore=%5 destination=%6", distance, arrive, driver, dynamicBody, m_pMovement.GetForwardInput(), destination));
+			}
+		}
 		CgsDriveTo(position, destination, arrive, label, dt);
 	}
 
