@@ -464,6 +464,28 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		float vertical = Math.Sqrt(2.0 * gravity * apex);
 		float airtime = (2.0 * vertical) / gravity;
 		vector target = from + forward * distance;
+		bool useMark = m_bAllowMarkedTarget && m_bHasMarkedTarget && m_iMarkedPlayerId == playerId;
+		if (useMark)
+		{
+			// Only alter the horizontal destination inputs. Keep the proven
+			// V2 physics launch, probe, camera and landing implementation intact.
+			vector markedDelta = m_vMarkedTarget - from;
+			markedDelta[1] = 0;
+			float markedDistance = markedDelta.Length();
+			float maxMarkedDistance = Math.Clamp(m_fMarkMaximumDistance, 5.0, 100.0);
+			if (markedDistance >= 5.0 && markedDistance <= maxMarkedDistance)
+			{
+				distance = markedDistance;
+				forward = markedDelta.Normalized();
+				target = m_vMarkedTarget;
+				Print(string.Format("[CGS THROW MARK] using selected destination=%1 distance=%2", target, distance));
+			}
+			else
+			{
+				useMark = false;
+				Print(string.Format("[CGS THROW MARK] destination outside launch range distance=%1 max=%2; using fixed throw", markedDistance, maxMarkedDistance), LogLevel.WARNING);
+			}
+		}
 		float targetSurface = world.GetSurfaceY(target[0], target[2]);
 		if (targetSurface > target[1] + 1.5)
 		{
@@ -479,6 +501,12 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		if (m_pThrownCharacter)
 			return false;
 		m_pThrownCharacter = user;
+		// Clear the saved mark only after the launch was accepted.
+		if (useMark)
+		{
+			m_bHasMarkedTarget = false;
+			ClearMarkEffect();
+		}
 		m_vPlayerStart = user.GetOrigin();
 		m_vThrowStart = from;
 		m_vThrowEnd = target;
