@@ -59,6 +59,67 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	[Attribute("2.0", UIWidgets.Auto, "While native flight is active, slow downward speed this far above terrain. Terrain-only test.", category: "Tactical Throw V2")]
 	protected float m_fV2CushionHeight;
 
+	[Attribute("true", UIWidgets.CheckBox, "Allow a friendly player to mark a landing destination in front of them before throwing.", category: "Tactical Throw V2")]
+	protected bool m_bAllowMarkedTarget;
+
+	[Attribute("75", UIWidgets.Auto, "Maximum distance from the mech's throw point to a marked destination (metres).", category: "Tactical Throw V2")]
+	protected float m_fMarkMaximumDistance;
+
+	protected bool m_bHasMarkedTarget;
+	protected vector m_vMarkedTarget;
+	protected int m_iMarkedPlayerId;
+
+	// Registered on the server for a player-side recall interaction.
+	protected static ref array<CGS_MechTacticalThrowComponent> s_aActiveThrowers = {};
+
+	static bool RecallForPlayer(IEntity user)
+	{
+		if (!Replication.IsServer() || !user)
+			return false;
+		foreach (CGS_MechTacticalThrowComponent thrower : s_aActiveThrowers)
+		{
+			if (!thrower)
+				continue;
+			CGS_MechBrainComponent brain = thrower.GetBrain();
+			if (brain && brain.ServerRecallCompanion(user))
+				return true;
+		}
+		Print("[CGS RECALL] No claimed companion accepted remote recall", LogLevel.WARNING);
+		return false;
+	}
+
+	//! Mark a ground destination based on the player's current facing direction.
+	//! This is NOT camera crosshair or map-click targeting; those require a player RPC.
+	bool ServerMarkThrowTarget(IEntity user)
+	{
+		if (!Replication.IsServer() || !CanOffer(user) || !m_bAllowMarkedTarget || !GetGame())
+			return false;
+		PlayerManager manager = GetGame().GetPlayerManager();
+		if (!manager)
+			return false;
+		int id = manager.GetPlayerIdFromControlledEntity(user);
+		if (id <= 0 || manager.GetPlayerControlledEntity(id) != user)
+			return false;
+		vector direction = user.GetTransformAxis(2);
+		direction[1] = 0;
+		if (direction.LengthSq() < 0.01)
+			return false;
+		direction.Normalize();
+		vector candidate = user.GetOrigin() + direction * Math.Clamp(m_fMarkMaximumDistance, 5, 100);
+		BaseWorld world = GetGame().GetWorld();
+		if (!world)
+			return false;
+		candidate[1] = world.GetSurfaceY(candidate[0], candidate[2]);
+		vector mechPos = GetOwner().GetOrigin();
+		if (vector.Distance(mechPos, candidate) > Math.Clamp(m_fMarkMaximumDistance, 5, 100) + 10)
+			return false;
+		m_vMarkedTarget = candidate;
+		m_iMarkedPlayerId = id;
+		m_bHasMarkedTarget = true;
+		Print(string.Format("[CGS THROW MARK] owner=%1 landing target=%2 (character facing, terrain height)", id, candidate));
+		return true;
+	}
+
 	protected bool m_bV2Probing;
 	protected bool m_bV2Flying;
 	protected float m_fV2Elapsed;
@@ -84,7 +145,11 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	{
 		super.OnPostInit(owner);
 		if (Replication.IsServer())
+		{
 			SetEventMask(owner, EntityEvent.FRAME);
+			if (s_aActiveThrowers.Find(this) == -1)
+				s_aActiveThrowers.Insert(this);
+		}
 	}
 
 	override void EOnFrame(IEntity owner, float timeSlice)
@@ -243,6 +308,13 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		}
 	}
 
+	override void OnDelete(IEntity owner)
+	{
+		if (Replication.IsServer())
+			s_aActiveThrowers.RemoveItem(this);
+		super.OnDelete(owner);
+	}
+
 	//------------------------------------------------------------------------------------------------
 	protected CGS_MechBrainComponent GetBrain()
 	{
@@ -327,6 +399,20 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		float vertical = Math.Sqrt(2.0 * gravity * apex);
 		float airtime = (2.0 * vertical) / gravity;
 		vector target = from + forward * distance;
+		if (m_bHasMarkedTarget && m_iMarkedPlayerId == playerId)
+		{
+			target = m_vMarkedTarget;
+			vector delta = target - from;
+			delta[1] = 0;
+			distance = delta.Length();
+			if (distance < 5 || distance > Math.Clamp(m_fMarkMaximumDistance, 5, 100))
+			{
+				Print("[CGS THROW MARK] marked target out of range", LogLevel.WARNING);
+				return false;
+			}
+			forward = delta.Normalized();
+			airtime = 2.0 * vertical / gravity;
+		}
 		float targetSurface = world.GetSurfaceY(target[0], target[2]);
 		if (targetSurface > target[1] + 1.5)
 		{
@@ -342,6 +428,11 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		if (m_pThrownCharacter)
 			return false;
 		m_pThrownCharacter = user;
+		if (m_bHasMarkedTarget && m_iMarkedPlayerId == playerId)
+		{
+			Print(string.Format("[CGS THROW MARK] using selected destination=%1", target));
+			m_bHasMarkedTarget = false;
+		}
 		m_vPlayerStart = user.GetOrigin();
 		m_vThrowStart = from;
 		m_vThrowEnd = target;
