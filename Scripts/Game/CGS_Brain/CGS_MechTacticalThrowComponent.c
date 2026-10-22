@@ -1,6 +1,6 @@
 //------------------------------------------------------------------------------------------------
 //! EXPERIMENTAL: server-only arcing launch. Not activated on any shipping prefab.
-//! V2: physics airborne movement. Failed probes never transition into V1 SetOrigin flight.
+//! V2 regression isolation: flight code restored exactly from proven commit d2ef093. Mark targeting is intentionally not used by throw on this test branch.
 [ComponentEditorProps(category: "CGS MechCore", description: "EXPERIMENTAL companion tactical throw; OFF by default.")]
 class CGS_MechTacticalThrowComponentClass : ScriptComponentClass
 {
@@ -219,34 +219,6 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		if (!Replication.IsServer() || !m_pThrownCharacter || !GetGame())
 			return;
 
-		// Optional test: a single gentle lift clears the grounded controller,
-		// then we issue native velocity once on a later frame. No repeated teleporting.
-		if (m_bV2PendingRelease)
-		{
-			m_fV2ReleaseElapsed += Math.Max(timeSlice, 0);
-			if (m_fV2ReleaseElapsed >= Math.Max(m_fV2ReleaseDelay, 0.02))
-			{
-				m_bV2PendingRelease = false;
-				Physics releasePhysics = m_pThrownCharacter.GetPhysics();
-				if (!releasePhysics)
-				{
-					Print("[CGS THROW V2] ground release failed: character physics unavailable", LogLevel.WARNING);
-					m_pThrownCharacter = null;
-					return;
-				}
-				vector releasePosition = m_pThrownCharacter.GetOrigin();
-				m_vV2StartPos = releasePosition;
-				m_vV2PreviousPos = releasePosition;
-				m_fV2Elapsed = 0;
-				m_fV2MovementAccum = 0;
-				m_iV2ProbeSamples = 0;
-				m_bV2Probing = true;
-				releasePhysics.SetVelocity(m_vV2LaunchVelocity);
-				Print(string.Format("[CGS THROW V2] delayed launch from=%1 velocity=%2 actualVelocity=%3", releasePosition, m_vV2LaunchVelocity, releasePhysics.GetVelocity()));
-			}
-			return;
-		}
-
 		// V2 uses regular character physics rather than SetOrigin while native flight works.
 		// Earlier raw velocity experiments did not visibly move players, so always probe.
 		if (m_bV2Probing || m_bV2Flying)
@@ -254,34 +226,17 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 			m_fV2Elapsed += Math.Max(timeSlice, 0);
 			vector actualPos = m_pThrownCharacter.GetOrigin();
 			Physics probePhysics = m_pThrownCharacter.GetPhysics();
-			if (m_bV2Probing)
-			{
-				float stepTravel = vector.Distance(actualPos, m_vV2PreviousPos);
-				m_fV2MovementAccum += stepTravel;
-				m_vV2PreviousPos = actualPos;
-				if (m_iV2ProbeSamples < 4)
-				{
-					vector observedVelocity = vector.Zero;
-					if (probePhysics)
-						observedVelocity = probePhysics.GetVelocity();
-					Print(string.Format("[CGS THROW V2] probe sample=%1 pos=%2 step=%3 velocity=%4", m_iV2ProbeSamples, actualPos, stepTravel, observedVelocity));
-					m_iV2ProbeSamples++;
-				}
-			}
 			BaseWorld probeWorld = GetGame().GetWorld();
 			if (m_bV2Probing && m_fV2Elapsed >= Math.Max(m_fV2ProbeSeconds, 0.15))
 			{
 				float displacement = vector.Distance(actualPos, m_vV2StartPos);
-				Print(string.Format("[CGS THROW V2] motion probe displacement=%1 accumulated=%2 duration=%3 actual=%4", displacement, m_fV2MovementAccum, m_fV2Elapsed, actualPos));
+				Print(string.Format("[CGS THROW V2] native motion probe displacement=%1 actual=%2", displacement, actualPos));
 				m_bV2Probing = false;
-				if (displacement < Math.Max(m_fV2MinimumMovement, 0.2) && m_fV2MovementAccum < Math.Max(m_fV2MinimumMovement, 0.2))
+				if (displacement < Math.Max(m_fV2MinimumMovement, 0.2))
 				{
-					// IMPORTANT: the old automatic V1 fallback teleported the player
-					// via SetOrigin and caused severe camera snapping. Never silently
-					// switch modes after the player has started a V2 physics launch.
-					Print(string.Format("[CGS THROW V2] native motion not confirmed; cancel V2 control without teleporting (start=%1 current=%2)", m_vV2StartPos, actualPos), LogLevel.WARNING);
-					m_bV2Flying = false;
-					m_pThrownCharacter = null;
+					Print("[CGS THROW V2] no native movement; returning to scripted V1 arc", LogLevel.WARNING);
+					m_fThrowElapsed = 0;
+					m_vPlayerStart = actualPos;
 					return;
 				}
 				m_bV2Flying = true;
@@ -507,20 +462,6 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		float vertical = Math.Sqrt(2.0 * gravity * apex);
 		float airtime = (2.0 * vertical) / gravity;
 		vector target = from + forward * distance;
-		if (m_bHasMarkedTarget && m_iMarkedPlayerId == playerId)
-		{
-			target = m_vMarkedTarget;
-			vector delta = target - from;
-			delta[1] = 0;
-			distance = delta.Length();
-			if (distance < 5 || distance > Math.Clamp(m_fMarkMaximumDistance, 5, 100))
-			{
-				Print("[CGS THROW MARK] marked target out of range", LogLevel.WARNING);
-				return false;
-			}
-			forward = delta.Normalized();
-			airtime = 2.0 * vertical / gravity;
-		}
 		float targetSurface = world.GetSurfaceY(target[0], target[2]);
 		if (targetSurface > target[1] + 1.5)
 		{
@@ -536,12 +477,6 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		if (m_pThrownCharacter)
 			return false;
 		m_pThrownCharacter = user;
-		if (m_bHasMarkedTarget && m_iMarkedPlayerId == playerId)
-		{
-			Print(string.Format("[CGS THROW MARK] using selected destination=%1", target));
-			m_bHasMarkedTarget = false;
-			ClearMarkEffect();
-		}
 		m_vPlayerStart = user.GetOrigin();
 		m_vThrowStart = from;
 		m_vThrowEnd = target;
@@ -562,30 +497,12 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 			// Test a native push from the player's actual position, avoiding a camera
 			// teleport to the mech socket. Use socket orientation to calculate direction.
 			m_vV2StartPos = user.GetOrigin();
-			m_vV2PreviousPos = m_vV2StartPos;
-			m_fV2MovementAccum = 0;
-			m_iV2ProbeSamples = 0;
 			m_vV2LaunchVelocity = forward * (distance / Math.Max(airtime, 0.1));
 			m_vV2LaunchVelocity[1] = vertical;
 			m_fV2Elapsed = 0;
-			m_bV2PendingRelease = false;
-			if (m_bV2GroundRelease)
-			{
-				vector lifted = user.GetOrigin();
-				lifted[1] = lifted[1] + Math.Clamp(m_fV2ReleaseHeight, 0.5, 2.0);
-				// Only move the character once; future flight is controlled by native physics.
-				user.SetOrigin(lifted);
-				m_bV2PendingRelease = true;
-				m_fV2ReleaseElapsed = 0;
-				Print(string.Format("[CGS THROW V2] one-time ground release start=%1 lifted=%2 actual=%3; delayed velocity pending", m_vV2StartPos, lifted, user.GetOrigin()));
-			}
-			else
-			{
-				m_bV2Probing = true;
-				vector velocityBefore = body.GetVelocity();
-				body.SetVelocity(m_vV2LaunchVelocity);
-				Print(string.Format("[CGS THROW V2] launch attempt player=%1 desired=%2 before=%3 immediatelyAfter=%4 start=%5", playerId, m_vV2LaunchVelocity, velocityBefore, body.GetVelocity(), m_vV2StartPos));
-			}
+			m_bV2Probing = true;
+			body.SetVelocity(m_vV2LaunchVelocity);
+			Print(string.Format("[CGS THROW V2] physics launch attempted player=%1 velocity=%2; probing", playerId, m_vV2LaunchVelocity));
 		}
 		Print(string.Format("[CGS THROW TEST] arc started player=%1 from=%2 to=%3 duration=%4", playerId, from, m_vThrowEnd, airtime));
 		CGS_MechBrainComponent brain = GetBrain();
