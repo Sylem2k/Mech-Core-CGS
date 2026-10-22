@@ -26,7 +26,7 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	[Attribute("6", UIWidgets.Auto, "Maximum player distance for activation (metres).", category: "Tactical Throw")]
 	protected float m_fUseDistance;
 
-	[Attribute("true", UIWidgets.CheckBox, "Tell the companion to FOLLOW once the launch succeeds.", category: "Tactical Throw")]
+	[Attribute("false", UIWidgets.CheckBox, "After launching, order the mech to FOLLOW. OFF: order it to GUARD its current position and provide support fire with its existing AI weapons. This does not override HOLD FIRE.", category: "Tactical Throw")]
 	protected bool m_bFollowAfterLaunch;
 
 	[Attribute(desc: "THROW POINT: place the gizmo on the mech where the player should leave its hand / launcher, exactly like the Movement Ground Point. Its local blue Z axis is throw-forward.", category: "Tactical Throw")]
@@ -202,11 +202,17 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		m_iThrowLogFrames = 0;
 		m_fNextThrowTime = now + Math.Max(m_fCooldown, 1.0);
 		Print(string.Format("[CGS THROW TEST] arc started player=%1 from=%2 to=%3 duration=%4", playerId, from, m_vThrowEnd, airtime));
-		if (m_bFollowAfterLaunch)
+		CGS_MechBrainComponent brain = GetBrain();
+		if (brain)
 		{
-			CGS_MechBrainComponent brain = GetBrain();
-			if (brain)
-				brain.ServerCommandCompanion(user, CGS_EMechCompanionOrder.FOLLOW);
+			int postThrowOrder = CGS_EMechCompanionOrder.GUARD;
+			if (m_bFollowAfterLaunch)
+				postThrowOrder = CGS_EMechCompanionOrder.FOLLOW;
+
+			if (!brain.ServerCommandCompanion(user, postThrowOrder))
+				Print("[CGS THROW TEST] Post-throw companion order rejected; check owner/faction/range", LogLevel.WARNING);
+			else
+				Print(string.Format("[CGS THROW TEST] Companion order after launch: %1", typename.EnumToString(CGS_EMechCompanionOrder, postThrowOrder)));
 		}
 		Print(string.Format("[CGS THROW TEST] attempted player=%1 distance=%2 apex=%3; movement unverified", playerId, distance, apex));
 		return true;
