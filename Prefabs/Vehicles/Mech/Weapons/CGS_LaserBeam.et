@@ -1,0 +1,16 @@
+// Uncollidable presentation-only beam, stretched locally between muzzle and hit.
+// Reuses the Core's lightweight sphere mesh; no RplComponent or damage logic.
+GenericEntity {
+ ID "E195C1D458A63F27"
+ components {
+  MeshObject "{E195C1D458A63F28}" {
+   Object "{BF012179927EE2BD}Assets/Characters/Sphere/spheretest.xob"
+   Materials {
+    MaterialAssignClass "{E195C1D458A63F29}" {
+     SourceMaterial "DefaultGeneratedMaterial"
+     AssignedMaterial "{A75DD42C3E0B8F12}Assets/Characters/Sphere/Data/CGS_LaserBeam.emat"
+    }
+   }
+  }
+ }
+}
