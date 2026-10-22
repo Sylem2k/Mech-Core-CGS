@@ -12,6 +12,90 @@ modded class BFA_MechAICrewComponent
 	protected bool m_bCgsFollowMoving;
 	protected float m_fCgsFollowForward;
 	protected float m_fCgsFollowTurn;
+	// Short-range steering around world obstacles during companion FOLLOW.
+	// This is a local avoidance layer, not long-range navmesh routing.
+	protected int m_iCgsFollowAvoidSide;
+	protected float m_fCgsFollowAvoidTime;
+	protected bool m_bCgsFollowAvoidEnabled = true;
+	protected float m_fCgsFollowObstacleRange = 13.0;
+
+	protected float CgsFollowClearance(vector origin, vector direction, float range)
+	{
+		BaseWorld world = GetGame().GetWorld();
+		if (!world)
+			return range;
+		direction[1] = 0;
+		if (direction.LengthSq() < 0.001)
+			return 0;
+		direction.Normalize();
+		TraceParam trace = new TraceParam();
+		trace.Start = origin + Vector(0, 2.0, 0);
+		trace.End = trace.Start + direction * range;
+		trace.Flags = TraceFlags.WORLD | TraceFlags.ENTS;
+		trace.Exclude = GetOwner();
+		trace.LayerMask = EPhysicsLayerPresets.Projectile;
+		return range * world.TraceMove(trace, null);
+	}
+
+	protected vector CgsFollowAvoidObstacle(vector position, vector toTarget, float dt)
+	{
+		if (!m_bCgsFollowAvoidEnabled || toTarget.LengthSq() < 1)
+			return toTarget;
+
+		float range = Math.Max(m_fCgsFollowObstacleRange, 6.0);
+		vector ahead = toTarget.Normalized();
+		float straight = CgsFollowClearance(position, ahead, range);
+		m_fCgsFollowAvoidTime = Math.Max(m_fCgsFollowAvoidTime - dt, 0);
+		if (straight >= range * 0.9 && m_fCgsFollowAvoidTime <= 0)
+		{
+			m_iCgsFollowAvoidSide = 0;
+			return toTarget;
+		}
+		// Compare forward-diagonal directions (approximately 45 degrees).
+		vector right = Vector(ahead[2], 0, -ahead[0]);
+		vector leftDir = (ahead + right).Normalized();
+		vector rightDir = (ahead - right).Normalized();
+		float leftClear = CgsFollowClearance(position, leftDir, range);
+		float rightClear = CgsFollowClearance(position, rightDir, range);
+
+		int side = m_iCgsFollowAvoidSide;
+		if (side == 0 || m_fCgsFollowAvoidTime <= 0)
+		{
+			if (leftClear > rightClear + 0.6)
+				side = 1;
+			else
+				side = -1;
+			m_iCgsFollowAvoidSide = side;
+			m_fCgsFollowAvoidTime = 1.5;
+		}
+
+		vector chosen = rightDir;
+		float chosenClear = rightClear;
+		if (side == 1)
+		{
+			chosen = leftDir;
+			chosenClear = leftClear;
+		}
+		if (chosenClear < 3.5)
+		{
+			vector alternate = leftDir;
+			float alternateClear = leftClear;
+			if (side == 1)
+			{
+				alternate = rightDir;
+				alternateClear = rightClear;
+			}
+			if (alternateClear > chosenClear + 1.0)
+			{
+				chosen = alternate;
+				m_iCgsFollowAvoidSide = -side;
+				m_fCgsFollowAvoidTime = 1.5;
+			}
+		}
+		// When both sides are blocked, slow the driver using existing stuck recovery.
+		return chosen * toTarget.Length();
+	}
+
 
 	//------------------------------------------------------------------------------------------------
 	protected CGS_MechBrainComponent CgsBrain()
@@ -124,6 +208,10 @@ modded class BFA_MechAICrewComponent
 		CGS_MechBrainComponent brain = CgsBrain();
 		bool follow = brain && brain.IsCompanionFollowing() && label == "following player";
 		float stopRadius = Math.Max(arrive, 2.0);
+		// Preserve the real distance for arrival, then route the steering vector
+		// around nearby obstacles rather than continuously driving at a wall.
+		if (follow && distance > stopRadius)
+			toTarget = CgsFollowAvoidObstacle(position, toTarget, dt);
 
 		if (follow)
 		{
