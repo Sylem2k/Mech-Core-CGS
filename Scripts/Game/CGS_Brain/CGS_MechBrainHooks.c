@@ -6,6 +6,7 @@ modded class BFA_MechAICrewComponent
 {
 	protected CGS_MechBrainComponent m_pCgsBrain;
 	protected bool m_bCgsBrainLooked;
+	protected bool m_bCgsPlayerDriving;
 
 	//------------------------------------------------------------------------------------------------
 	protected CGS_MechBrainComponent CgsBrain()
@@ -39,6 +40,16 @@ modded class BFA_MechAICrewComponent
 		{
 			if (driver != brain.GetPilot())
 			{
+				// A real player has exclusive movement control. Calling the base AI TickDriver
+				// every frame would send STOP commands over the player's own inputs.
+				if (!BFA_MechMovementComponent.IsAIControlled(driver))
+				{
+					if (!m_bCgsPlayerDriving)
+						StopDriver(); // release prior AI movement only once at handoff
+					m_bCgsPlayerDriving = true;
+					return;
+				}
+				m_bCgsPlayerDriving = false;
 				super.TickDriver(dt);
 				return;
 			}
@@ -51,11 +62,13 @@ modded class BFA_MechAICrewComponent
 			}
 		}
 
+		m_bCgsPlayerDriving = false;
 		IEntity owner = GetOwner();
 		vector position = owner.GetOrigin();
 
-		// Fight first (advance / strafe / back off), exactly like an AI driver would.
-		if (m_bCombatMovement && TickCombatMovement(driver, position, dt))
+		// Autonomous combat movement stays enabled for ordinary AI mechs.
+		// Companion orders prioritize staying near the player; AI gunners still fight.
+		if (!brain.CompanionOwnsMovement() && m_bCombatMovement && TickCombatMovement(driver, position, dt))
 			return;
 
 		vector destination;
@@ -125,6 +138,8 @@ modded class BFA_MechAICrewComponent
 			return super.IsCombatLeashed(driver, position);
 
 		CGS_MechBrainComponent brain = CgsBrain();
+		if (brain && brain.CompanionOwnsMovement())
+			return true; // companion movement must not chase enemies off the follow/guard order
 		return brain && brain.IsBeyondLeash(position);
 	}
 
