@@ -1,6 +1,6 @@
 //------------------------------------------------------------------------------------------------
 //! EXPERIMENTAL: server-only arcing launch. Not activated on any shipping prefab.
-//! Camera blend and landing velocity stabilization are experimental, NOT proven safe.
+//! Smoother velocity-matched launch transition is experimental; native character camera remains unchanged.
 [ComponentEditorProps(category: "CGS MechCore", description: "EXPERIMENTAL companion tactical throw; OFF by default.")]
 class CGS_MechTacticalThrowComponentClass : ScriptComponentClass
 {
@@ -32,8 +32,11 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	[Attribute(desc: "THROW POINT: place the gizmo on the mech where the player should leave its hand / launcher, exactly like the Movement Ground Point. Its local blue Z axis is throw-forward.", category: "Tactical Throw")]
 	protected ref PointInfo m_ThrowPoint;
 
-	[Attribute("0.35", UIWidgets.Auto, "Seconds to blend from player location to Throw Point to soften camera snap. 0 disables.", category: "Tactical Throw")]
+	[Attribute("0.5", UIWidgets.Auto, "Seconds to blend from the player's position to the throw arc without an abrupt velocity change.", category: "Tactical Throw")]
 	protected float m_fLaunchBlendSeconds;
+
+	[Attribute("true", UIWidgets.CheckBox, "EXPERIMENT: use a smooth, velocity-matched launch transition to reduce first-person camera jerk. OFF uses the older blend.", category: "Tactical Throw")]
+	protected bool m_bSmoothCameraLaunch;
 
 	[Attribute("1.15", UIWidgets.Auto, "Height above detected ground where the throw ends. Keep above 1m for first tests.", category: "Tactical Throw")]
 	protected float m_fLandingClearance;
@@ -95,14 +98,34 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		vector position = m_vThrowStart + (m_vThrowEnd - m_vThrowStart) * t;
 		position[1] = m_vThrowStart[1] + (m_vThrowEnd[1] - m_vThrowStart[1]) * t + 4.0 * m_fThrowApex * t * (1.0 - t);
 
-		// Instead of instantly snapping the player's camera 5+ metres to the socket,
-		// move into the initial launch path gradually during the first fraction of flight.
+		// Smoothly connect the player's real starting position to the trajectory.
+		// The original smoothstep blend had a hard velocity discontinuity when it ended,
+		// which can cause a visible camera jerk even though the player stays upright.
+		// Cubic Hermite here matches the flight arc's velocity at the join.
 		float blendDuration = Math.Max(0, m_fLaunchBlendSeconds);
 		if (blendDuration > 0 && m_fThrowElapsed < blendDuration)
 		{
-			float blend = Math.Clamp(m_fThrowElapsed / blendDuration, 0, 1);
-			blend = blend * blend * (3.0 - 2.0 * blend);
-			position = m_vPlayerStart + (position - m_vPlayerStart) * blend;
+			float u = Math.Clamp(m_fThrowElapsed / blendDuration, 0, 1);
+			if (m_bSmoothCameraLaunch)
+			{
+				float duration = Math.Max(m_fThrowDuration, 0.1);
+				float endT = Math.Min(blendDuration / duration, 1.0);
+				vector endPoint = m_vThrowStart + (m_vThrowEnd - m_vThrowStart) * endT;
+				endPoint[1] = m_vThrowStart[1] + (m_vThrowEnd[1] - m_vThrowStart[1]) * endT + 4.0 * m_fThrowApex * endT * (1.0 - endT);
+				vector endVelocity = (m_vThrowEnd - m_vThrowStart) * (1.0 / duration);
+				endVelocity[1] = endVelocity[1] + 4.0 * m_fThrowApex * (1.0 - 2.0 * endT) / duration;
+				float u2 = u * u;
+				float u3 = u2 * u;
+				float startWeight = 2.0 * u3 - 3.0 * u2 + 1.0;
+				float endWeight = -2.0 * u3 + 3.0 * u2;
+				float velocityWeight = u3 - u2;
+				position = m_vPlayerStart * startWeight + endPoint * endWeight + endVelocity * (blendDuration * velocityWeight);
+			}
+			else
+			{
+				float blend = u * u * (3.0 - 2.0 * u);
+				position = m_vPlayerStart + (position - m_vPlayerStart) * blend;
+			}
 		}
 
 		float terrain = world.GetSurfaceY(position[0], position[2]);
