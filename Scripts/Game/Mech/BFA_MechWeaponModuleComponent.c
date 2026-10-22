@@ -1148,6 +1148,21 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	//------------------------------------------------------------------------------------------------
 	//! Deal damage to whatever was hit. Returns the health actually removed.
 	//! type: EDamageType.KINETIC (bullets), EXPLOSIVE, INCENDIARY, TRUE (ignores armour) ...
+	// Original six-argument DealDamage signature is kept for CGS_CrewDamage overrides.
+	// A temporary override preserves the original shooter for missiles already in flight.
+	protected IEntity m_pDamageShooterOverride;
+
+	//------------------------------------------------------------------------------------------------
+	protected float DealDamageWithShooter(IEntity hitEntity, float amount, EDamageType type, vector hitPos, vector direction, IEntity instigator, IEntity shooter)
+	{
+		IEntity previousShooter = m_pDamageShooterOverride;
+		m_pDamageShooterOverride = shooter;
+		float lost = DealDamage(hitEntity, amount, type, hitPos, direction, instigator);
+		m_pDamageShooterOverride = previousShooter;
+		return lost;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	protected float AdjustDamageForTarget(IEntity target, float amount)
 	{
 		if (!target)
@@ -1163,7 +1178,7 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected float DealDamage(IEntity hitEntity, float amount, EDamageType type, vector hitPos, vector direction, IEntity instigator, IEntity shooterOverride = null)
+	protected float DealDamage(IEntity hitEntity, float amount, EDamageType type, vector hitPos, vector direction, IEntity instigator)
 	{
 		if (!Replication.IsServer() || !hitEntity || amount <= 0)
 			return 0;
@@ -1186,7 +1201,7 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 		hitTransform[1] = direction;
 		hitTransform[2] = direction * -1.0;
 
-		IEntity shooter = shooterOverride;
+		IEntity shooter = m_pDamageShooterOverride;
 		if (!shooter)
 			shooter = m_pMechOwner;
 		instigator = BFA_MechCoreComponent.BFA_ResolveKiller(shooter, instigator);
