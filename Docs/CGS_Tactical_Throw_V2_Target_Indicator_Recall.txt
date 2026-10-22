@@ -1,0 +1,31 @@
+CGS Tactical Throw V2 — target ray and visible marker (experimental)
+
+I kept native V2 physics flight, safe-landing experiment and GUARD/FOLLOW code
+unchanged, then added an aim-direction raycast and optional marker effect.
+
+TEST ON MECH
+- Add CGS_MechMarkThrowTargetAction to ActionsManagerComponent default context.
+- Set Tactical Throw component: Allow Marked Target = on
+- Set Trace Mark Target = on
+- Set Mark Eye Height = 1.6 initially
+- Set Mark Maximum Distance as required (75 m default)
+- To see a visual marker, choose a suitable persistent particle .ptc in Mark Effect.
+  No marker will appear if this field is blank. It is a WORLD particle, not HUD.
+- Face the target and activate MARK THROW TARGET. The server raycasts from the
+  player's body-forward direction at approximate eye height, then projects to
+  terrain elevation. It is NOT the exact first-person camera crosshair, so
+  expect some discrepancy while looking up/down or around separately from body.
+- Then activate TACTICAL THROW to consume the marked point.
+- Read [CGS THROW MARK] in console. Check for premature hits on the mech.
+
+RECALL STATUS
+- Existing CGS_MechRecallPlayerAction + ServerRecallCompanion are unchanged.
+- Action MUST run on a player-side interaction that stays available when far away.
+- Attaching it only to the mech means recall CANNOT be triggered remotely.
+- Owner ID, faction and damaged-state checks occur on server.
+- Follow maximum distance still limits recall, and it is not a teleport.
+- A character-side control/radio/keybind still requires UI integration and MP tests.
+
+I intentionally have NOT claimed that the camera crosshair or persistent map marker
+is working yet. The next task is sending local camera raycast info from the
+owning player to the server and displaying an actual selectable landing marker.
