@@ -46,7 +46,7 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	[Attribute("1", UIWidgets.Auto, "Damage multiplier against vehicles and mechs.", category: "Damage")]
 	protected float m_fDamageVsVehicles;
 
-	[Attribute("0", UIWidgets.Auto, "Minimum share of a DIRECT infantry hit that reaches health despite armour. 0 = normal armour handling. This does not change shield/vehicle damage.", category: "Damage")]
+	[Attribute("0.3", UIWidgets.Auto, "Minimum share of a DIRECT infantry hit that reaches health despite armour. 0 = normal armour handling. This does not change shield/vehicle damage.", category: "Damage")]
 	protected float m_fInfantryArmourFloor;
 
 
@@ -1203,7 +1203,7 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 			root = hitEntity;
 		if (type != EDamageType.TRUE && ChimeraCharacter.Cast(root) && m_fInfantryArmourFloor > 0 && healthBefore > 0)
 		{
-			float minimumLost = amount * Math.Clamp(m_fInfantryArmourFloor, 0.0, 1.0);
+			float minimumLost = Math.Min(healthBefore, amount * Math.Clamp(m_fInfantryArmourFloor, 0.0, 1.0));
 			float shortfall = minimumLost - lost;
 			if (shortfall > 0.001)
 			{
