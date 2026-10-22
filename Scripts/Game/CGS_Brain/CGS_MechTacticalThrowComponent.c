@@ -171,6 +171,9 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	protected float m_fV2Elapsed;
 	protected vector m_vV2StartPos;
 	protected vector m_vV2LaunchVelocity;
+	protected vector m_vV2PreviousPos;
+	protected float m_fV2MovementAccum;
+	protected int m_iV2ProbeSamples;
 
 	protected vector m_vPlayerStart;
 	protected float m_fLandingStabilizeLeft;
@@ -210,13 +213,27 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 			m_fV2Elapsed += Math.Max(timeSlice, 0);
 			vector actualPos = m_pThrownCharacter.GetOrigin();
 			Physics probePhysics = m_pThrownCharacter.GetPhysics();
+			if (m_bV2Probing)
+			{
+				float stepTravel = vector.Distance(actualPos, m_vV2PreviousPos);
+				m_fV2MovementAccum += stepTravel;
+				m_vV2PreviousPos = actualPos;
+				if (m_iV2ProbeSamples < 4)
+				{
+					vector observedVelocity = vector.Zero;
+					if (probePhysics)
+						observedVelocity = probePhysics.GetVelocity();
+					Print(string.Format("[CGS THROW V2] probe sample=%1 pos=%2 step=%3 velocity=%4", m_iV2ProbeSamples, actualPos, stepTravel, observedVelocity));
+					m_iV2ProbeSamples++;
+				}
+			}
 			BaseWorld probeWorld = GetGame().GetWorld();
 			if (m_bV2Probing && m_fV2Elapsed >= Math.Max(m_fV2ProbeSeconds, 0.15))
 			{
 				float displacement = vector.Distance(actualPos, m_vV2StartPos);
-				Print(string.Format("[CGS THROW V2] native motion probe displacement=%1 actual=%2", displacement, actualPos));
+				Print(string.Format("[CGS THROW V2] motion probe displacement=%1 accumulated=%2 duration=%3 actual=%4", displacement, m_fV2MovementAccum, m_fV2Elapsed, actualPos));
 				m_bV2Probing = false;
-				if (displacement < Math.Max(m_fV2MinimumMovement, 0.2))
+				if (displacement < Math.Max(m_fV2MinimumMovement, 0.2) && m_fV2MovementAccum < Math.Max(m_fV2MinimumMovement, 0.2))
 				{
 					// IMPORTANT: the old automatic V1 fallback teleported the player
 					// via SetOrigin and caused severe camera snapping. Never silently
@@ -504,12 +521,16 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 			// Test a native push from the player's actual position, avoiding a camera
 			// teleport to the mech socket. Use socket orientation to calculate direction.
 			m_vV2StartPos = user.GetOrigin();
+			m_vV2PreviousPos = m_vV2StartPos;
+			m_fV2MovementAccum = 0;
+			m_iV2ProbeSamples = 0;
 			m_vV2LaunchVelocity = forward * (distance / Math.Max(airtime, 0.1));
 			m_vV2LaunchVelocity[1] = vertical;
 			m_fV2Elapsed = 0;
 			m_bV2Probing = true;
+			vector velocityBefore = body.GetVelocity();
 			body.SetVelocity(m_vV2LaunchVelocity);
-			Print(string.Format("[CGS THROW V2] physics launch attempted player=%1 velocity=%2; probing", playerId, m_vV2LaunchVelocity));
+			Print(string.Format("[CGS THROW V2] launch attempt player=%1 desired=%2 before=%3 immediatelyAfter=%4 start=%5", playerId, m_vV2LaunchVelocity, velocityBefore, body.GetVelocity(), m_vV2StartPos));
 		}
 		Print(string.Format("[CGS THROW TEST] arc started player=%1 from=%2 to=%3 duration=%4", playerId, from, m_vThrowEnd, airtime));
 		CGS_MechBrainComponent brain = GetBrain();
