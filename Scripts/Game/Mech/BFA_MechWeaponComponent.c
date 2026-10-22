@@ -729,6 +729,12 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 			}
 		}
 
+		// Pure laser beams are hitscan: impact visuals should not wait for an
+		// imaginary bullet to cross the range. Keep projectile movement untouched
+		// if a weapon deliberately configures a model/trail alongside its beam.
+		if (fx && !fx.m_sBeamPrefab.IsEmpty() && fx.m_sProjectilePrefab.IsEmpty() && fx.m_sTrailParticle.IsEmpty())
+			visual.m_fSpeed = Math.Max(visual.m_fSpeed, distance / 0.016);
+
 		m_aProjectiles.Insert(visual);
 		while (m_aProjectiles.Count() > 256)
 		{
