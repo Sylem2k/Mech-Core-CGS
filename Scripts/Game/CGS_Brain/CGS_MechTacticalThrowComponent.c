@@ -29,6 +29,9 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	[Attribute("true", UIWidgets.CheckBox, "Tell the companion to FOLLOW once the launch succeeds.", category: "Tactical Throw")]
 	protected bool m_bFollowAfterLaunch;
 
+	[Attribute(desc: "THROW POINT: place the gizmo on the mech where the player should leave its hand / launcher, exactly like the Movement Ground Point. Its local blue Z axis is throw-forward.", category: "Tactical Throw")]
+	protected ref PointInfo m_ThrowPoint;
+
 	protected float m_fNextThrowTime;
 	protected IEntity m_pThrownCharacter;
 	protected vector m_vThrowStart;
@@ -65,9 +68,11 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		position[1] = m_vThrowStart[1] + (m_vThrowEnd[1] - m_vThrowStart[1]) * t + 4.0 * m_fThrowApex * t * (1.0 - t);
 
 		float terrain = world.GetSurfaceY(position[0], position[2]);
-		if (t < 1.0 && position[1] <= terrain + 0.25)
+		// Never reject the very first frame because the character's feet start near ground.
+		// Once clear of the launch phase, reject terrain obstructions rather than phase through.
+		if (t > 0.08 && t < 0.92 && position[1] <= terrain + 0.35)
 		{
-			Print("[CGS THROW TEST] STOP: arc intersects terrain", LogLevel.WARNING);
+			Print(string.Format("[CGS THROW TEST] STOP: path hits terrain t=%1 desired=%2 terrain=%3", t, position, terrain), LogLevel.WARNING);
 			m_pThrownCharacter = null;
 			return;
 		}
@@ -139,12 +144,33 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 			return false;
 		}
 
+		// Default to the character's current position when no throw point was placed.
+		// Placing a PointInfo on the mech overrides BOTH the arc origin and forward direction.
 		vector from = user.GetOrigin();
 		vector forward = mech.GetTransformAxis(2);
+		if (m_ThrowPoint)
+		{
+			m_ThrowPoint.Init(mech);
+			vector localPoint[4];
+			vector worldMech[4];
+			m_ThrowPoint.GetModelTransform(localPoint);
+			mech.GetWorldTransform(worldMech);
+			vector p = localPoint[3];
+			from = worldMech[3] + worldMech[0] * p[0] + worldMech[1] * p[1] + worldMech[2] * p[2];
+			vector axis = localPoint[2];
+			forward = worldMech[0] * axis[0] + worldMech[1] * axis[1] + worldMech[2] * axis[2];
+		}
 		forward[1] = 0;
 		if (forward.LengthSq() < 0.01)
 			return false;
 		forward.Normalize();
+
+		float launchGround = world.GetSurfaceY(from[0], from[2]);
+		if (from[1] < launchGround + 0.6)
+		{
+			Print(string.Format("[CGS THROW TEST] STOP: throw point is below terrain/too low. socket=%1 surface=%2; raise Throw Point in prefab.", from, launchGround), LogLevel.WARNING);
+			return false;
+		}
 
 		float distance = Math.Clamp(m_fDistance, 5.0, 60.0);
 		float apex = Math.Clamp(m_fArcHeight, 3.0, 16.0);
@@ -160,8 +186,7 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		}
 		// This checks only landing height. Full obstacle sweeps and safe-landing protection
 		// are required before this experiment can ship as gameplay.
-		vector launchVelocity = forward * (distance / airtime);
-		launchVelocity[1] = vertical;
+
 
 		// A direct physics velocity compiled but didn't visibly move the character.
 		// Diagnose movement with a server-driven arc instead of claiming it succeeded.
