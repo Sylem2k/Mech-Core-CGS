@@ -238,6 +238,32 @@ class CGS_MechBrainComponent : ScriptComponent
 		return true;
 	}
 
+	//! Remote recall only for the player who already claimed this companion.
+	//! Distance is deliberately NOT checked here: the companion will handle its
+	//! existing maximum follow distance in GetDestination.
+	bool ServerRecallCompanion(IEntity user)
+	{
+		if (!Replication.IsServer() || !IsCompanionEnabled() || !user || !ChimeraCharacter.Cast(user))
+			return false;
+		PlayerManager manager = GetGame().GetPlayerManager();
+		if (!manager)
+			return false;
+		int id = manager.GetPlayerIdFromControlledEntity(user);
+		if (id <= 0 || id != m_iCompanionOwnerId || manager.GetPlayerControlledEntity(id) != user)
+			return false;
+		Faction playerFaction = CgsCharacterFaction(user);
+		Faction mechFaction = ResolveFaction();
+		if (!playerFaction || !mechFaction || mechFaction.IsFactionEnemy(playerFaction))
+			return false;
+		SCR_DamageManagerComponent damage = SCR_DamageManagerComponent.Cast(GetOwner().FindComponent(SCR_DamageManagerComponent));
+		if (damage && damage.GetState() == EDamageState.DESTROYED)
+			return false;
+		m_eCompanionOrder = CGS_EMechCompanionOrder.FOLLOW;
+		m_bHasPatrolPoint = false;
+		Print(string.Format("[CGS RECALL] companion following owner=%1", id));
+		return true;
+	}
+
 	//! Disconnected owners release their claim so another friendly player can use the mech.
 	protected void WatchCompanionOwner()
 	{
