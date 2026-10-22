@@ -30,7 +30,66 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	protected bool m_bFollowAfterLaunch;
 
 	protected float m_fNextThrowTime;
+	protected IEntity m_pThrownCharacter;
+	protected vector m_vThrowStart;
+	protected vector m_vThrowEnd;
+	protected float m_fThrowElapsed;
+	protected float m_fThrowDuration;
+	protected float m_fThrowApex;
+	protected int m_iThrowLogFrames;
 
+	//------------------------------------------------------------------------------------------------
+	//! Proof-of-concept only. Character-controller authority may undo SetOrigin after this frame.
+	override void OnPostInit(IEntity owner)
+	{
+		super.OnPostInit(owner);
+		if (Replication.IsServer())
+			SetEventMask(owner, EntityEvent.FRAME);
+	}
+
+	override void EOnFrame(IEntity owner, float timeSlice)
+	{
+		if (!Replication.IsServer() || !m_pThrownCharacter || !GetGame())
+			return;
+
+		BaseWorld world = GetGame().GetWorld();
+		if (!world)
+		{
+			m_pThrownCharacter = null;
+			return;
+		}
+
+		m_fThrowElapsed += Math.Max(timeSlice, 0);
+		float t = Math.Min(m_fThrowElapsed / Math.Max(m_fThrowDuration, 0.1), 1.0);
+		vector position = m_vThrowStart + (m_vThrowEnd - m_vThrowStart) * t;
+		position[1] = m_vThrowStart[1] + (m_vThrowEnd[1] - m_vThrowStart[1]) * t + 4.0 * m_fThrowApex * t * (1.0 - t);
+
+		float terrain = world.GetSurfaceY(position[0], position[2]);
+		if (t < 1.0 && position[1] <= terrain + 0.25)
+		{
+			Print("[CGS THROW TEST] STOP: arc intersects terrain", LogLevel.WARNING);
+			m_pThrownCharacter = null;
+			return;
+		}
+		// No wall/roof collision scan or landing protection yet: TEST WORLD ONLY.
+		vector before = m_pThrownCharacter.GetOrigin();
+		m_pThrownCharacter.SetOrigin(position);
+		m_pThrownCharacter.Update();
+
+		if (m_iThrowLogFrames < 6)
+		{
+			Print(string.Format("[CGS THROW TEST] frame=%1 before=%2 desired=%3 actual=%4", m_iThrowLogFrames, before, position, m_pThrownCharacter.GetOrigin()));
+			m_iThrowLogFrames++;
+		}
+
+		if (t >= 1.0)
+		{
+			Print(string.Format("[CGS THROW TEST] completed; actual=%1", m_pThrownCharacter.GetOrigin()));
+			m_pThrownCharacter = null;
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
 	protected CGS_MechBrainComponent GetBrain()
 	{
 		IEntity owner = GetOwner();
@@ -104,17 +163,27 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		vector launchVelocity = forward * (distance / airtime);
 		launchVelocity[1] = vertical;
 
-		// This Physics API is a candidate only: confirm its behavior on Character entities
-		// and server-to-client replication in Workbench before enabling a real prefab.
-		body.SetVelocity(launchVelocity);
+		// A direct physics velocity compiled but didn't visibly move the character.
+		// Diagnose movement with a server-driven arc instead of claiming it succeeded.
+		if (m_pThrownCharacter)
+			return false;
+		m_pThrownCharacter = user;
+		m_vThrowStart = from;
+		m_vThrowEnd = target;
+		m_vThrowEnd[1] = Math.Max(targetSurface + 0.8, target[1]);
+		m_fThrowElapsed = 0;
+		m_fThrowDuration = airtime;
+		m_fThrowApex = apex;
+		m_iThrowLogFrames = 0;
 		m_fNextThrowTime = now + Math.Max(m_fCooldown, 1.0);
+		Print(string.Format("[CGS THROW TEST] arc started player=%1 from=%2 to=%3 duration=%4", playerId, from, m_vThrowEnd, airtime));
 		if (m_bFollowAfterLaunch)
 		{
 			CGS_MechBrainComponent brain = GetBrain();
 			if (brain)
 				brain.ServerCommandCompanion(user, CGS_EMechCompanionOrder.FOLLOW);
 		}
-		Print(string.Format("[CGS THROW] launched player=%1 distance=%2 apex=%3", playerId, distance, apex));
+		Print(string.Format("[CGS THROW TEST] attempted player=%1 distance=%2 apex=%3; movement unverified", playerId, distance, apex));
 		return true;
 	}
 }
