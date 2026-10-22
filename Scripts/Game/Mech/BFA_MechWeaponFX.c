@@ -64,7 +64,7 @@ class BFA_MechWeaponFX
 	[Attribute("false", UIWidgets.CheckBox, "Continuous laser: one beam stays visible while the trigger is held, updating on each damage tick. OFF = short pulse per shot.", category: "Laser Beam")]
 	bool m_bBeamContinuous;
 
-	[Attribute("3.0", UIWidgets.Auto, "Failsafe: turn off a held beam if no new shot update arrives for this many seconds (e.g. lost release, overheat or despawn).", category: "Laser Beam")]
+	[Attribute("1.25", UIWidgets.Auto, "Failsafe: turn off a held beam if no new shot update arrives for this many seconds (e.g. lost release, overheat or despawn).", category: "Laser Beam")]
 	float m_fBeamIdleTimeout;
 
 	// ---- Impact --------------------------------------------------------------------------------
