@@ -12,7 +12,18 @@ class CGS_MechCompanionOrderAction : ScriptedUserAction
 		IEntity entity = GetOwner();
 		if (!entity)
 			return null;
-		return CGS_MechBrainComponent.Find(entity.GetRootParent());
+
+		// Normal interaction actions are attached directly to the mech's
+		// ActionsManagerComponent. Some vehicle roots have no separate parent.
+		CGS_MechBrainComponent brain = CGS_MechBrainComponent.Find(entity);
+		if (brain)
+			return brain;
+
+		IEntity root = entity.GetRootParent();
+		if (root && root != entity)
+			return CGS_MechBrainComponent.Find(root);
+
+		return null;
 	}
 
 	override bool GetActionNameScript(out string outName)
@@ -44,7 +55,7 @@ class CGS_MechCompanionOrderAction : ScriptedUserAction
 	{
 		if (!Replication.IsServer())
 			return;
-		CGS_MechBrainComponent brain = CGS_MechBrainComponent.Find(pOwnerEntity.GetRootParent());
+		CGS_MechBrainComponent brain = GetBrain();
 		if (brain)
 			brain.ServerCommandCompanion(pUserEntity, m_eOrder);
 	}
