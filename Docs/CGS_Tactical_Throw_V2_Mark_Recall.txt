@@ -1,0 +1,27 @@
+CGS Tactical Throw V2 — destination marker and remote recall (experimental)
+
+I added a mark-target action to the mech and a separate player-side CALL MY MECH action.
+I did not change animations or merge this into V1 shipping files.
+
+To enable marking:
+  Add CGS_MechMarkThrowTargetAction to the mech ActionsManagerComponent under default.
+  Enable the Tactical Throw component and Allow Marked Target.
+  Stand near the mech, face the intended destination, activate MARK THROW TARGET,
+  then activate TACTICAL THROW. The marker uses character facing plus the ground
+  height at the configured maximum distance. It does NOT use the screen crosshair
+  and does NOT put a marker on the map yet.
+  Marked target is used only by the same player who set it, and consumed on throw.
+
+To enable recall:
+  Add CGS_MechRecallPlayerAction to a player CHARACTER ActionsManagerComponent
+  and set its action context. This action cannot appear remotely if it is only
+  attached to the mech. The player must previously claim that companion by
+  a nearby FOLLOW/GUARD or THROW. The server validates owner identity/faction.
+  Existing FollowMaxDistance still limits how far the mech can travel after recall.
+  No teleportation, instant summoning or guaranteed cross-map navigation is added.
+
+Safety: V2 physics throw and cushion are experimental. Terrain mark ignores roofs,
+bridges, obstructions and steep surfaces. Compile/test local and multiplayer first.
+
+Next: accurate crosshair/map-click targeting, route/path validation, proper user
+interface for remote recall, and explicit per-mech choice if I own multiple mechs.
