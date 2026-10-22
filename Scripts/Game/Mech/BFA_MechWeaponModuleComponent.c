@@ -1163,7 +1163,7 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected float DealDamage(IEntity hitEntity, float amount, EDamageType type, vector hitPos, vector direction, IEntity instigator)
+	protected float DealDamage(IEntity hitEntity, float amount, EDamageType type, vector hitPos, vector direction, IEntity instigator, IEntity shooterOverride = null)
 	{
 		if (!Replication.IsServer() || !hitEntity || amount <= 0)
 			return 0;
@@ -1186,10 +1186,14 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 		hitTransform[1] = direction;
 		hitTransform[2] = direction * -1.0;
 
-		instigator = BFA_MechCoreComponent.BFA_ResolveKiller(m_pMechOwner, instigator);
+		IEntity shooter = shooterOverride;
+		if (!shooter)
+			shooter = m_pMechOwner;
+		instigator = BFA_MechCoreComponent.BFA_ResolveKiller(shooter, instigator);
 		Instigator damageInstigator = Instigator.CreateInstigator(instigator);
-		SCR_DamageContext context = new SCR_DamageContext(type, amount, hitTransform, m_pMechOwner, hitZone, damageInstigator, null, -1, -1);
+		SCR_DamageContext context = new SCR_DamageContext(type, amount, hitTransform, shooter, hitZone, damageInstigator, null, -1, -1);
 		BeginDamage();
+		BFA_MechExtension.s_pCurrentShooterMech = shooter;
 		// A kinetic shell's blast is EXPLOSIVE, even if its direct hit is KINETIC.
 		// ENERGY splash (such as a PPC) remains ENERGY for shield interactions.
 		if (type == EDamageType.EXPLOSIVE && m_eDamageKind == BFA_EMechDamageKind.KINETIC)
@@ -1207,8 +1211,9 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 			float shortfall = minimumLost - lost;
 			if (shortfall > 0.001)
 			{
-				SCR_DamageContext floorContext = new SCR_DamageContext(EDamageType.TRUE, shortfall, hitTransform, m_pMechOwner, hitZone, damageInstigator, null, -1, -1);
+				SCR_DamageContext floorContext = new SCR_DamageContext(EDamageType.TRUE, shortfall, hitTransform, shooter, hitZone, damageInstigator, null, -1, -1);
 				BeginDamage();
+		BFA_MechExtension.s_pCurrentShooterMech = shooter;
 				damageManager.HandleDamage(floorContext);
 				EndDamage();
 			}
