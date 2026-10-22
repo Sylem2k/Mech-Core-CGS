@@ -119,6 +119,23 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		return false;
 	}
 
+	//! Radio GUARD looks up the assigned companion exactly as remote recall does.
+	static bool GuardForPlayer(IEntity user)
+	{
+		if (!Replication.IsServer() || !user)
+			return false;
+		foreach (CGS_MechTacticalThrowComponent thrower : s_aActiveThrowers)
+		{
+			if (!thrower)
+				continue;
+			CGS_MechBrainComponent brain = thrower.GetBrain();
+			if (brain && brain.ServerRadioGuardCompanion(user))
+				return true;
+		}
+		Print("[CGS RADIO] No claimed companion accepted GUARD POSITION", LogLevel.WARNING);
+		return false;
+	}
+
 	//! Mark a ground destination based on the player's current facing direction.
 	//! This is NOT camera crosshair or map-click targeting; those require a player RPC.
 	bool ServerMarkThrowTarget(IEntity user)
