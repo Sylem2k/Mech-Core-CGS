@@ -234,9 +234,11 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 				m_bV2Probing = false;
 				if (displacement < Math.Max(m_fV2MinimumMovement, 0.2))
 				{
-					Print("[CGS THROW V2] no native movement; returning to scripted V1 arc", LogLevel.WARNING);
-					m_fThrowElapsed = 0;
-					m_vPlayerStart = actualPos;
+					// A failed native launch must not silently teleport the player
+					// through the scripted V1 arc. Leave the character controller alone.
+					Print(string.Format("[CGS THROW V2] no native movement; aborting without V1 fallback pos=%1", actualPos), LogLevel.WARNING);
+					m_bV2Flying = false;
+					m_pThrownCharacter = null;
 					return;
 				}
 				m_bV2Flying = true;
