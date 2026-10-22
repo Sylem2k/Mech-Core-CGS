@@ -1190,6 +1190,10 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 		Instigator damageInstigator = Instigator.CreateInstigator(instigator);
 		SCR_DamageContext context = new SCR_DamageContext(type, amount, hitTransform, m_pMechOwner, hitZone, damageInstigator, null, -1, -1);
 		BeginDamage();
+		// A kinetic shell's blast is EXPLOSIVE, even if its direct hit is KINETIC.
+		// ENERGY splash (such as a PPC) remains ENERGY for shield interactions.
+		if (type == EDamageType.EXPLOSIVE && m_eDamageKind == BFA_EMechDamageKind.KINETIC)
+			BFA_MechExtension.s_iCurrentDamageKind = BFA_EMechDamageKind.EXPLOSIVE;
 		damageManager.HandleDamage(context);
 		EndDamage();
 
