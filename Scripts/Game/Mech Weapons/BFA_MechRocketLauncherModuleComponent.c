@@ -488,7 +488,7 @@ class BFA_MechRocketLauncherModuleComponent : BFA_MechWeaponModuleComponent
 			return 0;
 		// Route direct and splash hits through the same tuned damage system.
 		// This preserves the existing physics hit checks and single-hit-per-object splash logic.
-		return DealDamage(damageManager.GetOwner(), amount, EDamageType.EXPLOSIVE, position, direction, instigatorEntity, mechOwner);
+		return DealDamageWithShooter(damageManager.GetOwner(), amount, EDamageType.EXPLOSIVE, position, direction, instigatorEntity, mechOwner);
 	}
 
 	//------------------------------------------------------------------------------------------------
