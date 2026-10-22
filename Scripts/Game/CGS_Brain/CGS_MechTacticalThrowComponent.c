@@ -1,6 +1,6 @@
 //------------------------------------------------------------------------------------------------
 //! EXPERIMENTAL: server-only arcing launch. Not activated on any shipping prefab.
-//! Character physics and landing damage must be validated in Workbench before enabling.
+//! Camera blend and landing velocity stabilization are experimental, NOT proven safe.
 [ComponentEditorProps(category: "CGS MechCore", description: "EXPERIMENTAL companion tactical throw; OFF by default.")]
 class CGS_MechTacticalThrowComponentClass : ScriptComponentClass
 {
@@ -11,7 +11,7 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	[Attribute("false", UIWidgets.CheckBox, "Enable experimental tactical throw on this mech.", category: "Tactical Throw")]
 	protected bool m_bEnabled;
 
-	[Attribute("false", UIWidgets.CheckBox, "ALLOW UNSAFE TEST: no landing damage protection is implemented yet. Only enable in a disposable test world.", category: "Tactical Throw")]
+	[Attribute("false", UIWidgets.CheckBox, "ALLOW UNSAFE TEST: landing protection remains experimental; no collision-damage immunity or overhead obstacle sweep. Test in a disposable world only.", category: "Tactical Throw")]
 	protected bool m_bAllowUnprotectedTest;
 
 	[Attribute("20", UIWidgets.Auto, "Horizontal throw distance (metres).", category: "Tactical Throw")]
@@ -31,6 +31,19 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 
 	[Attribute(desc: "THROW POINT: place the gizmo on the mech where the player should leave its hand / launcher, exactly like the Movement Ground Point. Its local blue Z axis is throw-forward.", category: "Tactical Throw")]
 	protected ref PointInfo m_ThrowPoint;
+
+	[Attribute("0.35", UIWidgets.Auto, "Seconds to blend from player location to Throw Point to soften camera snap. 0 disables.", category: "Tactical Throw")]
+	protected float m_fLaunchBlendSeconds;
+
+	[Attribute("1.15", UIWidgets.Auto, "Height above detected ground where the throw ends. Keep above 1m for first tests.", category: "Tactical Throw")]
+	protected float m_fLandingClearance;
+
+	[Attribute("0.4", UIWidgets.Auto, "Seconds to gently stabilize velocity at end of throw (test only).", category: "Tactical Throw")]
+	protected float m_fLandingStabilizeSeconds;
+
+	protected vector m_vPlayerStart;
+	protected float m_fLandingStabilizeLeft;
+	protected bool m_bLandingStabilizing;
 
 	protected float m_fNextThrowTime;
 	protected IEntity m_pThrownCharacter;
@@ -55,6 +68,21 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		if (!Replication.IsServer() || !m_pThrownCharacter || !GetGame())
 			return;
 
+		if (m_bLandingStabilizing)
+		{
+			Physics activePhysics = m_pThrownCharacter.GetPhysics();
+			if (activePhysics)
+				activePhysics.SetVelocity(vector.Zero);
+			m_fLandingStabilizeLeft -= timeSlice;
+			if (m_fLandingStabilizeLeft <= 0)
+			{
+				Print(string.Format("[CGS THROW TEST] landing stabilization ended position=%1", m_pThrownCharacter.GetOrigin()));
+				m_bLandingStabilizing = false;
+				m_pThrownCharacter = null;
+			}
+			return;
+		}
+
 		BaseWorld world = GetGame().GetWorld();
 		if (!world)
 		{
@@ -66,6 +94,16 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		float t = Math.Min(m_fThrowElapsed / Math.Max(m_fThrowDuration, 0.1), 1.0);
 		vector position = m_vThrowStart + (m_vThrowEnd - m_vThrowStart) * t;
 		position[1] = m_vThrowStart[1] + (m_vThrowEnd[1] - m_vThrowStart[1]) * t + 4.0 * m_fThrowApex * t * (1.0 - t);
+
+		// Instead of instantly snapping the player's camera 5+ metres to the socket,
+		// move into the initial launch path gradually during the first fraction of flight.
+		float blendDuration = Math.Max(0, m_fLaunchBlendSeconds);
+		if (blendDuration > 0 && m_fThrowElapsed < blendDuration)
+		{
+			float blend = Math.Clamp(m_fThrowElapsed / blendDuration, 0, 1);
+			blend = blend * blend * (3.0 - 2.0 * blend);
+			position = m_vPlayerStart + (position - m_vPlayerStart) * blend;
+		}
 
 		float terrain = world.GetSurfaceY(position[0], position[2]);
 		// Never reject the very first frame because the character's feet start near ground.
@@ -89,8 +127,12 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 
 		if (t >= 1.0)
 		{
-			Print(string.Format("[CGS THROW TEST] completed; actual=%1", m_pThrownCharacter.GetOrigin()));
-			m_pThrownCharacter = null;
+			Physics landingPhysics = m_pThrownCharacter.GetPhysics();
+			if (landingPhysics)
+				landingPhysics.SetVelocity(vector.Zero);
+			m_bLandingStabilizing = true;
+			m_fLandingStabilizeLeft = Math.Max(m_fLandingStabilizeSeconds, 0.1);
+			Print(string.Format("[CGS THROW TEST] arrived above ground=%1; stabilizing velocity for %2 seconds", m_pThrownCharacter.GetOrigin(), m_fLandingStabilizeLeft));
 		}
 	}
 
@@ -193,9 +235,14 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		if (m_pThrownCharacter)
 			return false;
 		m_pThrownCharacter = user;
+		m_vPlayerStart = user.GetOrigin();
 		m_vThrowStart = from;
 		m_vThrowEnd = target;
-		m_vThrowEnd[1] = Math.Max(targetSurface + 0.8, target[1]);
+		// End close enough to the ground to prevent a damaging free fall after SetOrigin stops.
+		// Terrain-only first pass: bridges/rooftops need further work.
+		m_vThrowEnd[1] = targetSurface + Math.Max(m_fLandingClearance, 1.0);
+		m_bLandingStabilizing = false;
+		m_fLandingStabilizeLeft = 0;
 		m_fThrowElapsed = 0;
 		m_fThrowDuration = airtime;
 		m_fThrowApex = apex;
