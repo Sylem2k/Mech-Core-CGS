@@ -49,6 +49,24 @@ class BFA_MechWeaponFX
 	[Attribute("0.4", UIWidgets.Auto, "Seconds the projectile and trail stay after arriving, so smoke can fade.", category: "Projectile")]
 	float m_fLinger;
 
+	// ---- Instant visible laser beam ---------------------------------------------------------------
+	// One lightweight client-only mesh stretched from muzzle to raycast endpoint.
+	// No collision, replication or damage. Leave empty for weapons that don't use lasers.
+	[Attribute("", UIWidgets.ResourceNamePicker, "Instant visible beam prefab (.et): use Mech Core CGS_LaserBeam.et for hitscan lasers.", params: "et", category: "Laser Beam")]
+	ResourceName m_sBeamPrefab;
+
+	[Attribute("0.15", UIWidgets.Auto, "Seconds the whole beam remains visible after firing.", category: "Laser Beam")]
+	float m_fBeamDuration;
+
+	[Attribute("0.18", UIWidgets.Auto, "Beam radius/width scale (mesh local X and Y).", category: "Laser Beam")]
+	float m_fBeamWidth;
+
+	[Attribute("false", UIWidgets.CheckBox, "Continuous laser: one beam stays visible while the trigger is held, updating on each damage tick. OFF = short pulse per shot.", category: "Laser Beam")]
+	bool m_bBeamContinuous;
+
+	[Attribute("1.25", UIWidgets.Auto, "Failsafe: turn off a held beam if no new shot update arrives for this many seconds (e.g. lost release, overheat or despawn).", category: "Laser Beam")]
+	float m_fBeamIdleTimeout;
+
 	// ---- Impact --------------------------------------------------------------------------------
 	[Attribute("", UIWidgets.ResourceNamePicker, "Impact particle (.ptc).", params: "ptc", category: "Impact")]
 	ResourceName m_sImpactParticle;
@@ -84,7 +102,20 @@ class BFA_MechProjectileVisual
 	bool m_bServerImpact;
 	bool m_bArrived;
 	IEntity m_pEntity;
+	GenericEntity m_pBeam;
+	float m_fBeamRemaining;
 	ParticleEffectEntity m_pTrail;
+}
+
+//------------------------------------------------------------------------------------------------
+//! One LIVE beam per active laser hardpoint, updated by periodic authoritative shot RPCs.
+//! Damage is NOT handled here. Safe for two arms and many simultaneous emitters.
+class BFA_MechContinuousBeamVisual
+{
+	int m_iHardpoint;
+	GenericEntity m_pEntity;
+	int m_iLastUpdateMs;
+	float m_fIdleTimeout;
 }
 
 //------------------------------------------------------------------------------------------------

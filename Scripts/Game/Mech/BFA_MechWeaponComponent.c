@@ -122,6 +122,7 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 	protected bool m_bServerFireTickRunning;
 	protected ref array<ref BFA_MechTracerVisual> m_aTracerVisuals = {};
 	protected ref array<ref BFA_MechProjectileVisual> m_aProjectiles = {};
+	protected ref array<ref BFA_MechContinuousBeamVisual> m_aContinuousBeams = {};
 	protected bool m_bProjectileTickRunning;
 	protected int m_iLastProjectileTickMs;
 	protected int m_iNextShotId;
@@ -507,6 +508,114 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! A continuous laser gets only ONE local visible mesh per hardpoint. Subsequent
+	//! authoritative damage ticks move the SAME mesh to the newest muzzle/impact ray.
+	//! No extra damage, collision, physics bodies or network updates are created.
+	protected void UpdateContinuousBeamLocal(int hardpointIndex, BFA_MechWeaponFX fx, vector start, vector end)
+	{
+		if (!fx || fx.m_sBeamPrefab.IsEmpty() || hardpointIndex < 0 || System.IsConsoleApp())
+			return;
+
+		vector direction = end - start;
+		float distance = direction.Length();
+		if (distance < 0.01)
+			return;
+		direction.Normalize();
+
+		BFA_MechContinuousBeamVisual beam;
+		foreach (BFA_MechContinuousBeamVisual existing : m_aContinuousBeams)
+		{
+			if (existing && existing.m_iHardpoint == hardpointIndex)
+			{
+				beam = existing;
+				break;
+			}
+		}
+
+		if (!beam)
+		{
+			Resource beamPrefab = Resource.Load(fx.m_sBeamPrefab);
+			if (!beamPrefab || !beamPrefab.IsValid())
+			{
+				Print("[BFA LASER FX] Missing beam prefab: " + fx.m_sBeamPrefab, LogLevel.WARNING);
+				return;
+			}
+			EntitySpawnParams spawn = new EntitySpawnParams();
+			spawn.TransformMode = ETransformMode.WORLD;
+			Math3D.MatrixIdentity4(spawn.Transform);
+			spawn.Transform[3] = start;
+
+			GenericEntity entity = GenericEntity.Cast(GetGame().SpawnEntityPrefabLocal(beamPrefab, GetOwner().GetWorld(), spawn));
+			if (!entity)
+				return;
+			MakeVisualOnly(entity);
+			entity.SetFlags(EntityFlags.ACTIVE | EntityFlags.SET_RENDERED);
+			entity.SetVComponentFlags(VCFlags.NOFILTER | VCFlags.DYNAMICBBOX | VCFlags.NOSHADOW | VCFlags.NOLIGHT);
+			entity.SetFixedLOD(0);
+			beam = new BFA_MechContinuousBeamVisual();
+			beam.m_iHardpoint = hardpointIndex;
+			beam.m_pEntity = entity;
+			m_aContinuousBeams.Insert(beam);
+		}
+
+		if (!beam.m_pEntity)
+			return;
+
+		vector matrix[4];
+		vector up = vector.Up;
+		if (Math.AbsFloat(vector.Dot(direction, up)) > 0.98)
+			up = "1 0 0";
+		Math3D.DirectionAndUpMatrix(direction, up, matrix);
+		float width = Math.Max(fx.m_fBeamWidth, 0.025);
+		matrix[0] = matrix[0] * width;
+		matrix[1] = matrix[1] * width;
+		matrix[2] = matrix[2] * (distance * 0.5);
+		matrix[3] = start + direction * (distance * 0.5);
+		beam.m_pEntity.SetWorldTransform(matrix);
+		beam.m_pEntity.Show(true);
+		beam.m_pEntity.Update();
+		beam.m_iLastUpdateMs = System.GetTickCount();
+		beam.m_fIdleTimeout = Math.Max(fx.m_fBeamIdleTimeout, 0.5);
+
+		StartProjectileTick();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Called on the server after the player releases fire, or when a module unbinds.
+	//! The reliable stop RPC prevents a held beam from hanging on remote players.
+	void ServerStopModuleBeam(BFA_MechWeaponModuleComponent module)
+	{
+		if (!Replication.IsServer() || !module)
+			return;
+		int hardpointIndex = module.GetHardpointIndex();
+		if (hardpointIndex < 0)
+			return;
+		if (!System.IsConsoleApp())
+			StopContinuousBeamLocal(hardpointIndex);
+		Rpc(RpcDo_StopModuleBeam, hardpointIndex);
+	}
+
+	[RplRpc(RplChannel.Reliable, RplRcver.Broadcast)]
+	protected void RpcDo_StopModuleBeam(int hardpointIndex)
+	{
+		if (!System.IsConsoleApp())
+			StopContinuousBeamLocal(hardpointIndex);
+	}
+
+	protected void StopContinuousBeamLocal(int hardpointIndex)
+	{
+		for (int i = m_aContinuousBeams.Count() - 1; i >= 0; i--)
+		{
+			BFA_MechContinuousBeamVisual beam = m_aContinuousBeams[i];
+			if (!beam || beam.m_iHardpoint != hardpointIndex)
+				continue;
+			if (beam.m_pEntity)
+				SCR_EntityHelper.DeleteEntityAndChildren(beam.m_pEntity);
+			m_aContinuousBeams.Remove(i);
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
 	protected void PlayShotLocal(int hardpointIndex, int shotId, vector start, vector end, int flags, float speed, float length, float thickness)
 	{
 		BFA_MechWeaponModuleComponent module = FindLocalModule(hardpointIndex);
@@ -542,6 +651,48 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 
 		if (fx)
 		{
+			// Hitscan laser visuals are full-length beams displayed immediately.
+			// The existing moving projectile/trail effects remain independently usable.
+			if (fx.m_bBeamContinuous && hardpointIndex >= 0)
+			{
+				UpdateContinuousBeamLocal(hardpointIndex, fx, start, end);
+			}
+			else if (!fx.m_sBeamPrefab.IsEmpty())
+			{
+				Resource beamPrefab = Resource.Load(fx.m_sBeamPrefab);
+				if (beamPrefab && beamPrefab.IsValid())
+				{
+					EntitySpawnParams beamSpawn = new EntitySpawnParams();
+					beamSpawn.TransformMode = ETransformMode.WORLD;
+					Math3D.MatrixIdentity4(beamSpawn.Transform);
+					beamSpawn.Transform[3] = start;
+					visual.m_pBeam = GenericEntity.Cast(GetGame().SpawnEntityPrefabLocal(beamPrefab, GetOwner().GetWorld(), beamSpawn));
+					if (visual.m_pBeam)
+					{
+						MakeVisualOnly(visual.m_pBeam);
+						// Bundled laser-beam mesh is a centered sphere. Stretch it to
+						// span muzzle-to-impact like a luminous straight capsule.
+						vector beamMatrix[4];
+						vector beamUp = vector.Up;
+						if (Math.AbsFloat(vector.Dot(dir, beamUp)) > 0.98)
+							beamUp = "1 0 0";
+						Math3D.DirectionAndUpMatrix(dir, beamUp, beamMatrix);
+						float beamWidth = Math.Max(fx.m_fBeamWidth, 0.025);
+						beamMatrix[0] = beamMatrix[0] * beamWidth;
+						beamMatrix[1] = beamMatrix[1] * beamWidth;
+						beamMatrix[2] = beamMatrix[2] * (distance * 0.5);
+						beamMatrix[3] = start + dir * (distance * 0.5);
+						visual.m_pBeam.SetWorldTransform(beamMatrix);
+						visual.m_pBeam.SetFlags(EntityFlags.ACTIVE | EntityFlags.SET_RENDERED);
+						visual.m_pBeam.SetVComponentFlags(VCFlags.NOFILTER | VCFlags.DYNAMICBBOX | VCFlags.NOSHADOW | VCFlags.NOLIGHT);
+						visual.m_pBeam.SetFixedLOD(0);
+						visual.m_pBeam.Show(true);
+						visual.m_pBeam.Update();
+						visual.m_fBeamRemaining = Math.Max(fx.m_fBeamDuration, 0.04);
+					}
+				}
+			}
+
 			if (fx.m_fProjectileSpeed > 0)
 				visual.m_fSpeed = fx.m_fProjectileSpeed;
 
@@ -577,6 +728,12 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 				visual.m_pTrail = ParticleEffectEntity.SpawnParticleEffect(fx.m_sTrailParticle, trailParams);
 			}
 		}
+
+		// Pure laser beams are hitscan: impact visuals should not wait for an
+		// imaginary bullet to cross the range. Keep projectile movement untouched
+		// if a weapon deliberately configures a model/trail alongside its beam.
+		if (fx && !fx.m_sBeamPrefab.IsEmpty() && fx.m_sProjectilePrefab.IsEmpty() && fx.m_sTrailParticle.IsEmpty())
+			visual.m_fSpeed = Math.Max(visual.m_fSpeed, distance / 0.016);
 
 		m_aProjectiles.Insert(visual);
 		while (m_aProjectiles.Count() > 256)
@@ -622,6 +779,19 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		float dt = Math.Clamp((nowMs - m_iLastProjectileTickMs) * 0.001, 0.0, 0.1);
 		m_iLastProjectileTickMs = nowMs;
 
+		// Failsafe cleanup when a release RPC is lost, an overheated weapon
+		// stops ticking, or the module disappears. The normal stop is immediate.
+		for (int beamIndex = m_aContinuousBeams.Count() - 1; beamIndex >= 0; beamIndex--)
+		{
+			BFA_MechContinuousBeamVisual beam = m_aContinuousBeams[beamIndex];
+			if (!beam || !beam.m_pEntity || nowMs - beam.m_iLastUpdateMs > Math.Max(beam.m_fIdleTimeout, 0.5) * 1000.0)
+			{
+				if (beam && beam.m_pEntity)
+					SCR_EntityHelper.DeleteEntityAndChildren(beam.m_pEntity);
+				m_aContinuousBeams.Remove(beamIndex);
+			}
+		}
+
 		for (int i = m_aProjectiles.Count() - 1; i >= 0; i--)
 		{
 			BFA_MechProjectileVisual visual = m_aProjectiles[i];
@@ -629,6 +799,16 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 			{
 				m_aProjectiles.Remove(i);
 				continue;
+			}
+
+			if (visual.m_pBeam)
+			{
+				visual.m_fBeamRemaining -= dt;
+				if (visual.m_fBeamRemaining <= 0)
+				{
+					SCR_EntityHelper.DeleteEntityAndChildren(visual.m_pBeam);
+					visual.m_pBeam = null;
+				}
 			}
 
 			if (visual.m_bArrived)
@@ -654,7 +834,7 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 			MoveProjectileVisual(visual, visual.m_vStart + visual.m_vDir * travelled);
 		}
 
-		if (m_aProjectiles.IsEmpty())
+		if (m_aProjectiles.IsEmpty() && m_aContinuousBeams.IsEmpty())
 			StopProjectileTick();
 	}
 
@@ -699,10 +879,14 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		if (visual.m_pEntity)
 			SCR_EntityHelper.DeleteEntityAndChildren(visual.m_pEntity);
 
+		if (visual.m_pBeam)
+			SCR_EntityHelper.DeleteEntityAndChildren(visual.m_pBeam);
+
 		if (visual.m_pTrail)
 			delete visual.m_pTrail;
 
 		visual.m_pEntity = null;
+		visual.m_pBeam = null;
 		visual.m_pTrail = null;
 	}
 
@@ -1730,6 +1914,12 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		foreach (BFA_MechProjectileVisual visual : m_aProjectiles)
 			DestroyProjectileVisual(visual);
 		m_aProjectiles.Clear();
+		foreach (BFA_MechContinuousBeamVisual beam : m_aContinuousBeams)
+		{
+			if (beam && beam.m_pEntity)
+				SCR_EntityHelper.DeleteEntityAndChildren(beam.m_pEntity);
+		}
+		m_aContinuousBeams.Clear();
 		m_bProjectileTickRunning = false;
 
 		m_bServerFireTickRunning = false;
