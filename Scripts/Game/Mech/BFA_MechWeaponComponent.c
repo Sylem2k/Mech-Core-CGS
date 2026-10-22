@@ -553,7 +553,7 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 					beamSpawn.TransformMode = ETransformMode.WORLD;
 					Math3D.MatrixIdentity4(beamSpawn.Transform);
 					beamSpawn.Transform[3] = start;
-					visual.m_pBeam = GetGame().SpawnEntityPrefabLocal(beamPrefab, GetOwner().GetWorld(), beamSpawn);
+					visual.m_pBeam = GenericEntity.Cast(GetGame().SpawnEntityPrefabLocal(beamPrefab, GetOwner().GetWorld(), beamSpawn));
 					if (visual.m_pBeam)
 					{
 						MakeVisualOnly(visual.m_pBeam);
@@ -571,7 +571,10 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 						beamMatrix[3] = start + dir * (distance * 0.5);
 						visual.m_pBeam.SetWorldTransform(beamMatrix);
 						visual.m_pBeam.SetFlags(EntityFlags.ACTIVE | EntityFlags.SET_RENDERED);
+						visual.m_pBeam.SetVComponentFlags(VCFlags.NOFILTER | VCFlags.DYNAMICBBOX | VCFlags.NOSHADOW | VCFlags.NOLIGHT);
+						visual.m_pBeam.SetFixedLOD(0);
 						visual.m_pBeam.Show(true);
+						visual.m_pBeam.Update();
 						visual.m_fBeamRemaining = Math.Max(fx.m_fBeamDuration, 0.04);
 					}
 				}
