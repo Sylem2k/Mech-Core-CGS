@@ -65,6 +65,37 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	[Attribute("75", UIWidgets.Auto, "Maximum distance from the mech's throw point to a marked destination (metres).", category: "Tactical Throw V2")]
 	protected float m_fMarkMaximumDistance;
 
+	[Attribute("true", UIWidgets.CheckBox, "Raycast from the character eye height along its forward aim direction. This is NOT yet client camera crosshair targeting.", category: "Tactical Throw V2")]
+	protected bool m_bTraceMarkTarget;
+
+	[Attribute("1.6", UIWidgets.Auto, "Height above feet where target trace starts.", category: "Tactical Throw V2")]
+	protected float m_fMarkEyeHeight;
+
+	[Attribute("", UIWidgets.ResourcePickerThumbnail, "Optional visible world particle at marked landing location. Supply a persistent marker .ptc; no default FX.", category: "Tactical Throw V2", params: "ptc")]
+	protected ResourceName m_sMarkEffect;
+
+	protected ParticleEffectEntity m_pMarkEffectInstance;
+
+	protected void ClearMarkEffect()
+	{
+		if (!m_pMarkEffectInstance)
+			return;
+		delete m_pMarkEffectInstance;
+		m_pMarkEffectInstance = null;
+	}
+
+	protected void ShowMarkEffect(vector worldPosition)
+	{
+		ClearMarkEffect();
+		if (m_sMarkEffect.IsEmpty())
+			return;
+		ParticleEffectEntitySpawnParams params();
+		params.Transform[3] = worldPosition;
+		m_pMarkEffectInstance = ParticleEffectEntity.SpawnParticleEffect(m_sMarkEffect, params);
+		if (!m_pMarkEffectInstance)
+			Print("[CGS THROW MARK] configured particle did not spawn", LogLevel.WARNING);
+	}
+
 	protected bool m_bHasMarkedTarget;
 	protected vector m_vMarkedTarget;
 	protected int m_iMarkedPlayerId;
@@ -101,14 +132,28 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		if (id <= 0 || manager.GetPlayerControlledEntity(id) != user)
 			return false;
 		vector direction = user.GetTransformAxis(2);
-		direction[1] = 0;
 		if (direction.LengthSq() < 0.01)
 			return false;
 		direction.Normalize();
-		vector candidate = user.GetOrigin() + direction * Math.Clamp(m_fMarkMaximumDistance, 5, 100);
 		BaseWorld world = GetGame().GetWorld();
 		if (!world)
 			return false;
+		float maxRange = Math.Clamp(m_fMarkMaximumDistance, 5, 100);
+		vector eye = user.GetOrigin() + vector.Up * Math.Max(m_fMarkEyeHeight, 0.5);
+		vector candidate = eye + direction * maxRange;
+		if (m_bTraceMarkTarget)
+		{
+			TraceParam trace = new TraceParam();
+			trace.Start = eye;
+			trace.End = candidate;
+			trace.Flags = TraceFlags.WORLD | TraceFlags.ENTS;
+			trace.Exclude = user;
+			trace.LayerMask = EPhysicsLayerPresets.Projectile;
+			float fraction = world.TraceMove(trace, null);
+			if (fraction < 1.0)
+				candidate = eye + (candidate - eye) * fraction;
+		}
+		// Target ground elevation, not a high wall or sky location.
 		candidate[1] = world.GetSurfaceY(candidate[0], candidate[2]);
 		vector mechPos = GetOwner().GetOrigin();
 		if (vector.Distance(mechPos, candidate) > Math.Clamp(m_fMarkMaximumDistance, 5, 100) + 10)
@@ -116,7 +161,8 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		m_vMarkedTarget = candidate;
 		m_iMarkedPlayerId = id;
 		m_bHasMarkedTarget = true;
-		Print(string.Format("[CGS THROW MARK] owner=%1 landing target=%2 (character facing, terrain height)", id, candidate));
+		ShowMarkEffect(candidate);
+		Print(string.Format("[CGS THROW MARK] owner=%1 landing target=%2 (aim-direction trace with ground projection)", id, candidate));
 		return true;
 	}
 
@@ -312,6 +358,7 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	{
 		if (Replication.IsServer())
 			s_aActiveThrowers.RemoveItem(this);
+		ClearMarkEffect();
 		super.OnDelete(owner);
 	}
 
@@ -432,6 +479,7 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		{
 			Print(string.Format("[CGS THROW MARK] using selected destination=%1", target));
 			m_bHasMarkedTarget = false;
+			ClearMarkEffect();
 		}
 		m_vPlayerStart = user.GetOrigin();
 		m_vThrowStart = from;
