@@ -171,6 +171,19 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	protected float m_fV2Elapsed;
 	protected vector m_vV2StartPos;
 	protected vector m_vV2LaunchVelocity;
+	[Attribute("false", UIWidgets.CheckBox, "V2 TEST: raise character slightly to clear grounded state before applying launch velocity. OFF preserves prior V2 behavior.", category: "Tactical Throw V2")]
+	protected bool m_bV2GroundRelease;
+
+	[Attribute("1.2", UIWidgets.Auto, "Ground release vertical clearance (metres); only used when Ground Release enabled.", category: "Tactical Throw V2")]
+	protected float m_fV2ReleaseHeight;
+
+	[Attribute("0.08", UIWidgets.Auto, "Time after one-time lift before applying native launch velocity, seconds.", category: "Tactical Throw V2")]
+	protected float m_fV2ReleaseDelay;
+
+	protected bool m_bV2PendingRelease;
+	protected float m_fV2ReleaseElapsed;
+
+
 	protected vector m_vV2PreviousPos;
 	protected float m_fV2MovementAccum;
 	protected int m_iV2ProbeSamples;
@@ -205,6 +218,34 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	{
 		if (!Replication.IsServer() || !m_pThrownCharacter || !GetGame())
 			return;
+
+		// Optional test: a single gentle lift clears the grounded controller,
+		// then we issue native velocity once on a later frame. No repeated teleporting.
+		if (m_bV2PendingRelease)
+		{
+			m_fV2ReleaseElapsed += Math.Max(timeSlice, 0);
+			if (m_fV2ReleaseElapsed >= Math.Max(m_fV2ReleaseDelay, 0.02))
+			{
+				m_bV2PendingRelease = false;
+				Physics releasePhysics = m_pThrownCharacter.GetPhysics();
+				if (!releasePhysics)
+				{
+					Print("[CGS THROW V2] ground release failed: character physics unavailable", LogLevel.WARNING);
+					m_pThrownCharacter = null;
+					return;
+				}
+				vector releasePosition = m_pThrownCharacter.GetOrigin();
+				m_vV2StartPos = releasePosition;
+				m_vV2PreviousPos = releasePosition;
+				m_fV2Elapsed = 0;
+				m_fV2MovementAccum = 0;
+				m_iV2ProbeSamples = 0;
+				m_bV2Probing = true;
+				releasePhysics.SetVelocity(m_vV2LaunchVelocity);
+				Print(string.Format("[CGS THROW V2] delayed launch from=%1 velocity=%2 actualVelocity=%3", releasePosition, m_vV2LaunchVelocity, releasePhysics.GetVelocity()));
+			}
+			return;
+		}
 
 		// V2 uses regular character physics rather than SetOrigin while native flight works.
 		// Earlier raw velocity experiments did not visibly move players, so always probe.
@@ -527,10 +568,24 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 			m_vV2LaunchVelocity = forward * (distance / Math.Max(airtime, 0.1));
 			m_vV2LaunchVelocity[1] = vertical;
 			m_fV2Elapsed = 0;
-			m_bV2Probing = true;
-			vector velocityBefore = body.GetVelocity();
-			body.SetVelocity(m_vV2LaunchVelocity);
-			Print(string.Format("[CGS THROW V2] launch attempt player=%1 desired=%2 before=%3 immediatelyAfter=%4 start=%5", playerId, m_vV2LaunchVelocity, velocityBefore, body.GetVelocity(), m_vV2StartPos));
+			m_bV2PendingRelease = false;
+			if (m_bV2GroundRelease)
+			{
+				vector lifted = user.GetOrigin();
+				lifted[1] = lifted[1] + Math.Clamp(m_fV2ReleaseHeight, 0.5, 2.0);
+				// Only move the character once; future flight is controlled by native physics.
+				user.SetOrigin(lifted);
+				m_bV2PendingRelease = true;
+				m_fV2ReleaseElapsed = 0;
+				Print(string.Format("[CGS THROW V2] one-time ground release start=%1 lifted=%2 actual=%3; delayed velocity pending", m_vV2StartPos, lifted, user.GetOrigin()));
+			}
+			else
+			{
+				m_bV2Probing = true;
+				vector velocityBefore = body.GetVelocity();
+				body.SetVelocity(m_vV2LaunchVelocity);
+				Print(string.Format("[CGS THROW V2] launch attempt player=%1 desired=%2 before=%3 immediatelyAfter=%4 start=%5", playerId, m_vV2LaunchVelocity, velocityBefore, body.GetVelocity(), m_vV2StartPos));
+			}
 		}
 		Print(string.Format("[CGS THROW TEST] arc started player=%1 from=%2 to=%3 duration=%4", playerId, from, m_vThrowEnd, airtime));
 		CGS_MechBrainComponent brain = GetBrain();
