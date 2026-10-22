@@ -147,17 +147,17 @@ class BFA_MechLasCannonModuleComponent : BFA_MechWeaponModuleComponent
 
 
 	//------------------------------------------------------------------------------------------------
-	protected void ApplyDamage(IEntity hitEntity, IEntity instigatorEntity)
+	protected void ApplyDamage(IEntity hitEntity, IEntity instigatorEntity, vector hitPosition, vector hitDirection)
 	{
 		if (!Replication.IsServer() || m_fDamage <= 0 || !hitEntity)
 			return;
 
 		// Shared damage path now applies infantry effectiveness and a tunable armour floor.
-		float dealt = DealDamage(hitEntity, m_fDamage, EDamageType.KINETIC, hitEntity.GetOrigin(), vector.Forward, instigatorEntity);
+		float dealt = DealDamage(hitEntity, m_fDamage, EDamageType.KINETIC, hitPosition, hitDirection, instigatorEntity);
 
 		// Legacy optional armour-piercing fallback: only when NO health was removed at all.
 		if (m_bArmorPiercingFallback && dealt <= 0.001 && m_fArmorPiercingMultiplier > 0)
-			dealt += DealDamage(hitEntity, m_fDamage * m_fArmorPiercingMultiplier, EDamageType.TRUE, hitEntity.GetOrigin(), vector.Forward, instigatorEntity);
+			dealt += DealDamage(hitEntity, m_fDamage * m_fArmorPiercingMultiplier, EDamageType.TRUE, hitPosition, hitDirection, instigatorEntity);
 
 		if (m_bDebug)
 			Print(string.Format("[BFA LAS MODULE] target=%1 applied=%2 requested=%3", hitEntity, dealt, m_fDamage));
@@ -178,7 +178,7 @@ class BFA_MechLasCannonModuleComponent : BFA_MechWeaponModuleComponent
 		IEntity hitEntity;
 		vector end = TraceShot(start, direction, m_fRange, hitEntity);
 
-		ApplyDamage(hitEntity, instigatorEntity);
+		ApplyDamage(hitEntity, instigatorEntity, end, direction);
 		BroadcastShot(start, end, hitEntity != null, m_fTracerSpeed, m_fTracerLength, m_fTracerThickness);
 
 		if (m_bDebug)
