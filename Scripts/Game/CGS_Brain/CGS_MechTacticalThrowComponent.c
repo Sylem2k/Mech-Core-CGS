@@ -44,6 +44,9 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	[Attribute("0.4", UIWidgets.Auto, "Seconds to gently stabilize velocity at end of throw (test only).", category: "Tactical Throw")]
 	protected float m_fLandingStabilizeSeconds;
 
+	[Attribute("false", UIWidgets.CheckBox, "CAMERA EXPERIMENT: explicitly Update() the thrown character after SetOrigin each frame. OFF tests whether forcing the entity update causes camera stutter; ON is the previous behavior.", category: "Tactical Throw")]
+	protected bool m_bForceCharacterUpdateEachFrame;
+
 	protected vector m_vPlayerStart;
 	protected float m_fLandingStabilizeLeft;
 	protected bool m_bLandingStabilizing;
@@ -140,7 +143,11 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		// No wall/roof collision scan or landing protection yet: TEST WORLD ONLY.
 		vector before = m_pThrownCharacter.GetOrigin();
 		m_pThrownCharacter.SetOrigin(position);
-		m_pThrownCharacter.Update();
+		// SetOrigin updates the spatial location; the extra explicit entity Update
+		// might be interfering with the normal character-controller/camera update.
+		// Test with it disabled; switch it back on to compare with the previous build.
+		if (m_bForceCharacterUpdateEachFrame)
+			m_pThrownCharacter.Update();
 
 		if (m_iThrowLogFrames < 6)
 		{
