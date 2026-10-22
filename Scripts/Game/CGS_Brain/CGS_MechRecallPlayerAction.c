@@ -1,6 +1,6 @@
-// Remote recall is a PLAYER-side action; attach to a player's ActionsManagerComponent,
-// not to the mech. The player's owned companion is looked up server-side.
-// No V1 prefabs are changed. Separate phone/radio or keybind UI can be added later.
+// Recall action for a handheld CGS Mech Command Radio or a player-side context.
+// The item must be held/carried by the caller; the server verifies player identity
+// and assigned mech ownership before the companion can switch to FOLLOW.
 class CGS_MechRecallPlayerAction : ScriptedUserAction
 {
 	override bool GetActionNameScript(out string outName)
@@ -12,7 +12,7 @@ class CGS_MechRecallPlayerAction : ScriptedUserAction
 	override bool CanBeShownScript(IEntity user)
 	{
 		IEntity owner = GetOwner();
-		return user && ChimeraCharacter.Cast(user) && owner && (user == owner || user.GetRootParent() == owner);
+		return user && ChimeraCharacter.Cast(user) && owner && (owner == user || owner.GetRootParent() == user);
 	}
 
 	override bool CanBePerformedScript(IEntity user)
