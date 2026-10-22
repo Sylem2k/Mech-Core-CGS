@@ -542,6 +542,40 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 
 		if (fx)
 		{
+			// Hitscan laser visuals are full-length beams displayed immediately.
+			// The existing moving projectile/trail effects remain independently usable.
+			if (!fx.m_sBeamPrefab.IsEmpty())
+			{
+				Resource beamPrefab = Resource.Load(fx.m_sBeamPrefab);
+				if (beamPrefab && beamPrefab.IsValid())
+				{
+					EntitySpawnParams beamSpawn = new EntitySpawnParams();
+					beamSpawn.TransformMode = ETransformMode.WORLD;
+					Math3D.MatrixIdentity4(beamSpawn.Transform);
+					beamSpawn.Transform[3] = start;
+					visual.m_pBeam = GetGame().SpawnEntityPrefabLocal(beamPrefab, GetOwner().GetWorld(), beamSpawn);
+					if (visual.m_pBeam)
+					{
+						MakeVisualOnly(visual.m_pBeam);
+						// Bundled laser-beam mesh is a centered sphere. Stretch it to
+						// span muzzle-to-impact like a luminous straight capsule.
+						vector beamMatrix[4];
+						vector beamUp = vector.Up;
+						if (Math.AbsFloat(vector.Dot(dir, beamUp)) > 0.98)
+							beamUp = "1 0 0";
+						Math3D.DirectionAndUpMatrix(dir, beamUp, beamMatrix);
+						float beamWidth = Math.Max(fx.m_fBeamWidth, 0.025);
+						beamMatrix[0] = beamMatrix[0] * beamWidth;
+						beamMatrix[1] = beamMatrix[1] * beamWidth;
+						beamMatrix[2] = beamMatrix[2] * (distance * 0.5);
+						beamMatrix[3] = start + dir * (distance * 0.5);
+						visual.m_pBeam.SetWorldTransform(beamMatrix);
+						visual.m_pBeam.SetFlags(EntityFlags.ACTIVE | EntityFlags.SET_RENDERED);
+						visual.m_pBeam.Show(true);
+						visual.m_fBeamRemaining = Math.Max(fx.m_fBeamDuration, 0.04);
+					}
+				}
+			}
 			if (fx.m_fProjectileSpeed > 0)
 				visual.m_fSpeed = fx.m_fProjectileSpeed;
 
@@ -631,6 +665,16 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 				continue;
 			}
 
+			if (visual.m_pBeam)
+			{
+				visual.m_fBeamRemaining -= dt;
+				if (visual.m_fBeamRemaining <= 0)
+				{
+					SCR_EntityHelper.DeleteEntityAndChildren(visual.m_pBeam);
+					visual.m_pBeam = null;
+				}
+			}
+
 			if (visual.m_bArrived)
 			{
 				visual.m_fLingerLeft -= dt;
@@ -699,10 +743,14 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		if (visual.m_pEntity)
 			SCR_EntityHelper.DeleteEntityAndChildren(visual.m_pEntity);
 
+		if (visual.m_pBeam)
+			SCR_EntityHelper.DeleteEntityAndChildren(visual.m_pBeam);
+
 		if (visual.m_pTrail)
 			delete visual.m_pTrail;
 
 		visual.m_pEntity = null;
+		visual.m_pBeam = null;
 		visual.m_pTrail = null;
 	}
 
