@@ -1,0 +1,14 @@
+// Reusable bright beam material. Applied only to a short-lived visual mesh.
+MatPBRBasicGlass {
+ Color 0.18 0.83 1 1
+ Emissive 0.24 0.92 1 1
+ EmissiveLV 5
+ EmissiveAbsoluteLV 0
+ AlphaMul 0.94
+ BlendMode AlphaBlend
+ NormalPower 0
+ FresnelPower 1
+ Backscatterig 0
+ RefractionIntensity 0
+ DimIntensity 1
+}

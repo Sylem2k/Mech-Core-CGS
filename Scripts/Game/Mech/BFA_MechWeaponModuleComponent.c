@@ -761,6 +761,16 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 
 		m_bTriggerHeld = false;
 		OnTriggerUp(instigator);
+
+		// Continuous lasers reuse a single live beam on every client.
+		// Stop the presentation reliably when the trigger is released;
+		// hitscan damage and heat remain in FireShot()/ConsumeRound().
+		if (m_FX && m_FX.m_bBeamContinuous && m_pMechOwner)
+		{
+			BFA_MechWeaponComponent router = BFA_MechWeaponComponent.Cast(m_pMechOwner.FindComponent(BFA_MechWeaponComponent));
+			if (router)
+				router.ServerStopModuleBeam(this);
+		}
 	}
 
 	//------------------------------------------------------------------------------------------------
