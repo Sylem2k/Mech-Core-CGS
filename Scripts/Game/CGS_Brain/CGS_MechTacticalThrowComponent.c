@@ -1,6 +1,6 @@
 //------------------------------------------------------------------------------------------------
 //! EXPERIMENTAL: server-only arcing launch. Not activated on any shipping prefab.
-//! V2: optionally probe physical airborne movement, falling back to the tested V1 arc if the character does not move.
+//! V2: physics airborne movement. Failed probes never transition into V1 SetOrigin flight.
 [ComponentEditorProps(category: "CGS MechCore", description: "EXPERIMENTAL companion tactical throw; OFF by default.")]
 class CGS_MechTacticalThrowComponentClass : ScriptComponentClass
 {
@@ -47,10 +47,10 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	[Attribute("false", UIWidgets.CheckBox, "CAMERA EXPERIMENT: explicitly Update() the thrown character after SetOrigin each frame. OFF tests whether forcing the entity update causes camera stutter; ON is the previous behavior.", category: "Tactical Throw")]
 	protected bool m_bForceCharacterUpdateEachFrame;
 
-	[Attribute("false", UIWidgets.CheckBox, "V2 TEST: try native physics-driven flight before using the proven scripted V1 arc. OFF is V1 behavior.", category: "Tactical Throw V2")]
+	[Attribute("false", UIWidgets.CheckBox, "V2 TEST: use physics-driven flight. If its probe fails, stop instead of automatically teleporting via V1. OFF selects V1 manually.", category: "Tactical Throw V2")]
 	protected bool m_bV2TryPhysicsFlight;
 
-	[Attribute("0.35", UIWidgets.Auto, "Time to confirm the physics launch actually moves the character before reverting to V1.", category: "Tactical Throw V2")]
+	[Attribute("0.35", UIWidgets.Auto, "Time to confirm physics launch movement. A failed V2 probe releases the character without teleporting into V1.", category: "Tactical Throw V2")]
 	protected float m_fV2ProbeSeconds;
 
 	[Attribute("0.7", UIWidgets.Auto, "Distance player must move during probe before treating native launch as working.", category: "Tactical Throw V2")]
@@ -218,9 +218,12 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 				m_bV2Probing = false;
 				if (displacement < Math.Max(m_fV2MinimumMovement, 0.2))
 				{
-					Print("[CGS THROW V2] no native movement; returning to scripted V1 arc", LogLevel.WARNING);
-					m_fThrowElapsed = 0;
-					m_vPlayerStart = actualPos;
+					// IMPORTANT: the old automatic V1 fallback teleported the player
+					// via SetOrigin and caused severe camera snapping. Never silently
+					// switch modes after the player has started a V2 physics launch.
+					Print(string.Format("[CGS THROW V2] native motion not confirmed; cancel V2 control without teleporting (start=%1 current=%2)", m_vV2StartPos, actualPos), LogLevel.WARNING);
+					m_bV2Flying = false;
+					m_pThrownCharacter = null;
 					return;
 				}
 				m_bV2Flying = true;
