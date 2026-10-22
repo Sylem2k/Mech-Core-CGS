@@ -61,6 +61,12 @@ class BFA_MechWeaponFX
 	[Attribute("0.18", UIWidgets.Auto, "Beam radius/width scale (mesh local X and Y).", category: "Laser Beam")]
 	float m_fBeamWidth;
 
+	[Attribute("false", UIWidgets.CheckBox, "Continuous laser: one beam stays visible while the trigger is held, updating on each damage tick. OFF = short pulse per shot.", category: "Laser Beam")]
+	bool m_bBeamContinuous;
+
+	[Attribute("3.0", UIWidgets.Auto, "Failsafe: turn off a held beam if no new shot update arrives for this many seconds (e.g. lost release, overheat or despawn).", category: "Laser Beam")]
+	float m_fBeamIdleTimeout;
+
 	// ---- Impact --------------------------------------------------------------------------------
 	[Attribute("", UIWidgets.ResourceNamePicker, "Impact particle (.ptc).", params: "ptc", category: "Impact")]
 	ResourceName m_sImpactParticle;
@@ -99,6 +105,17 @@ class BFA_MechProjectileVisual
 	GenericEntity m_pBeam;
 	float m_fBeamRemaining;
 	ParticleEffectEntity m_pTrail;
+}
+
+//------------------------------------------------------------------------------------------------
+//! One LIVE beam per active laser hardpoint, updated by periodic authoritative shot RPCs.
+//! Damage is NOT handled here. Safe for two arms and many simultaneous emitters.
+class BFA_MechContinuousBeamVisual
+{
+	int m_iHardpoint;
+	GenericEntity m_pEntity;
+	int m_iLastUpdateMs;
+	float m_fIdleTimeout;
 }
 
 //------------------------------------------------------------------------------------------------
