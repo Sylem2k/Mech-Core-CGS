@@ -585,12 +585,18 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 			// Test a native push from the player's actual position, avoiding a camera
 			// teleport to the mech socket. Use socket orientation to calculate direction.
 			m_vV2StartPos = user.GetOrigin();
+			float playerSurface = world.GetSurfaceY(m_vV2StartPos[0], m_vV2StartPos[2]);
+			float mechGap = vector.Distance(m_vV2StartPos, mech.GetOrigin());
+			vector originalVelocity = body.GetVelocity();
+			Print(string.Format("[CGS THROW V2 DIAG] player=%1 playerPos=%2 terrainY=%3 clearance=%4 mechGap=%5 initialVelocity=%6 socket=%7", playerId, m_vV2StartPos, playerSurface, m_vV2StartPos[1] - playerSurface, mechGap, originalVelocity, from));
+			if (m_vV2StartPos[1] < playerSurface - 0.2)
+				Print("[CGS THROW V2 DIAG] Player is below terrain surface; collision or character-ground state may block native launch", LogLevel.WARNING);
 			m_vV2LaunchVelocity = forward * (distance / Math.Max(airtime, 0.1));
 			m_vV2LaunchVelocity[1] = vertical;
 			m_fV2Elapsed = 0;
 			m_bV2Probing = true;
 			body.SetVelocity(m_vV2LaunchVelocity);
-			Print(string.Format("[CGS THROW V2] physics launch attempted player=%1 velocity=%2; probing", playerId, m_vV2LaunchVelocity));
+			Print(string.Format("[CGS THROW V2] physics launch attempted player=%1 velocity=%2 immediatelyAfter=%3; probing", playerId, m_vV2LaunchVelocity, body.GetVelocity()));
 		}
 		Print(string.Format("[CGS THROW TEST] arc started player=%1 from=%2 to=%3 duration=%4", playerId, from, m_vThrowEnd, airtime));
 		CGS_MechBrainComponent brain = GetBrain();
