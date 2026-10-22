@@ -12,7 +12,7 @@ class CGS_MechRecallPlayerAction : ScriptedUserAction
 	override bool CanBeShownScript(IEntity user)
 	{
 		IEntity owner = GetOwner();
-		return user && ChimeraCharacter.Cast(user) && owner && (owner == user || owner.GetRootParent() == user);
+		return user && ChimeraCharacter.Cast(user) && GetOwner();
 	}
 
 	override bool CanBePerformedScript(IEntity user)
