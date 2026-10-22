@@ -1,6 +1,6 @@
 //------------------------------------------------------------------------------------------------
 //! EXPERIMENTAL: server-only arcing launch. Not activated on any shipping prefab.
-//! Smoother velocity-matched launch transition is experimental; native character camera remains unchanged.
+//! V2: optionally probe physical airborne movement, falling back to the tested V1 arc if the character does not move.
 [ComponentEditorProps(category: "CGS MechCore", description: "EXPERIMENTAL companion tactical throw; OFF by default.")]
 class CGS_MechTacticalThrowComponentClass : ScriptComponentClass
 {
@@ -47,6 +47,24 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	[Attribute("false", UIWidgets.CheckBox, "CAMERA EXPERIMENT: explicitly Update() the thrown character after SetOrigin each frame. OFF tests whether forcing the entity update causes camera stutter; ON is the previous behavior.", category: "Tactical Throw")]
 	protected bool m_bForceCharacterUpdateEachFrame;
 
+	[Attribute("false", UIWidgets.CheckBox, "V2 TEST: try native physics-driven flight before using the proven scripted V1 arc. OFF is V1 behavior.", category: "Tactical Throw V2")]
+	protected bool m_bV2TryPhysicsFlight;
+
+	[Attribute("0.35", UIWidgets.Auto, "Time to confirm the physics launch actually moves the character before reverting to V1.", category: "Tactical Throw V2")]
+	protected float m_fV2ProbeSeconds;
+
+	[Attribute("0.7", UIWidgets.Auto, "Distance player must move during probe before treating native launch as working.", category: "Tactical Throw V2")]
+	protected float m_fV2MinimumMovement;
+
+	[Attribute("2.0", UIWidgets.Auto, "While native flight is active, slow downward speed this far above terrain. Terrain-only test.", category: "Tactical Throw V2")]
+	protected float m_fV2CushionHeight;
+
+	protected bool m_bV2Probing;
+	protected bool m_bV2Flying;
+	protected float m_fV2Elapsed;
+	protected vector m_vV2StartPos;
+	protected vector m_vV2LaunchVelocity;
+
 	protected vector m_vPlayerStart;
 	protected float m_fLandingStabilizeLeft;
 	protected bool m_bLandingStabilizing;
@@ -73,6 +91,65 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 	{
 		if (!Replication.IsServer() || !m_pThrownCharacter || !GetGame())
 			return;
+
+		// V2 uses regular character physics rather than SetOrigin while native flight works.
+		// Earlier raw velocity experiments did not visibly move players, so always probe.
+		if (m_bV2Probing || m_bV2Flying)
+		{
+			m_fV2Elapsed += Math.Max(timeSlice, 0);
+			vector actualPos = m_pThrownCharacter.GetOrigin();
+			Physics probePhysics = m_pThrownCharacter.GetPhysics();
+			BaseWorld probeWorld = GetGame().GetWorld();
+			if (m_bV2Probing && m_fV2Elapsed >= Math.Max(m_fV2ProbeSeconds, 0.15))
+			{
+				float displacement = vector.Distance(actualPos, m_vV2StartPos);
+				Print(string.Format("[CGS THROW V2] native motion probe displacement=%1 actual=%2", displacement, actualPos));
+				m_bV2Probing = false;
+				if (displacement < Math.Max(m_fV2MinimumMovement, 0.2))
+				{
+					Print("[CGS THROW V2] no native movement; returning to scripted V1 arc", LogLevel.WARNING);
+					m_fThrowElapsed = 0;
+					m_vPlayerStart = actualPos;
+					return;
+				}
+				m_bV2Flying = true;
+				Print("[CGS THROW V2] physics flight active; no forced character position updates");
+			}
+			if (m_bV2Flying)
+			{
+				if (!probePhysics || !probeWorld)
+				{
+					m_bV2Flying = false;
+					m_pThrownCharacter = null;
+					return;
+				}
+				float ground = probeWorld.GetSurfaceY(actualPos[0], actualPos[2]);
+				float clearance = actualPos[1] - ground;
+				vector v = probePhysics.GetVelocity();
+				// Apply fall cushioning near terrain, modeled on the old grav-chute logic.
+				if (clearance <= Math.Max(m_fV2CushionHeight, 1.0) && v[1] < 0)
+				{
+					v[1] = Math.Max(v[1], -2.0);
+					v[0] = v[0] * 0.35;
+					v[2] = v[2] * 0.35;
+					probePhysics.SetVelocity(v);
+				}
+				if (clearance <= 1.3 && m_fV2Elapsed > 0.8)
+				{
+					m_bV2Flying = false;
+					m_bLandingStabilizing = true;
+					m_fLandingStabilizeLeft = Math.Max(m_fLandingStabilizeSeconds, 0.1);
+					Print(string.Format("[CGS THROW V2] landing approached position=%1; stabilizing", actualPos));
+				}
+				else if (m_fV2Elapsed > 9.0)
+				{
+					Print("[CGS THROW V2] flight timeout; character returned to normal controller", LogLevel.WARNING);
+					m_bV2Flying = false;
+					m_pThrownCharacter = null;
+				}
+			}
+			return;
+		}
 
 		if (m_bLandingStabilizing)
 		{
@@ -278,6 +355,20 @@ class CGS_MechTacticalThrowComponent : ScriptComponent
 		m_fThrowApex = apex;
 		m_iThrowLogFrames = 0;
 		m_fNextThrowTime = now + Math.Max(m_fCooldown, 1.0);
+		m_bV2Probing = false;
+		m_bV2Flying = false;
+		if (m_bV2TryPhysicsFlight)
+		{
+			// Test a native push from the player's actual position, avoiding a camera
+			// teleport to the mech socket. Use socket orientation to calculate direction.
+			m_vV2StartPos = user.GetOrigin();
+			m_vV2LaunchVelocity = forward * (distance / Math.Max(airtime, 0.1));
+			m_vV2LaunchVelocity[1] = vertical;
+			m_fV2Elapsed = 0;
+			m_bV2Probing = true;
+			body.SetVelocity(m_vV2LaunchVelocity);
+			Print(string.Format("[CGS THROW V2] physics launch attempted player=%1 velocity=%2; probing", playerId, m_vV2LaunchVelocity));
+		}
 		Print(string.Format("[CGS THROW TEST] arc started player=%1 from=%2 to=%3 duration=%4", playerId, from, m_vThrowEnd, airtime));
 		CGS_MechBrainComponent brain = GetBrain();
 		if (brain)
