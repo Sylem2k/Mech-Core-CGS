@@ -566,10 +566,13 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		if (Math.AbsFloat(vector.Dot(direction, up)) > 0.98)
 			up = "1 0 0";
 		Math3D.DirectionAndUpMatrix(direction, up, matrix);
-		float width = Math.Max(fx.m_fBeamWidth, 0.025);
+		// lasbolt.txo source geometry: 0.07 m diameter at its wide end and
+		// 0.45 m end-to-end. Transform at the beam midpoint to span the exact ray.
+		// m_fBeamWidth specifies the desired WORLD-SPACE maximum beam diameter.
+		float width = Math.Max(fx.m_fBeamWidth, 0.025) / 0.07;
 		matrix[0] = matrix[0] * width;
 		matrix[1] = matrix[1] * width;
-		matrix[2] = matrix[2] * (distance * 0.5);
+		matrix[2] = matrix[2] * (distance / 0.45);
 		matrix[3] = start + direction * (distance * 0.5);
 		beam.m_pEntity.SetWorldTransform(matrix);
 		beam.m_pEntity.Show(true);
@@ -677,10 +680,12 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 						if (Math.AbsFloat(vector.Dot(dir, beamUp)) > 0.98)
 							beamUp = "1 0 0";
 						Math3D.DirectionAndUpMatrix(dir, beamUp, beamMatrix);
-						float beamWidth = Math.Max(fx.m_fBeamWidth, 0.025);
+						// Match the 0.07 m x 0.07 m x 0.45 m source lasbolt
+						// geometry; center-to-center scaling makes full-length hitscan rays.
+						float beamWidth = Math.Max(fx.m_fBeamWidth, 0.025) / 0.07;
 						beamMatrix[0] = beamMatrix[0] * beamWidth;
 						beamMatrix[1] = beamMatrix[1] * beamWidth;
-						beamMatrix[2] = beamMatrix[2] * (distance * 0.5);
+						beamMatrix[2] = beamMatrix[2] * (distance / 0.45);
 						beamMatrix[3] = start + dir * (distance * 0.5);
 						visual.m_pBeam.SetWorldTransform(beamMatrix);
 						visual.m_pBeam.SetFlags(EntityFlags.ACTIVE | EntityFlags.SET_RENDERED);

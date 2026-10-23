@@ -58,7 +58,7 @@ class BFA_MechWeaponFX
 	[Attribute("0.15", UIWidgets.Auto, "Seconds the whole beam remains visible after firing.", category: "Laser Beam")]
 	float m_fBeamDuration;
 
-	[Attribute("0.18", UIWidgets.Auto, "Beam radius/width scale (mesh local X and Y).", category: "Laser Beam")]
+	[Attribute("0.18", UIWidgets.Auto, "Maximum visible beam diameter in metres. Works with the bundled lasbolt.xob; regular, ER and pulse lasers can each set a different width.", category: "Laser Beam")]
 	float m_fBeamWidth;
 
 	[Attribute("false", UIWidgets.CheckBox, "Continuous laser: one beam stays visible while the trigger is held, updating on each damage tick. OFF = short pulse per shot.", category: "Laser Beam")]

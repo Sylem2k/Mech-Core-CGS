@@ -1,13 +1,15 @@
-// Uncollidable presentation-only beam, stretched locally between muzzle and hit.
-// Reuses the Core's lightweight sphere mesh; no RplComponent or damage logic.
+// Local-only hitscan laser beam visual. Core damage and tracing stay server-side.
+// This model is stretched between the muzzle and the traced impact on each shot.
+// lasbolt.xob: source material "lasbolt", with an emissive override for visibility.
+// The renderer accounts for the mesh dimensions in Assets/Weapons/lasbolt.txo.
 GenericEntity {
  ID "E195C1D458A63F27"
  components {
   MeshObject "{E195C1D458A63F28}" {
-   Object "{BF012179927EE2BD}Assets/Characters/Sphere/spheretest.xob"
+   Object "{C4E113BF121624B3}Assets/Weapons/lasbolt.xob"
    Materials {
     MaterialAssignClass "{E195C1D458A63F29}" {
-     SourceMaterial "DefaultGeneratedMaterial"
+     SourceMaterial "lasbolt"
      AssignedMaterial "{A75DD42C3E0B8F12}Assets/Characters/Sphere/Data/CGS_LaserBeam.emat"
     }
    }
