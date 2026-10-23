@@ -49,6 +49,18 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	[Attribute("0.3", UIWidgets.Auto, "Minimum share of a DIRECT infantry hit that reaches health despite armour. 0 = normal armour handling. This does not change shield/vehicle damage.", category: "Damage")]
 	protected float m_fInfantryArmourFloor;
 
+	// ---- Penetration ---------------------------------------------------------------------------
+	// Percent of this hit's ORIGINAL damage that bypasses hit-zone armour via TRUE damage.
+	// The remainder keeps the original type. Total raw damage is never increased.
+	// 0 = legacy damage behavior (fully backwards compatible).
+	[Attribute("0", UIWidgets.Auto, "Armor penetration percent (0-100). The penetrative share uses TRUE damage while the rest keeps its original KINETIC/EXPLOSIVE/INCENDIARY type. Applies to direct hits AND splash; shields/add-ons still receive damage callbacks. 0 preserves existing balance.", category: "Penetration")]
+	protected float m_fArmorPenetrationPercent;
+
+	float GetArmorPenetrationPercent()
+	{
+		return Math.Clamp(m_fArmorPenetrationPercent, 0.0, 100.0);
+	}
+
 
 	// ---- Crosshair -----------------------------------------------------------------------------
 	[Attribute("", UIWidgets.Object, "This weapon's own crosshair. Empty = the mech's default crosshair.", category: "Crosshair")]
@@ -1216,15 +1228,39 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 			shooter = m_pMechOwner;
 		instigator = BFA_MechCoreComponent.BFA_ResolveKiller(shooter, instigator);
 		Instigator damageInstigator = Instigator.CreateInstigator(instigator);
-		SCR_DamageContext context = new SCR_DamageContext(type, amount, hitTransform, shooter, hitZone, damageInstigator, null, -1, -1);
-		BeginDamage();
-		BFA_MechExtension.s_pCurrentShooterMech = shooter;
-		// A kinetic shell's blast is EXPLOSIVE, even if its direct hit is KINETIC.
-		// ENERGY splash (such as a PPC) remains ENERGY for shield interactions.
-		if (type == EDamageType.EXPLOSIVE && m_eDamageKind == BFA_EMechDamageKind.KINETIC)
-			BFA_MechExtension.s_iCurrentDamageKind = BFA_EMechDamageKind.EXPLOSIVE;
-		damageManager.HandleDamage(context);
-		EndDamage();
+		// Split, not stack: penetrating damage replaces an equal part of ordinary
+		// damage. A 100-damage shot with 25% penetration = 75 typed + 25 TRUE.
+		// At 0% this follows the EXACT original, single-context path.
+		float penetrationShare = GetArmorPenetrationPercent() * 0.01;
+		if (type == EDamageType.TRUE)
+			penetrationShare = 0.0;
+
+		float penetratingAmount = amount * penetrationShare;
+		float normalAmount = amount - penetratingAmount;
+
+		if (normalAmount > 0.0)
+		{
+			SCR_DamageContext context = new SCR_DamageContext(type, normalAmount, hitTransform, shooter, hitZone, damageInstigator, null, -1, -1);
+			BeginDamage();
+			BFA_MechExtension.s_pCurrentShooterMech = shooter;
+			// Kinetic shell blast remains EXPLOSIVE; ENERGY splash retains ENERGY
+			// for shields that inspect the MechCore damage-kind metadata.
+			if (type == EDamageType.EXPLOSIVE && m_eDamageKind == BFA_EMechDamageKind.KINETIC)
+				BFA_MechExtension.s_iCurrentDamageKind = BFA_EMechDamageKind.EXPLOSIVE;
+			damageManager.HandleDamage(context);
+			EndDamage();
+		}
+
+		if (penetratingAmount > 0.0)
+		{
+			SCR_DamageContext penetrationContext = new SCR_DamageContext(EDamageType.TRUE, penetratingAmount, hitTransform, shooter, hitZone, damageInstigator, null, -1, -1);
+			BeginDamage();
+			BFA_MechExtension.s_pCurrentShooterMech = shooter;
+			if (type == EDamageType.EXPLOSIVE && m_eDamageKind == BFA_EMechDamageKind.KINETIC)
+				BFA_MechExtension.s_iCurrentDamageKind = BFA_EMechDamageKind.EXPLOSIVE;
+			damageManager.HandleDamage(penetrationContext);
+			EndDamage();
+		}
 
 		float lost = Math.Max(healthBefore - hitZone.GetHealth(), 0.0);
 		IEntity root = hitEntity.GetRootParent();
