@@ -31,6 +31,9 @@ class BFA_MechWeaponDefinition
 	[Attribute("75", UIWidgets.Auto, "Base damage dealt by each successful hit.", category: "Damage")]
 	float m_fDamage;
 
+	[Attribute("0", UIWidgets.Auto, "LEGACY weapons only: percent of raw damage that bypasses hit-zone armour via TRUE damage (0-100). The remainder stays kinetic; total base damage is unchanged. New weapon modules use their own Penetration attribute.", category: "Penetration")]
+	float m_fArmorPenetrationPercent;
+
 	[Attribute("true", UIWidgets.CheckBox, "If normal kinetic damage is completely absorbed, apply an armor-piercing TRUE-damage fallback to the same hit zone.", category: "Damage")]
 	bool m_bArmorPiercingFallback;
 
@@ -1391,21 +1394,34 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		IEntity instigatorEntity = BFA_MechCoreComponent.BFA_ResolveKiller(GetOwner(), ResolveDamageInstigator(weapon));
 		Instigator instigator = Instigator.CreateInstigator(instigatorEntity);
 
-		// First try normal KINETIC damage so ordinary hit zones still use their
-		// configured armor multipliers/reduction.
-		SCR_DamageContext kineticContext = new SCR_DamageContext(
-			EDamageType.KINETIC,
-			weapon.m_fDamage,
-			empty,
-			GetOwner(),
-			hitZone,
-			instigator,
-			null,
-			-1,
-			-1
-		);
-
-		damageManager.HandleDamage(kineticContext);
+		// Backwards compatible at 0%: normal kinetic hit is unchanged.
+		// At nonzero penetration split rather than adding extra raw damage.
+		float penFraction = Math.Clamp(weapon.m_fArmorPenetrationPercent, 0.0, 100.0) * 0.01;
+		float normalAmount = weapon.m_fDamage * (1.0 - penFraction);
+		float penetratingAmount = weapon.m_fDamage - normalAmount;
+		if (normalAmount > 0.0)
+		{
+			SCR_DamageContext kineticContext = new SCR_DamageContext(
+				EDamageType.KINETIC,
+				normalAmount,
+				empty,
+				GetOwner(),
+				hitZone,
+				instigator,
+				null,
+				-1,
+				-1
+			);
+			damageManager.HandleDamage(kineticContext);
+		}
+		if (penetratingAmount > 0.0)
+		{
+			SCR_DamageContext penetrationContext = new SCR_DamageContext(
+				EDamageType.TRUE, penetratingAmount, empty, GetOwner(),
+				hitZone, instigator, null, -1, -1
+			);
+			damageManager.HandleDamage(penetrationContext);
+		}
 
 		float healthAfterKinetic = hitZone.GetHealth();
 		float kineticHealthLost = healthBefore - healthAfterKinetic;
@@ -1416,6 +1432,7 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		// receive a second hit when kinetic damage already worked.
 		if (
 			weapon.m_bArmorPiercingFallback
+			&& penFraction <= 0.0
 			&& healthBefore > 0.0
 			&& kineticHealthLost <= 0.001
 		)
