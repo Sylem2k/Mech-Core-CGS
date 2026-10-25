@@ -1,0 +1,35 @@
+PHASE 1 - MULTIPLAYER OWNERSHIP AND SYNCHRONIZATION
+October 25, 2026
+Development notes (first person)
+
+I am tackling the five Phase 1 defects from my Mech Core CGS and Reforger Warfare / MW backlog.
+This is a TEST-BRANCH pass; I have not merged either repository's main branch.
+
+1. MECH BAY ORDER OWNERSHIP - CODE FIX ADDED (REQUIRES DEDICATED MP TEST)
+I found that all nearby clients' Order Frame screens independently watch the same pad and automatically open the Mech Lab when ANY frame appears. The server tracked an ordering player ID for deletion, but that ID was not replicated onto the spawned frame or enforced when fitting a loadout. I now attach a replicated order-owner player ID to the frame, verify the requesting player's controlled character, bind eligible CGS companions to that player on the server, deny other players' build/save requests, and keep nonowners' Order Frame screens from switching to the owner's Lab. Everyone will still see the actual world mech; only the editing ownership is exclusive.
+
+2. JUMP-JET RUBBER-BANDING - ROOT-CAUSE CODE FIX ADDED (REQUIRES DEDICATED MP TEST)
+I found that the dedicated server owns authoritative root simulation even if Enfusion transfers Rpl ownership to the driver's client. ApplyJumpJetBoost previously checked only Rpl ownership, so the server could reject the same jump the client predicted. I changed IsPhysicsOwner to treat the server as simulation-authoritative while keeping Rpl ownership checks for client prediction. I need a two-client jump test to verify height and landing across the network.
+
+3. FOLLOW ME WRONG PLAYER - OWNER BINDING SAFEGUARDS ADDED (REQUIRES TWO-PLAYER TEST)
+I added a server-only ServerBindCompanionOwner(int playerId) entry point in the CGS brain for authenticated Mech Bay builds. I also verify that the entity resolved as the companion owner still maps back to the originally claimed player ID before setting follow destinations. Unowned/world-spawned companion mechs still have the original first-friendly-claim behavior; I need to test radio calls for each owner separately.
+
+4. REMOTE WALKER JITTER - MOVING-PILOTLESS SNAPSHOT FIX ADDED (REQUIRES TWO-CLIENT TEST)
+I found that the server throttled snapshots for all mechs with no pilot to 5 Hz, including moving AI companions. I now throttle only stationary pilotless mechs; moving pilotless mechs use the authored snapshot interval, normally ~15 Hz. The existing remote interpolation code and driver reconciliation remain unchanged. A dedicated MP test must still verify player-driven walkers under real latency.
+
+5. PILOT AVATAR SEATING / VISIBILITY - UNDER INVESTIGATION, NOT FIXED
+The MechCore vehicle controller deliberately hides pilot entity visibility when m_bHidePilot is set, and the actual seat/skeleton placement must be verified before changing this behavior. I have not changed pilot attachment points, character rendering, cockpit camera, or prefab seat locations in this pass. I need a recording from two client perspectives plus the affected mech prefab / pilot seat configuration. This should be addressed without exposing character models on top of the chassis.
+
+TEST PLAN
+A) Two players stand at one Mech Bay. Player A orders a frame, Player B leaves an Order Frame menu open. Only A's menu should switch; B cannot apply/save on A's frame. Confirm B still sees the actual world mech.
+B) Player A deletes A's unoccupied ordered mech from the correct bay. B should be rejected if attempting the same deletion.
+C) Both players spawn separate companion mechs; claim/follow/guard each. A's follower must never target B and vice versa.
+D) On a dedicated server, A jump-jets a mech while B observes. Compare client A, client B, server root position and landings. Ensure no rubber-band back to launch position.
+E) While B observes, drive an unoccupied AI companion mech continuously: it should receive normal-rate snapshots and render smoother than the old 5 Hz mode. Test a player-driven mech separately.
+F) Record avatar placement entering, driving and exiting from both clients. Do not change hide settings until seat transform is checked.
+
+IMPORTANT DEPENDENCY
+For this test pass, both matching branches are needed together. RW_MechBayComponent calls CGS_MechBrainComponent.ServerBindCompanionOwner, which is new in the Mech Core Phase 1 test branch. Pulling only the MW branch against an older CGS core can fail script compilation.
+
+STATUS
+Source structural review completed. No Workbench compiler or dedicated-server runtime verification was possible here. I will not mark those multiplayer behaviors fixed until the test logs confirm them.
