@@ -712,7 +712,9 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	//! The server validates who requested a change before updating its RplProp words.
 	void SetRuntimeWeaponGroup(int weaponGroup)
 	{
-		m_iRouteGroupOverride = Math.Clamp(weaponGroup, 0, 9);
+		// Respect original MechCore group numbers outside the editable 1-6 grid.
+		// The player's multi-group mask itself is validated separately (0-63).
+		m_iRouteGroupOverride = Math.Clamp(weaponGroup, 0, 30);
 	}
 
 	//------------------------------------------------------------------------------------------------
