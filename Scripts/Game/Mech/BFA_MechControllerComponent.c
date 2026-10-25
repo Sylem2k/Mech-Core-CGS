@@ -611,6 +611,47 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//------------------------------------------------------------------------------------------------
+	//! Direct number-key group selection. Keep B to cycle; never switch mid-shot.
+	protected void SelectNumberedWeaponGroup(int group)
+	{
+		if (!m_bLocalPilot || m_bFireHeld)
+			return;
+		SCR_PlayerController pc = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		if (pc)
+			pc.BFA_Mech_RequestSelectWeaponGroup(GetOwner(), m_sCrewStationId, group);
+	}
+
+	void OnSelectMechGroup1()
+	{
+		SelectNumberedWeaponGroup(1);
+	}
+
+	void OnSelectMechGroup2()
+	{
+		SelectNumberedWeaponGroup(2);
+	}
+
+	void OnSelectMechGroup3()
+	{
+		SelectNumberedWeaponGroup(3);
+	}
+
+	void OnSelectMechGroup4()
+	{
+		SelectNumberedWeaponGroup(4);
+	}
+
+	void OnSelectMechGroup5()
+	{
+		SelectNumberedWeaponGroup(5);
+	}
+
+	void OnSelectMechGroup6()
+	{
+		SelectNumberedWeaponGroup(6);
+	}
+
 	void OnCycleWeaponInput()
 	{
 		if (
@@ -818,6 +859,12 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 		{
 			m_fMechLastFire = -1;
 			input.AddActionListener("MechNextGroup", EActionTrigger.DOWN, OnCycleWeaponInput);
+			input.AddActionListener("MechSelectGroup1", EActionTrigger.DOWN, OnSelectMechGroup1);
+			input.AddActionListener("MechSelectGroup2", EActionTrigger.DOWN, OnSelectMechGroup2);
+			input.AddActionListener("MechSelectGroup3", EActionTrigger.DOWN, OnSelectMechGroup3);
+			input.AddActionListener("MechSelectGroup4", EActionTrigger.DOWN, OnSelectMechGroup4);
+			input.AddActionListener("MechSelectGroup5", EActionTrigger.DOWN, OnSelectMechGroup5);
+			input.AddActionListener("MechSelectGroup6", EActionTrigger.DOWN, OnSelectMechGroup6);
 			input.AddActionListener("MechLoadout", EActionTrigger.DOWN, OnLoadoutInput);
 		}
 		else if (input)
@@ -952,6 +999,12 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 		if (input)
 		{
 			input.RemoveActionListener("MechNextGroup", EActionTrigger.DOWN, OnCycleWeaponInput);
+			input.RemoveActionListener("MechSelectGroup1", EActionTrigger.DOWN, OnSelectMechGroup1);
+			input.RemoveActionListener("MechSelectGroup2", EActionTrigger.DOWN, OnSelectMechGroup2);
+			input.RemoveActionListener("MechSelectGroup3", EActionTrigger.DOWN, OnSelectMechGroup3);
+			input.RemoveActionListener("MechSelectGroup4", EActionTrigger.DOWN, OnSelectMechGroup4);
+			input.RemoveActionListener("MechSelectGroup5", EActionTrigger.DOWN, OnSelectMechGroup5);
+			input.RemoveActionListener("MechSelectGroup6", EActionTrigger.DOWN, OnSelectMechGroup6);
 			input.RemoveActionListener("MechLoadout", EActionTrigger.DOWN, OnLoadoutInput);
 			if (m_bUseMechControls && m_fMechLastFire > 0.5)
 				OnFireInput(0);
