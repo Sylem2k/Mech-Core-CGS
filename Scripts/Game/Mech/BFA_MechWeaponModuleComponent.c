@@ -692,6 +692,13 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Original module prefab group, unaffected by runtime group membership.
+	int GetModuleDefaultWeaponGroup()
+	{
+		return m_iWeaponGroup;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	int GetWeaponGroup()
 	{
 		if (m_iRouteGroupOverride > 0)
