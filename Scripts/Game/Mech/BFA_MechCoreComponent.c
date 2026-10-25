@@ -379,6 +379,13 @@ class BFA_MechCoreComponent : ScriptGameComponent
 
 			array<int> groups = {};
 			GetCycleGroups(station, groups);
+			// A player may have moved the only weapon into a new custom group.
+			// Include those assignments when selecting a valid replacement group.
+			for (int customGroup = 1; customGroup <= 6; customGroup++)
+			{
+				if (!groups.Contains(customGroup) && IsGroupUsable(stationId, customGroup))
+					groups.Insert(customGroup);
+			}
 
 			foreach (int candidate : groups)
 			{
