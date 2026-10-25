@@ -1,0 +1,92 @@
+MECH CORE CGS + MECHWARRIOR (MW) - DEVELOPMENT BACKLOG
+Recorded: 2026-10-25
+Status: OPEN / UNVERIFIED. These are my observations and requests, not confirmed root causes.
+Repositories: Mech-Core-CGS and Reforger-Warfare--MechWarriorProject-main
+
+PURPOSE
+I am collecting the multiplayer, controls, customization, and presentation problems I want fixed.
+I will keep shared MechCore changes separate from MW-specific implementation. I do not want
+unrelated code changes or existing Titan boss balancing reverted during these fixes.
+
+1. MENU / UI FLASHES WHILE PLAYING
+   I see the menu/UI flash whenever I change weapons, go to the next screen, or perform other
+   movements. I need to determine which UI is being recreated or made visible and stop the
+   unintended flashing. Confirm that legitimate HUD changes and menus still work.
+   Likely investigation: MechCore HUD/input plus MW MechLab/combat HUD when applicable.
+
+2. MULTIPLAYER JUMP PACK RUBBER-BANDING
+   In multiplayer, when I activate the mech jump pack/jet and jump, I get snapped back to
+   the position where I started. I need the server-authoritative movement and client
+   prediction/correction investigated. This must be tested with a remote client, not only
+   local Workbench. I want all players to see the same jump position and landing.
+   Likely investigation: BFA_SentinelJumpJetComponent and movement replication.
+
+3. CONFIGURABLE WEAPON GROUPS / NUMBER-KEY SELECTION
+   Players have asked me for a way to assign individual weapons or weapon types to whichever
+   weapon group they want, then press 1, 2, 3, 4, 5, 6 (and more where supported) to select
+   those groups. I want a loadout/configuration UI, proper server-side weapon-group routing,
+   working hotkeys, and consistent replication. A per-weapon assignment should be unambiguous;
+   selection must not fire unintended modules or interfere with infantry keybinds.
+   Likely investigation: MechCore crew station/router plus MW MechLab and weapon modules.
+
+4. MECH BAY - TWO PLAYERS / WRONG OWNERSHIP
+   When two players stand near the mech bay, both can see the mech being built, and the
+   system struggles to determine who owns the build. I need builder sessions assigned to
+   the specific interacting player rather than any nearby player. Only the intended builder
+   should control the build and receive the finished mech unless I intentionally implement
+   shared builds. Test two clients standing next to the same bay and using it concurrently.
+   Likely investigation: MW RW_MechBayComponent, RW_MechLabMenu, saved builds, ownership/RPL.
+
+5. FOLLOW ME - MECHS FOLLOW THE WRONG PLAYER
+   My Follow Me order is causing mechs to follow another player rather than the person
+   who issued the command or owns the mech. I need the follow target assigned and maintained
+   per mech/per issuing player on the server and replicated consistently. Test two owners,
+   several mechs, switching orders, disconnect/reconnect, and no cross-follow.
+   Likely investigation: CGS_MechRadioFollowAction and CGS_MechCompanionOrderAction.
+
+6. MULTIPLAYER LASERS / WEAPON FX / RPL AUDIT
+   My lasers are not showing to other players in multiplayer. I want replication reviewed
+   for ALL weapon families, not just lasers: visibility, projectile/tracer/beam effects,
+   firing sounds, impacts, damage authority, module switching, and late joiners.
+   The server must own gameplay damage; remote clients must see correct effects without
+   duplicate or missing projectiles.
+   Likely investigation: CGS/MechCore weapon FX and MW laser/pulse/PPC/ballistic/missile code.
+
+7. COCKPIT VIEW
+   I want to design a cockpit camera/view for mechs. I need to establish a configurable
+   interior camera point, appropriate cockpit mesh/HUD, visibility of the pilot, correct
+   seat ownership, and first-person/third-person transitions, including multiplayer.
+   This is a feature/design task; it is not implemented merely by adding an exterior camera.
+
+8. PILOT VISIBILITY / SEAT ATTACHMENT IN MULTIPLAYER
+   Other players see pilots sitting on TOP of their mechs, but when a person drives their
+   own mech the driver appears invisible. I need occupants attached to the right physical
+   or visual seat position for remote clients, while preserving the pilot's expected camera
+   and vehicle-control behavior. Test both player viewpoints simultaneously.
+   Likely investigation: seat transforms, compartment manager, visibility flags and RPL.
+
+9. REMOTE MECH MOVEMENT IS BLOCKY / TELEPORTING
+   When watching other players drive mechs over the network, their mechs look like they
+   lag-jump between positions instead of moving smoothly. I need smoothing/interpolation
+   and movement replication studied without giving up server authority. Test two clients,
+   packet delay and moderate packet loss, stepping/turning, and fast movement.
+   Likely investigation: BFA_MechMovementComponent, BFA_MechMovementSystem, replication.
+
+10. MECH FOOTSTEPS TOO LOUD / NEED DISTINCT SOUNDS
+    The current mech footsteps are much too loud. I want per-mech sound sets so light,
+    medium, heavy and assault mechs (or specific chassis) can sound different. I need
+    sensible attenuation, volume, cadence, surface response and multiplayer playback,
+    without repeated or doubled footstep sounds.
+    Likely investigation: core procedural leg/step sound events, chassis sound configs.
+
+NOTES ABOUT ORDER / SCOPE
+- I want multiplayer ownership and correctness prioritized: #4, #5, #2, #8 and #9.
+- I want weapon effects, weapon-group controls and UI diagnosed next: #6, #3, #1.
+- I want cockpit-view design and footsteps addressed as separate scoped tasks: #7 and #10.
+- This is a provisional investigation order, NOT a code-fix list or root-cause diagnosis.
+- I want any future code modifications made on dedicated test branches, reviewed and tested
+  on a dedicated multiplayer server with at least two clients before merging to main.
+- I want all edited script files delivered under their original filenames, complete for
+  copy/paste when requested.
+
+No item #11 was supplied. Total captured issues: 10.
