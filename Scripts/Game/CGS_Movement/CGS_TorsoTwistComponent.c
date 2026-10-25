@@ -38,6 +38,12 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	[Attribute("", UIWidgets.Auto, "Weapon mount Ids (BFA_MechWeaponMountComponent) that turn with the torso: the arms. They still aim on top of the twist. Rigid arms: list the mount only. IK / animated arms: list the mount AND the arm's slot above.", category: "Parts")]
 	protected ref array<string> m_aTwistMounts;
 
+	[Attribute("true", UIWidgets.CheckBox, "Automatically twist all configured aim mounts (every arm/gun group). Explicit m_aTwistMounts can add more.", category: "Parts")]
+	protected bool m_bAutoDiscoverWeaponMounts;
+
+	[Attribute("true", UIWidgets.CheckBox, "Rotate all root-mounted torso, chest, shoulder and back hardpoint weapons along with the torso. Aim-mount children are handled separately.", category: "Parts")]
+	protected bool m_bTwistRootMountedWeapons;
+
 	[Attribute("false", UIWidgets.CheckBox, "Remove the mech root's own model (its slots stay visible). Use it when the root mesh is the whole body: put the same body model in a twisting 'Torso' slot instead.", category: "Parts")]
 	protected bool m_bHideRootMesh;
 
@@ -59,6 +65,8 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	protected ref array<IEntity> m_aSlotEntities = {};
 	protected ref array<ref CGS_TwistRest> m_aSlotRest = {};
 	protected ref array<ref CGS_TwistRest> m_aMountRest = {};
+	protected ref array<IEntity> m_aRootWeaponEntities = {};
+	protected ref array<ref CGS_TwistRest> m_aRootWeaponRest = {};
 
 	//------------------------------------------------------------------------------------------------
 	override void OnPostInit(IEntity owner)
@@ -159,9 +167,13 @@ class CGS_TorsoTwistComponent : ScriptComponent
 		if (!m_bCaptured)
 			Capture(owner);
 
+		// Refit-created weapons can appear while the torso is already twisted.
+		// Discover them before the unchanged-yaw fast path skips this tick.
+		bool newWeapons = RefreshRootWeapons(owner);
+
 		// Re-apply now and then even when still: a loadout swap re-binds the arms to their
 		// untwisted pose.
-		if (Math.AbsFloat(m_fTwist - m_fApplied) < 0.02 && now < m_fNextRefresh)
+		if (!newWeapons && Math.AbsFloat(m_fTwist - m_fApplied) < 0.02 && now < m_fNextRefresh)
 			return;
 		m_fNextRefresh = now + 0.5;
 		HideRoot(owner);
@@ -214,6 +226,8 @@ class CGS_TorsoTwistComponent : ScriptComponent
 		m_aSlotEntities.Clear();
 		m_aSlotRest.Clear();
 		m_aMountRest.Clear();
+		m_aRootWeaponEntities.Clear();
+		m_aRootWeaponRest.Clear();
 
 		SlotManagerComponent slots = SlotManagerComponent.Cast(owner.FindComponent(SlotManagerComponent));
 		if (slots && m_aTwistSlots)
@@ -233,9 +247,20 @@ class CGS_TorsoTwistComponent : ScriptComponent
 		}
 
 		BFA_MechWeaponMountComponent mounts = BFA_MechWeaponMountComponent.Cast(owner.FindComponent(BFA_MechWeaponMountComponent));
-		if (mounts && m_aTwistMounts)
+		if (mounts)
 		{
-			foreach (string mountId : m_aTwistMounts)
+			array<string> mountIds = {};
+			if (m_bAutoDiscoverWeaponMounts)
+				mounts.GetMountIds(mountIds);
+			if (m_aTwistMounts)
+			{
+				foreach (string explicitMount : m_aTwistMounts)
+				{
+					if (!mountIds.Contains(explicitMount))
+						mountIds.Insert(explicitMount);
+				}
+			}
+			foreach (string mountId : mountIds)
 			{
 				CGS_TwistRest mountRest = new CGS_TwistRest();
 				mountRest.m_sId = mountId;
@@ -244,7 +269,52 @@ class CGS_TorsoTwistComponent : ScriptComponent
 			}
 		}
 
+		RefreshRootWeapons(owner);
 		m_bCaptured = !m_aSlotRest.IsEmpty() || !m_aMountRest.IsEmpty();
+		foreach (IEntity rootWeapon : m_aRootWeaponEntities)
+		{
+			if (rootWeapon)
+				m_bCaptured = true;
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Root-mounted weapons are children of the mech itself, not the animated arm
+	//! mounts or bones. Snapshot each one's untwisted local transform once. Newly
+	//! installed weapons are captured on sight, even while the torso is turning.
+	protected bool RefreshRootWeapons(IEntity owner)
+	{
+		if (!m_bTwistRootMountedWeapons || !owner)
+			return false;
+		BFA_MechHardpointComponent hardpoints = BFA_MechHardpointComponent.Cast(owner.FindComponent(BFA_MechHardpointComponent));
+		if (!hardpoints)
+			return false;
+
+		bool changed = false;
+		int count = hardpoints.GetHardpointCount();
+		while (m_aRootWeaponEntities.Count() < count)
+		{
+			m_aRootWeaponEntities.Insert(null);
+			m_aRootWeaponRest.Insert(null);
+		}
+		for (int hp = 0; hp < count; hp++)
+		{
+			IEntity weapon = null;
+			if (hardpoints.IsRootMountedHardpoint(hp))
+				weapon = hardpoints.GetModuleEntityAt(hp);
+			if (weapon == m_aRootWeaponEntities[hp])
+				continue;
+
+			m_aRootWeaponEntities[hp] = weapon;
+			m_aRootWeaponRest[hp] = null;
+			if (!weapon)
+				continue;
+			CGS_TwistRest rest = new CGS_TwistRest();
+			weapon.GetLocalTransform(rest.m_Mat);
+			m_aRootWeaponRest[hp] = rest;
+			changed = true;
+		}
+		return changed;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -276,6 +346,20 @@ class CGS_TorsoTwistComponent : ScriptComponent
 			Math3D.MatrixMultiply4(rot, m_aSlotRest[i].m_Mat, mat);
 			part.SetLocalTransform(mat);
 			part.Update();
+		}
+
+		// Keep all root-mounted guns aligned with the turning torso, irrespective
+		// of their fire-group number or whether they aim through a separate mount.
+		for (int hp = 0; hp < m_aRootWeaponEntities.Count(); hp++)
+		{
+			IEntity weapon = m_aRootWeaponEntities[hp];
+			CGS_TwistRest basePose = m_aRootWeaponRest[hp];
+			if (!weapon || !basePose)
+				continue;
+			vector gunMat[4];
+			Math3D.MatrixMultiply4(rot, basePose.m_Mat, gunMat);
+			weapon.SetLocalTransform(gunMat);
+			weapon.Update();
 		}
 
 		BFA_MechWeaponMountComponent mounts = BFA_MechWeaponMountComponent.Cast(owner.FindComponent(BFA_MechWeaponMountComponent));
