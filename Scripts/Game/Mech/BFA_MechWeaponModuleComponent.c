@@ -701,6 +701,14 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Local replicated routing update, called by the owning mech's hardpoint component.
+	//! The server validates who requested a change before updating its RplProp words.
+	void SetRuntimeWeaponGroup(int weaponGroup)
+	{
+		m_iRouteGroupOverride = Math.Clamp(weaponGroup, 0, 9);
+	}
+
+	//------------------------------------------------------------------------------------------------
 	bool SupportsHeldFire()
 	{
 		return m_bSupportsHeldFire;
