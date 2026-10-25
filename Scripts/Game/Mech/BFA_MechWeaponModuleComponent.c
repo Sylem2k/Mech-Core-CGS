@@ -732,7 +732,21 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 		if (!m_bBoundToHardpoint)
 			return false;
 
-		if (weaponGroup != GetWeaponGroup())
+		// A fitted hardpoint can be part of more than one firing group. If the
+		// player supplied a custom mask, route against every checked group rather
+		// than only the original prefab's single group number.
+		if (m_pMechOwner && m_iHardpointIndex >= 0)
+		{
+			BFA_MechHardpointComponent hardpoints = BFA_MechHardpointComponent.Cast(m_pMechOwner.FindComponent(BFA_MechHardpointComponent));
+			if (hardpoints && hardpoints.GetCustomWeaponGroupMask(m_iHardpointIndex) > 0)
+			{
+				if (!hardpoints.IsWeaponInGroup(m_iHardpointIndex, weaponGroup))
+					return false;
+			}
+			else if (weaponGroup != GetWeaponGroup())
+				return false;
+		}
+		else if (weaponGroup != GetWeaponGroup())
 			return false;
 
 		string station = GetControlStation();
