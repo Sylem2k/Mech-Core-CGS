@@ -391,14 +391,12 @@ class BFA_MechHardpointComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! Effective groups for the Mech Lab; custom masks allow membership in multiple.
-	int GetEffectiveWeaponGroupMask(int hardpointIndex)
+	//! Authored default: prefer the hardpoint setting, then the module's
+	//! original group. Runtime overrides must not affect this fallback.
+	int GetDefaultWeaponGroupMask(int hardpointIndex)
 	{
 		if (hardpointIndex < 0 || hardpointIndex >= GetHardpointCount())
 			return 0;
-		int groups = GetCustomWeaponGroupMask(hardpointIndex);
-		if (groups > 0)
-			return groups;
 		int defaultGroup = 0;
 		if (m_aHardpoints && m_aHardpoints[hardpointIndex])
 			defaultGroup = m_aHardpoints[hardpointIndex].m_iWeaponGroup;
@@ -406,11 +404,21 @@ class BFA_MechHardpointComponent : ScriptComponent
 		{
 			BFA_MechWeaponModuleComponent module = GetInstalledModuleAt(hardpointIndex);
 			if (module)
-				defaultGroup = module.GetWeaponGroup();
+				defaultGroup = module.GetModuleDefaultWeaponGroup();
 		}
 		if (defaultGroup >= 1 && defaultGroup <= 6)
 			return 1 << (defaultGroup - 1);
 		return 0;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Effective groups for the Mech Lab; custom masks allow membership in multiple.
+	int GetEffectiveWeaponGroupMask(int hardpointIndex)
+	{
+		int groups = GetCustomWeaponGroupMask(hardpointIndex);
+		if (groups > 0)
+			return groups;
+		return GetDefaultWeaponGroupMask(hardpointIndex);
 	}
 
 	//------------------------------------------------------------------------------------------------
