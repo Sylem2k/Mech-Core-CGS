@@ -692,6 +692,13 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Original module prefab group, unaffected by runtime group membership.
+	int GetModuleDefaultWeaponGroup()
+	{
+		return m_iWeaponGroup;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	int GetWeaponGroup()
 	{
 		if (m_iRouteGroupOverride > 0)
@@ -705,7 +712,9 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	//! The server validates who requested a change before updating its RplProp words.
 	void SetRuntimeWeaponGroup(int weaponGroup)
 	{
-		m_iRouteGroupOverride = Math.Clamp(weaponGroup, 0, 9);
+		// Respect original MechCore group numbers outside the editable 1-6 grid.
+		// The player's multi-group mask itself is validated separately (0-63).
+		m_iRouteGroupOverride = Math.Clamp(weaponGroup, 0, 30);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -732,7 +741,21 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 		if (!m_bBoundToHardpoint)
 			return false;
 
-		if (weaponGroup != GetWeaponGroup())
+		// A fitted hardpoint can be part of more than one firing group. If the
+		// player supplied a custom mask, route against every checked group rather
+		// than only the original prefab's single group number.
+		if (m_pMechOwner && m_iHardpointIndex >= 0)
+		{
+			BFA_MechHardpointComponent hardpoints = BFA_MechHardpointComponent.Cast(m_pMechOwner.FindComponent(BFA_MechHardpointComponent));
+			if (hardpoints && hardpoints.GetCustomWeaponGroupMask(m_iHardpointIndex) > 0)
+			{
+				if (!hardpoints.IsWeaponInGroup(m_iHardpointIndex, weaponGroup))
+					return false;
+			}
+			else if (weaponGroup != GetWeaponGroup())
+				return false;
+		}
+		else if (weaponGroup != GetWeaponGroup())
 			return false;
 
 		string station = GetControlStation();

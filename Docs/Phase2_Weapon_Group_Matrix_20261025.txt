@@ -1,0 +1,37 @@
+PHASE 2 - WEAPON GROUP MATRIX REWORK
+October 25, 2026
+My development notes (first person)
+
+WHY I CHANGED IT
+The little < GROUP / GROUP > selector felt clumsy. I want weapon grouping to work like a MechWarrior-style matrix: weapons in rows, six numbered groups in columns, instant highlighting, optional membership in multiple groups and a separate chain-fire mode for each group. I used the reference screenshots as an interaction/layout guide, not to duplicate another game's artwork.
+
+MECH LAB USER FLOW
+I open my usual Mech Lab and click WEAPON GROUPS / CONFIGURE above the hardpoint selection panel. The editor shows each fitted or planned weapon plus the hardpoint name and six clickable columns. A highlighted group is ON; multiple columns on one weapon can be ON simultaneously. A weapon cannot be left with zero groups by unchecking the last column. Each row also has a DEFAULT control that clears the custom routing for that hardpoint and restores the prefab's authored group. The CHAIN FIRE row toggles sequential fire per group, independently of which group is selected in the cockpit. The menu provides paging for mechs with many weapons, a help panel on large viewports and a BACK TO LOADOUT button; the existing MenuBack key also goes back.
+
+SMOOTH FEEL / NETWORKING
+I switched from a single four-bit group value per hardpoint to a six-bit membership mask. Four replicated 30-bit words cover my 18 hardpoints (five masks per word), keeping the network payload small. Rather than re-spawning/rebuilding weapons after each edit, each weapon checks the live custom membership mask when deciding if a group can fire it. The server still authenticates the requesting player at the Mech Bay (including Phase 1 order ownership) or through a nearby Mech Wrench. The editor sends the entire desired mask on each click via a reliable RPC, and temporarily previews the requested state to make rapid clicks feel immediate while waiting for replicated confirmation. The previously implemented canvas double buffering prevents blank menu frames while entering and leaving the group editor.
+
+CONTROLS / CHAIN FIRE
+I keep number keys 1-6 as direct weapon group selection while driving or gunning, and B for group cycling. Chain-fire mode is stored/replicated in the existing weapon router, and every group can use simultaneous fire (OFF) or sequential fire (ON). Station authorization still applies; a player cannot fire guns belonging to another station just by assigning them to a group.
+
+DEFAULTS AND BACKWARD COMPATIBILITY
+Existing prefab groups remain the default if no custom mask is set. Core's old ServerSetCustomWeaponGroup method remains available for old callers. The Mech Lab single-group networking method remains for compatibility, but the visible group editor now sends full six-bit masks. I also changed selected-group revalidation so switching all weapons to a custom group no longer strands the station on an empty group.
+
+SAVED BUILDS: KNOWN LIMITATION
+The new group membership is replicated with the live mech and survives hardpoint remounts during that mech's session. It is NOT yet serialized with saved-build presets, so rebuilding a fresh mech from a saved build will currently restore prefab groups. Adding saved-build persistence is a separate change and must not be misrepresented as completed.
+
+TESTING
+The change exists in both matching Core and MW test branches. I have not compiled these new scripts in Workbench and have not tested multiplayer. I need to pull BOTH branches together, compile, then open Mech Lab and test:
+1) Enter WEAPON GROUPS and return without black flashes.
+2) Put arm lasers in Group 1 and Group 4 simultaneously.
+3) Put missiles in Group 2 only and verify the correct guns fire on each selected number.
+4) Uncheck one group while keeping another; try to uncheck the last group and confirm rejection.
+5) Toggle CHAIN FIRE ON for Group 1 and OFF for Group 4; verify order vs simultaneous shots.
+6) Press DEFAULT on a weapon to restore its original group.
+7) Apply a new weapon module to a hardpoint and confirm the chosen custom groups persist on that mech.
+8) Later: verify server acceptance, group Rpl replication and multi-client firing/visuals on a dedicated MP server.
+No main branches have been changed.
+
+SOURCE:
+Core: BFA_MechHardpointComponent.c, BFA_MechWeaponModuleComponent.c, BFA_MechCoreComponent.c.
+MW: RW_MechLabNet.c, RW_MechLabMenu.c.
