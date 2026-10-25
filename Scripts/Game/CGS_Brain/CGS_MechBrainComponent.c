@@ -184,8 +184,11 @@ class CGS_MechBrainComponent : ScriptComponent
 	{
 		if (m_iCompanionOwnerId <= 0 || !GetGame() || !GetGame().GetPlayerManager())
 			return null;
-		IEntity user = GetGame().GetPlayerManager().GetPlayerControlledEntity(m_iCompanionOwnerId);
-		if (!user)
+		PlayerManager manager = GetGame().GetPlayerManager();
+		IEntity user = manager.GetPlayerControlledEntity(m_iCompanionOwnerId);
+		// Do not steer toward a stale or mismatched player-controlled entity.
+		// If the owner changes controlled entities while entering a vehicle, guard.
+		if (!user || manager.GetPlayerIdFromControlledEntity(user) != m_iCompanionOwnerId)
 			return null;
 		SCR_DamageManagerComponent damage = SCR_DamageManagerComponent.Cast(user.FindComponent(SCR_DamageManagerComponent));
 		if (damage && damage.GetState() == EDamageState.DESTROYED)
@@ -200,6 +203,29 @@ class CGS_MechBrainComponent : ScriptComponent
 			return false;
 		float maxDistance = Math.Max(m_fCompanionCommandDistance, 2);
 		return vector.DistanceSq(user.GetOrigin(), GetOwner().GetOrigin()) <= maxDistance * maxDistance;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! A server-authenticated Mech Bay order can reserve its companion for exactly
+	//! the ordering player. This prevents a bystander claiming it first.
+	bool ServerBindCompanionOwner(int playerId)
+	{
+		if (!Replication.IsServer() || !IsCompanionEnabled() || playerId <= 0 || !GetOwner() || !GetGame())
+			return false;
+
+		PlayerManager manager = GetGame().GetPlayerManager();
+		if (!manager || !manager.GetPlayerController(playerId))
+			return false;
+
+		if (m_iCompanionOwnerId > 0 && m_iCompanionOwnerId != playerId)
+			return false;
+
+		m_iCompanionOwnerId = playerId;
+		m_eCompanionOrder = CGS_EMechCompanionOrder.GUARD;
+		m_vCompanionGuardPoint = GetOwner().GetOrigin();
+		m_bCompanionGuardSet = true;
+		m_bHasPatrolPoint = false;
+		return true;
 	}
 
 	//! Called only by server-side context actions. Never trust a player ID sent by a client.
