@@ -318,6 +318,21 @@ class BFA_MechWeaponMountComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! All configured mount IDs. Torso twist uses this to follow every arm
+	//! regardless of weapon type/group, without manual per-prefab lists.
+	void GetMountIds(notnull array<string> outIds)
+	{
+		outIds.Clear();
+		if (!m_aMounts)
+			return;
+		foreach (BFA_MechWeaponMountDefinition mount : m_aMounts)
+		{
+			if (mount && !mount.m_sMountId.IsEmpty() && !outIds.Contains(mount.m_sMountId))
+				outIds.Insert(mount.m_sMountId);
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
 	IEntity GetMountEntity(string mountId)
 	{
 		BFA_MechWeaponMountDefinition mount = FindMount(mountId);
