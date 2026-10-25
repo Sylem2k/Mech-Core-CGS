@@ -61,6 +61,7 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	protected bool m_bCaptured;
 	protected float m_fNextCapture;
 	protected float m_fNextRefresh;
+	protected float m_fNextMountScan;
 
 	protected ref array<IEntity> m_aSlotEntities = {};
 	protected ref array<ref CGS_TwistRest> m_aSlotRest = {};
@@ -170,10 +171,16 @@ class CGS_TorsoTwistComponent : ScriptComponent
 		// Refit-created weapons can appear while the torso is already twisted.
 		// Discover them before the unchanged-yaw fast path skips this tick.
 		bool newWeapons = RefreshRootWeapons(owner);
+		bool newMounts = false;
+		if (now >= m_fNextMountScan)
+		{
+			m_fNextMountScan = now + 0.25;
+			newMounts = RefreshMissingMounts(owner);
+		}
 
 		// Re-apply now and then even when still: a loadout swap re-binds the arms to their
 		// untwisted pose.
-		if (!newWeapons && Math.AbsFloat(m_fTwist - m_fApplied) < 0.02 && now < m_fNextRefresh)
+		if (!newWeapons && !newMounts && Math.AbsFloat(m_fTwist - m_fApplied) < 0.02 && now < m_fNextRefresh)
 			return;
 		m_fNextRefresh = now + 0.5;
 		HideRoot(owner);
@@ -279,7 +286,51 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! Root-mounted weapons are children of the mech itself, not the animated arm
+	//! Resolve aim mounts spawned after the first upper-body capture. Initial
+	//! prefab slots can be ready before their weapon entities and late refits.
+	protected bool RefreshMissingMounts(IEntity owner)
+	{
+		BFA_MechWeaponMountComponent mounts = BFA_MechWeaponMountComponent.Cast(owner.FindComponent(BFA_MechWeaponMountComponent));
+		if (!mounts)
+			return false;
+		array<string> ids = {};
+		if (m_bAutoDiscoverWeaponMounts)
+			mounts.GetMountIds(ids);
+		if (m_aTwistMounts)
+		{
+			foreach (string namedMount : m_aTwistMounts)
+			{
+				if (!ids.Contains(namedMount))
+					ids.Insert(namedMount);
+			}
+		}
+		bool changed = false;
+		foreach (string mountId : ids)
+		{
+			bool known = false;
+			foreach (CGS_TwistRest oldRest : m_aMountRest)
+			{
+				if (oldRest && oldRest.m_sId == mountId)
+				{
+					known = true;
+					break;
+				}
+			}
+			if (known)
+				continue;
+			CGS_TwistRest rest = new CGS_TwistRest();
+			rest.m_sId = mountId;
+			if (!mounts.GetMountRestModelTransform(mountId, rest.m_Mat))
+				continue;
+			m_aMountRest.Insert(rest);
+			m_bCaptured = true;
+			changed = true;
+		}
+		return changed;
+	}
+
+	//------------------------------------------------------------------------------------------------
+		//! Root-mounted weapons are children of the mech itself, not the animated arm
 	//! mounts or bones. Snapshot each one's untwisted local transform once. Newly
 	//! installed weapons are captured on sight, even while the torso is turning.
 	protected bool RefreshRootWeapons(IEntity owner)
