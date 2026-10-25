@@ -116,14 +116,17 @@ class BFA_MechHardpointComponent : ScriptComponent
 	[Attribute("", UIWidgets.Object, "Modules this mech is allowed to mount.", category: "Modules")]
 	ref array<ref BFA_MechModuleDefinition> m_aModules;
 
-	// Optional 0-9 player-assigned weapon groups, 0 = authored prefab routing.
-	// Six hardpoints per 24-bit replicated word, four bits per hardpoint.
+	// Player's optional six-group membership per hardpoint, 0 = prefab default.
+	// Five slots per replicated word, six bits per slot = 30 bits / word.
+	// Four words cover all 18 hardpoints. A bit means the weapon is in that group.
 	[RplProp(onRplName: "OnRoutingReplicated")]
 	protected int m_iRouteGroups0;
 	[RplProp(onRplName: "OnRoutingReplicated")]
 	protected int m_iRouteGroups1;
 	[RplProp(onRplName: "OnRoutingReplicated")]
 	protected int m_iRouteGroups2;
+	[RplProp(onRplName: "OnRoutingReplicated")]
+	protected int m_iRouteGroups3;
 
 	[RplProp(onRplName: "OnLoadoutReplicated")]
 	protected int m_iLoadout0;
@@ -358,6 +361,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 			case 0: return m_iRouteGroups0;
 			case 1: return m_iRouteGroups1;
 			case 2: return m_iRouteGroups2;
+			case 3: return m_iRouteGroups3;
 		}
 		return 0;
 	}
@@ -370,18 +374,66 @@ class BFA_MechHardpointComponent : ScriptComponent
 			case 0: m_iRouteGroups0 = value; break;
 			case 1: m_iRouteGroups1 = value; break;
 			case 2: m_iRouteGroups2 = value; break;
+			case 3: m_iRouteGroups3 = value; break;
 		}
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! 0 = use the weapon group's authored default; 1-9 = player's routing.
-	int GetCustomWeaponGroup(int hardpointIndex)
+	//! Raw per-weapon selection: bits 0-5 mean groups 1-6.
+	//! Zero means the prefab's original single group, not an empty weapon.
+	int GetCustomWeaponGroupMask(int hardpointIndex)
 	{
 		if (hardpointIndex < 0 || hardpointIndex >= GetHardpointCount())
 			return 0;
-		int word = GetGroupRouteWord(hardpointIndex / 6);
-		int shift = Math.Mod(hardpointIndex, 6) * 4;
-		return (word >> shift) & 15;
+		int word = GetGroupRouteWord(hardpointIndex / 5);
+		int shift = Math.Mod(hardpointIndex, 5) * 6;
+		return (word >> shift) & 63;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Effective groups for the Mech Lab; custom masks allow membership in multiple.
+	int GetEffectiveWeaponGroupMask(int hardpointIndex)
+	{
+		if (hardpointIndex < 0 || hardpointIndex >= GetHardpointCount())
+			return 0;
+		int groups = GetCustomWeaponGroupMask(hardpointIndex);
+		if (groups > 0)
+			return groups;
+		int defaultGroup = 0;
+		if (m_aHardpoints && m_aHardpoints[hardpointIndex])
+			defaultGroup = m_aHardpoints[hardpointIndex].m_iWeaponGroup;
+		if (defaultGroup <= 0)
+		{
+			BFA_MechWeaponModuleComponent module = GetInstalledModuleAt(hardpointIndex);
+			if (module)
+				defaultGroup = module.GetWeaponGroup();
+		}
+		if (defaultGroup >= 1 && defaultGroup <= 6)
+			return 1 << (defaultGroup - 1);
+		return 0;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	bool IsWeaponInGroup(int hardpointIndex, int weaponGroup)
+	{
+		if (weaponGroup < 1 || weaponGroup > 6)
+			return false;
+		return (GetEffectiveWeaponGroupMask(hardpointIndex) & (1 << (weaponGroup - 1))) != 0;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Backward-compatible getter used by the older inline group control.
+	//! A multi-group weapon reports its first selected group here, but firing
+	//! routes through the full six-bit mask instead of using this one value.
+	int GetCustomWeaponGroup(int hardpointIndex)
+	{
+		int mask = GetCustomWeaponGroupMask(hardpointIndex);
+		for (int group = 1; group <= 6; group++)
+		{
+			if ((mask & (1 << (group - 1))) != 0)
+				return group;
+		}
+		return 0;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -393,11 +445,8 @@ class BFA_MechHardpointComponent : ScriptComponent
 		if (!module)
 			return;
 		int chosen = GetCustomWeaponGroup(hardpointIndex);
-		int authored = 0;
-		if (m_aHardpoints && hardpointIndex < m_aHardpoints.Count() && m_aHardpoints[hardpointIndex])
-			authored = m_aHardpoints[hardpointIndex].m_iWeaponGroup;
-		if (chosen <= 0)
-			chosen = authored;
+		if (chosen <= 0 && m_aHardpoints && hardpointIndex < m_aHardpoints.Count() && m_aHardpoints[hardpointIndex])
+			chosen = m_aHardpoints[hardpointIndex].m_iWeaponGroup;
 		module.SetRuntimeWeaponGroup(chosen);
 	}
 
@@ -409,18 +458,19 @@ class BFA_MechHardpointComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! Authorized caller only. The server owns the compact route words and replicates
-	//! them to clients; no weapon entity or loadout respawn is needed.
-	bool ServerSetCustomWeaponGroup(int hardpointIndex, int group)
+	//! Only the trusted server-side Mech Lab/controller may call this.
+	//! A nonzero mask puts a weapon in any combination of groups 1-6.
+	//! Zero restores the original prefab group.
+	bool ServerSetCustomWeaponGroupMask(int hardpointIndex, int groupMask)
 	{
-		if (!Replication.IsServer() || hardpointIndex < 0 || hardpointIndex >= GetHardpointCount() || group < 0 || group > 9)
+		if (!Replication.IsServer() || hardpointIndex < 0 || hardpointIndex >= GetHardpointCount() || groupMask < 0 || groupMask > 63)
 			return false;
-		if (GetCustomWeaponGroup(hardpointIndex) == group)
+		if (GetCustomWeaponGroupMask(hardpointIndex) == groupMask)
 			return true;
-		int wordIndex = hardpointIndex / 6;
-		int shift = Math.Mod(hardpointIndex, 6) * 4;
+		int wordIndex = hardpointIndex / 5;
+		int shift = Math.Mod(hardpointIndex, 5) * 6;
 		int word = GetGroupRouteWord(wordIndex);
-		word = (word & ~(15 << shift)) | (group << shift);
+		word = (word & ~(63 << shift)) | (groupMask << shift);
 		SetGroupRouteWord(wordIndex, word);
 		ApplyCustomGroupToModule(hardpointIndex);
 		Replication.BumpMe();
@@ -431,14 +481,26 @@ class BFA_MechHardpointComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! Restrict custom group access to the station owning that hardpoint.
+	//! Retain old single-group requests for backward-compatible callers.
+	bool ServerSetCustomWeaponGroup(int hardpointIndex, int group)
+	{
+		if (group < 0 || group > 6)
+			return false;
+		if (group == 0)
+			return ServerSetCustomWeaponGroupMask(hardpointIndex, 0);
+		return ServerSetCustomWeaponGroupMask(hardpointIndex, 1 << (group - 1));
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! A custom group is usable only if a weapon at this station belongs to it.
 	bool HasCustomWeaponGroupForStation(string stationId, int group)
 	{
-		if (group < 1 || group > 9)
+		if (group < 1 || group > 6)
 			return false;
+		int bit = 1 << (group - 1);
 		for (int hp = 0; hp < GetHardpointCount(); hp++)
 		{
-			if (GetCustomWeaponGroup(hp) != group)
+			if ((GetCustomWeaponGroupMask(hp) & bit) == 0)
 				continue;
 			BFA_MechWeaponModuleComponent module = GetInstalledModuleAt(hp);
 			if (!module)
@@ -451,7 +513,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected void OnLoadoutReplicated()
+		protected void OnLoadoutReplicated()
 	{
 		// A new loadout gets a fresh retry budget.
 		m_iRebuildAttempts = 0;
