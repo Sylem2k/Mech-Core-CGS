@@ -58,6 +58,9 @@ class BFA_MechWeaponFX
 	[Attribute("0.15", UIWidgets.Auto, "Seconds the whole beam remains visible after firing.", category: "Laser Beam")]
 	float m_fBeamDuration;
 
+	[Attribute("false", UIWidgets.CheckBox, "Send laser pulse shot FX reliably to multiplayer clients. Enable for low/medium-rate beams; leave off for very rapid or continuously updated beams.", category: "Laser Beam")]
+	bool m_bReliableBeamShot;
+
 	[Attribute("0.18", UIWidgets.Auto, "Maximum visible beam diameter in metres. Works with the bundled lasbolt.xob; regular, ER and pulse lasers can each set a different width.", category: "Laser Beam")]
 	float m_fBeamWidth;
 

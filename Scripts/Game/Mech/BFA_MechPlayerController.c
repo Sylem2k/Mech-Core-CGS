@@ -386,6 +386,44 @@ modded class SCR_PlayerController
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Select an exact group with number keys (1-9), keeping the existing cycle key.
+	//! Only the server confirms the requested station belongs to this controller.
+	void BFA_Mech_RequestSelectWeaponGroup(IEntity mech, string stationId, int group)
+	{
+		if (!mech || stationId.IsEmpty() || group < 1 || group > 9)
+			return;
+		RplComponent rpl = RplComponent.Cast(mech.FindComponent(RplComponent));
+		if (!rpl)
+			return;
+		if (Replication.IsServer())
+		{
+			BFA_Mech_ServerSelectWeaponGroup(rpl.Id(), stationId, group);
+			return;
+		}
+		Rpc(BFA_Mech_RpcAsk_SelectWeaponGroup, rpl.Id(), stationId, group);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+	protected void BFA_Mech_RpcAsk_SelectWeaponGroup(RplId mechId, string stationId, int group)
+	{
+		BFA_Mech_ServerSelectWeaponGroup(mechId, stationId, group);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void BFA_Mech_ServerSelectWeaponGroup(RplId mechId, string stationId, int group)
+	{
+		if (!Replication.IsServer() || group < 1 || group > 9)
+			return;
+		IEntity mech = BFA_Mech_ResolveEntity(mechId);
+		if (!mech || !BFA_Mech_IsStationController(mech, stationId))
+			return;
+		BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(mech.FindComponent(BFA_MechCoreComponent));
+		if (core)
+			core.ServerSelectWeaponGroup(stationId, group);
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! Switch the station's selected weapon group between chain fire and group fire.
 	void BFA_Mech_RequestToggleChainFire(IEntity mech, string stationId)
 	{

@@ -133,7 +133,13 @@ class BFA_MechCoreComponent : ScriptGameComponent
 			return false;
 
 		int groupBit = 1 << (weaponGroup - 1);
-		return (station.m_iWeaponGroupMask & groupBit) != 0;
+		if ((station.m_iWeaponGroupMask & groupBit) != 0)
+			return true;
+
+		// Player-defined routing grants only groups with a live module belonging
+		// to this station. The authored mask remains the default for all others.
+		BFA_MechHardpointComponent hardpoints = BFA_MechHardpointComponent.Cast(GetOwner().FindComponent(BFA_MechHardpointComponent));
+		return hardpoints && hardpoints.HasCustomWeaponGroupForStation(stationId, weaponGroup);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -269,6 +275,11 @@ class BFA_MechCoreComponent : ScriptGameComponent
 
 		array<int> groups = {};
 		GetCycleGroups(station, groups);
+		for (int customGroup = 1; customGroup <= 9; customGroup++)
+		{
+			if (!groups.Contains(customGroup) && IsGroupUsable(stationId, customGroup))
+				groups.Insert(customGroup);
+		}
 		if (groups.Count() < 2)
 			return false;
 
@@ -319,6 +330,11 @@ class BFA_MechCoreComponent : ScriptGameComponent
 		GetCycleGroups(station, groups);
 		if (station.m_iAuxWeaponGroup > 0 && !groups.Contains(station.m_iAuxWeaponGroup))
 			groups.Insert(station.m_iAuxWeaponGroup);
+		for (int customGroup = 1; customGroup <= 9; customGroup++)
+		{
+			if (!groups.Contains(customGroup) && IsGroupUsable(stationId, customGroup))
+				groups.Insert(customGroup);
+		}
 
 		foreach (int group : groups)
 		{

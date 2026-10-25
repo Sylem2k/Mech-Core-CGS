@@ -1,0 +1,40 @@
+PHASE 2 - WEAPONS, WEAPON GROUPS, AND HUD/MENU STABILITY
+October 25, 2026
+Development notes (first person)
+
+I am building Phase 2 on top of both Phase 1 multiplayer test branches, not on top of main. I have kept the Phase 1 ownership, jump-jet, companion follow, and moving-AI-mech improvements in the Phase 2 branch histories. I have not merged main.
+
+ISSUE 3 - CUSTOM WEAPON GROUPS
+I can now assign each of my 18 hardpoints to a custom weapon group via the Mech Lab, instead of being restricted to each prefab's original m_iWeaponGroup value. The weapon attached to that hardpoint goes into the selected fire group, letting me combine weapons of a chosen type or mix weapon types as needed.
+In the Mech Lab, I select a hardpoint and use < GROUP / GROUP > above the selection panel to cycle group 0-6. Group 0 means 'use the original prefab/default group'; groups 1-6 are my custom selections. These edits are sent via a server-validated RPC, authorized by Mech Bay proximity and order ownership or my nearby Mech Wrench, then replicated to every client via three packed RplProps (4 bits per hardpoint; 18 hardpoints). I do not respawn weapons to change their group.
+For station authorization, the original crew station bit masks remain active. A custom group becomes available only when an installed weapon on that group belongs to the controlling station.
+For the driver and gunner, keyboard keys 1-6 select the exact group using a server-validated PlayerController RPC. The existing B key still cycles groups. I added all six bindings to the Mech controls section for rebinding. Direct selection is blocked while firing to avoid stuck held-trigger behavior.
+LIMIT: Custom group assignments currently live on the active mech, not inside the saved-build string. They need an additional save-format upgrade if I want them permanently embedded in saved loadouts across re-orders. Existing preset saves still contain weapons and heatsinks.
+
+ISSUE 6 - LASER FX MULTIPLAYER REPLICATION
+The server already sends shot, impact, rocket course, reload, and beam-stop RPCs through MechCore's weapon router. The actual beam mesh intentionally spawns locally on each receiving client and is not an independent replicated actor. I found that if a laser module prefab lacks its m_FX beam prefab, clients can receive the shot but display no beam.
+I added an FX beam fallback to MW RW_LaserWeapon (inherited by RW_PulseLaserWeapon) and to the Core Las Cannon module. The fallback references Mech Core's existing CGS_LaserBeam.et asset, lasts 0.22 seconds, and is 0.14 metres wide. Authored beam FX values are preserved if present.
+I also added an opt-in reliable-beam-shot FX flag. Pulse / noncontinuous laser shot visuals use the reliable shot channel when enabled, while continuous beam tick updates remain unreliable to avoid network flooding. Projectile/rocket impact events stay on their original pathways.
+LIMIT: This is not proof that every other custom weapon from other mods is configured. Dedicated multiplayer visual checks remain required.
+
+ISSUE 1 - HUD AND MECH LAB FLASHES
+I found that changing the Mech Lab's weapon catalog, hardpoint page, or order screen caused the current canvas to be destroyed before the new one had been measured and constructed, leaving blank frames. I now retain the outgoing canvas during construction of the next one and remove it after the replacement is ready. Both canvases are cleaned up on menu closure.
+I also made MechCore's BeginLocalAim idempotent for the same active station so redundant compartment events do not reset the reticle/HUD.
+LIMIT: I still need an in-game report of any remaining flashes, particularly those outside Mech Lab navigation.
+
+COMPILE TEST
+I have only performed static source checks, balanced brace checks, and duplicate config GUID checks. I have NOT compiled this Phase 2 code in Workbench and have NOT tested multiplayer. If compilation fails, I will fix the exact log error without merging main.
+
+TEST CHECKLIST WHEN AVAILABLE
+1) Pull BOTH matching Core and MW Phase 2 test branches together.
+2) Compile Game scripts, then test the Mech Lab and pilot controls locally.
+3) In the Mech Lab, put both arm lasers into Group 1 and missile pods into Group 2. Group changes should appear in the selected hardpoint text.
+4) Drive: press 1 to select lasers, 2 to select missiles, and B to cycle; confirm HUD group changes and only the assigned weapons fire.
+5) Save/load a mech and swap modules; confirm the active mech's custom group routing survives remounting (not persistent saved-build re-orders yet).
+6) Cycle equipment/scroll parts/pages while watching for a blank menu frame.
+7) Later MP test: fire lasers from Client A while Client B observes; verify beam visibility, shot origin/end, no duplicate beams, and no extra damage.
+8) Later MP test: confirm group selections replicate to observer HUDs, and a second player cannot edit the owner-reserved Mech Bay frame.
+
+SOURCE LOCATIONS
+Core: Scripts/Game/Mech/BFA_MechHardpointComponent.c, BFA_MechCoreComponent.c, BFA_MechPlayerController.c, BFA_MechWeaponComponent.c, BFA_MechWeaponFX.c, BFA_MechWeaponModuleComponent.c, BFA_MechControllerComponent.c, BFA_MechCrewStationControllerComponent.c, BFA_MechAimComponent.c, Scripts/Game/Mech Weapons/BFA_MechLasCannonModuleComponent.c, Configs/System/chimeraInputCommon.conf, Configs/System/keyBindingMenu.conf.
+MW: Scripts/Game/RW_MechLab/RW_MechLabNet.c, Scripts/Game/RW_MechLab/RW_MechLabMenu.c, Scripts/Game/RW_Weapons/Energy/RW_LaserWeapon.c.

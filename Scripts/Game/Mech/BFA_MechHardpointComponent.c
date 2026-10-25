@@ -116,6 +116,15 @@ class BFA_MechHardpointComponent : ScriptComponent
 	[Attribute("", UIWidgets.Object, "Modules this mech is allowed to mount.", category: "Modules")]
 	ref array<ref BFA_MechModuleDefinition> m_aModules;
 
+	// Optional 0-9 player-assigned weapon groups, 0 = authored prefab routing.
+	// Six hardpoints per 24-bit replicated word, four bits per hardpoint.
+	[RplProp(onRplName: "OnRoutingReplicated")]
+	protected int m_iRouteGroups0;
+	[RplProp(onRplName: "OnRoutingReplicated")]
+	protected int m_iRouteGroups1;
+	[RplProp(onRplName: "OnRoutingReplicated")]
+	protected int m_iRouteGroups2;
+
 	[RplProp(onRplName: "OnLoadoutReplicated")]
 	protected int m_iLoadout0;
 
@@ -339,6 +348,106 @@ class BFA_MechHardpointComponent : ScriptComponent
 		}
 
 		m_bInitialized = true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected int GetGroupRouteWord(int index)
+	{
+		switch (index)
+		{
+			case 0: return m_iRouteGroups0;
+			case 1: return m_iRouteGroups1;
+			case 2: return m_iRouteGroups2;
+		}
+		return 0;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void SetGroupRouteWord(int index, int value)
+	{
+		switch (index)
+		{
+			case 0: m_iRouteGroups0 = value; break;
+			case 1: m_iRouteGroups1 = value; break;
+			case 2: m_iRouteGroups2 = value; break;
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! 0 = use the weapon group's authored default; 1-9 = player's routing.
+	int GetCustomWeaponGroup(int hardpointIndex)
+	{
+		if (hardpointIndex < 0 || hardpointIndex >= GetHardpointCount())
+			return 0;
+		int word = GetGroupRouteWord(hardpointIndex / 6);
+		int shift = Math.Mod(hardpointIndex, 6) * 4;
+		return (word >> shift) & 15;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void ApplyCustomGroupToModule(int hardpointIndex)
+	{
+		if (hardpointIndex < 0 || hardpointIndex >= m_aWeaponModules.Count())
+			return;
+		BFA_MechWeaponModuleComponent module = m_aWeaponModules[hardpointIndex];
+		if (!module)
+			return;
+		int chosen = GetCustomWeaponGroup(hardpointIndex);
+		int authored = 0;
+		if (m_aHardpoints && hardpointIndex < m_aHardpoints.Count() && m_aHardpoints[hardpointIndex])
+			authored = m_aHardpoints[hardpointIndex].m_iWeaponGroup;
+		if (chosen <= 0)
+			chosen = authored;
+		module.SetRuntimeWeaponGroup(chosen);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void OnRoutingReplicated()
+	{
+		for (int hp = 0; hp < GetHardpointCount(); hp++)
+			ApplyCustomGroupToModule(hp);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Authorized caller only. The server owns the compact route words and replicates
+	//! them to clients; no weapon entity or loadout respawn is needed.
+	bool ServerSetCustomWeaponGroup(int hardpointIndex, int group)
+	{
+		if (!Replication.IsServer() || hardpointIndex < 0 || hardpointIndex >= GetHardpointCount() || group < 0 || group > 9)
+			return false;
+		if (GetCustomWeaponGroup(hardpointIndex) == group)
+			return true;
+		int wordIndex = hardpointIndex / 6;
+		int shift = Math.Mod(hardpointIndex, 6) * 4;
+		int word = GetGroupRouteWord(wordIndex);
+		word = (word & ~(15 << shift)) | (group << shift);
+		SetGroupRouteWord(wordIndex, word);
+		ApplyCustomGroupToModule(hardpointIndex);
+		Replication.BumpMe();
+		BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(GetOwner().FindComponent(BFA_MechCoreComponent));
+		if (core)
+			core.ServerRevalidateWeaponSelection();
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Restrict custom group access to the station owning that hardpoint.
+	bool HasCustomWeaponGroupForStation(string stationId, int group)
+	{
+		if (group < 1 || group > 9)
+			return false;
+		for (int hp = 0; hp < GetHardpointCount(); hp++)
+		{
+			if (GetCustomWeaponGroup(hp) != group)
+				continue;
+			BFA_MechWeaponModuleComponent module = GetInstalledModuleAt(hp);
+			if (!module)
+				continue;
+			string station = module.GetControlStation();
+			if (station.IsEmpty() || station == stationId)
+				return true;
+		}
+		return false;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -709,8 +818,10 @@ class BFA_MechHardpointComponent : ScriptComponent
 				if (ShouldReuseExistingWeapon(module, existingWeaponModule))
 				{
 					existingWeaponModule.BindToHardpoint(owner, hp, hardpoint.m_sName, hardpoint.m_iClass, hardpoint.m_sControlStation, hardpoint.m_iWeaponGroup);
+					// Routing will be applied as soon as the module is registered.
 
 					m_aWeaponModules[hp] = existingWeaponModule;
+					ApplyCustomGroupToModule(hp);
 					m_aMountedIds[hp] = want;
 					BFA_MechEvents.RaiseWeaponInstalled(owner, hp, existingWeaponModule);
 
@@ -827,6 +938,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 			{
 				weaponModule.BindToHardpoint(owner, hp, hardpoint.m_sName, hardpoint.m_iClass, hardpoint.m_sControlStation, hardpoint.m_iWeaponGroup);
 				m_aWeaponModules[hp] = weaponModule;
+					ApplyCustomGroupToModule(hp);
 				BFA_MechEvents.RaiseWeaponInstalled(owner, hp, weaponModule);
 			}
 
