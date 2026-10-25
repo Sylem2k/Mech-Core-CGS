@@ -299,6 +299,12 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		if (!owner)
 			return false;
 
+		// V23 server-authoritative root simulation must also own jump state,
+		// even after the engine transfers Rpl ownership to the client's driver.
+		// Client prediction still requires local Rpl ownership.
+		if (Replication.IsServer())
+			return true;
+
 		RplComponent rpl = RplComponent.Cast(owner.FindComponent(RplComponent));
 		return !rpl || rpl.IsOwner();
 	}
@@ -1486,8 +1492,15 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		m_fNetSnapshotTimer += timeSlice;
 
 		float interval = Math.Max(m_fNetSnapshotInterval, 0.033);
-		if (!m_Pilot)
-			interval = Math.Max(interval, 0.20);
+		// Unoccupied/companion mechs can move without any pilot character.
+		// 5 Hz snapshots made these moving walkers jump between positions for
+		// observers. Throttle to 5 Hz only while truly stationary.
+		if (!m_Pilot && !m_bAirborne)
+		{
+			Physics netBody = owner.GetPhysics();
+			if (!netBody || netBody.GetVelocity().LengthSq() < 0.04)
+				interval = Math.Max(interval, 0.20);
+		}
 
 		if (m_fNetSnapshotTimer < interval)
 			return;
