@@ -595,6 +595,18 @@ class BFA_MechHardpointComponent : ScriptComponent
 
 
 	//------------------------------------------------------------------------------------------------
+	//! Root-attached hardpoints must turn around the waist with the torso.
+	//! Aim-mount and bone-attached weapons already inherit their own parent pose;
+	//! rotating them again here would cause double transforms.
+	bool IsRootMountedHardpoint(int hardpointIndex)
+	{
+		if (!m_aHardpoints || hardpointIndex < 0 || hardpointIndex >= GetHardpointCount())
+			return false;
+		BFA_MechHardpointDefinition def = m_aHardpoints[hardpointIndex];
+		return def && def.m_sAimMountId.IsEmpty() && def.m_sAttachBone.IsEmpty();
+	}
+
+	//------------------------------------------------------------------------------------------------
 	IEntity GetModuleEntityAt(int hardpointIndex)
 	{
 		if (hardpointIndex < 0 || hardpointIndex >= m_aModuleEntities.Count())
