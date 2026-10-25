@@ -258,6 +258,12 @@ class BFA_MechAimComponent : ScriptGameComponent
 		if (stationId.IsEmpty())
 			stationId = "DRIVER";
 
+		// Compartment state notifications can be delivered more than once in MP.
+		// Do not restart the HUD, reticle and local tick for the same active station.
+		// A new/different station still performs the full initialization below.
+		if (m_bLocalAimActive && m_bLocalAimTickRunning && m_sLocalStation == stationId)
+			return;
+
 		m_sLocalStation = stationId;
 
 		m_bLocalAimActive = true;
