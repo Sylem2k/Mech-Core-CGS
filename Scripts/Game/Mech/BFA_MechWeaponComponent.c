@@ -472,8 +472,17 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		if (!System.IsConsoleApp())
 			PlayShotLocal(hardpointIndex, shotId, start, end, flags, speed, length, thickness);
 
-		// Rockets are few and long-lived: reliable. Rapid fire: unreliable (a lost flash is harmless).
-		if (serverImpact)
+		// Guided rockets keep their reliable visual launch. Hitscan pulse lasers may
+		// opt into reliable FX to stop their entire short beam disappearing when the
+		// unreliable packet is lost. Continuous beam ticks stay unreliable.
+		bool reliableShot = serverImpact;
+		if (!reliableShot && module)
+		{
+			BFA_MechWeaponFX shotFx = module.GetFX();
+			if (shotFx && shotFx.m_bReliableBeamShot && !shotFx.m_bBeamContinuous && !shotFx.m_sBeamPrefab.IsEmpty())
+				reliableShot = true;
+		}
+		if (reliableShot)
 			Rpc(RpcDo_ModuleShotReliable, hardpointIndex, shotId, start, end, flags, speed, length, thickness);
 		else
 			Rpc(RpcDo_ModuleShot, hardpointIndex, shotId, start, end, flags, speed, length, thickness);
