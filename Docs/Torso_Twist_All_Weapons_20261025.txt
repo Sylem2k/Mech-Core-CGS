@@ -1,0 +1,38 @@
+TORSO TWIST - UPPER BODY AND WEAPON FOLLOW
+October 25, 2026
+My MechCore / MW development notes (first person)
+
+I found that having CGS_TorsoTwistComponent on every mech was not enough. Most frame and enemy prefabs had EMPTY m_aTwistSlots / m_aTwistMounts, and their visible upper-body MeshObject was still on the vehicle root. Their leg movement and body visual therefore remained tied together, and many weapons were installed directly at root hardpoints instead of inheriting the torso movement.
+
+I made a test-branch-only change in Mech Core CGS:
+- CGS_TorsoTwistComponent now automatically discovers the MechWeaponMountComponent's arm/weapon mount IDs, even when the prefab's explicit twist-mount list is empty.
+- Aim-mount weapons still use their proper independent yaw/pitch and match the twisted mount rest pose.
+- I added tracking of ROOT-mounted weapon module entities at hardpoints (torso, chest, shoulders, back, any fire group), and rotate their existing local transform around the waist pivot. Root guns no longer remain fixed to the leg-facing chassis.
+- I skip modules mounted under aim mounts or explicit bones so they do NOT receive the torso yaw twice.
+- I also discover fresh weapons when the mech is refitted during an active twist, and detect late-bound arm mounts with a throttled 0.25-second scan.
+- No fire-group changes, weapon damage, aim-range limits, leg simulation, pilot control or shield changes were made in this pass.
+
+I made a companion test-branch-only MW prefab change:
+- I added six reusable torso-visual entity prefabs with correct .et.meta resources, covering light, medium and Warlord model and material variants.
+- I updated ten player/legacy frame prefabs (Light_Mech_Base, Light_Mech_Frame_B, Med_Mech_Base, Med_Mech_Frame_B, Heavy_Judiciar_Gun, Heavy_Judiciar_Missile, Heavy_War_Lord, Assault_Gravemarch_Gun, Assault_Gravemarch_Missile, SampleMech).
+- I updated all 15 non-boss OPFOR variants (four Cricket, four Warden, four Judiciar and three Gravemarch).
+- These prefabs now attach the matching visual upper-body model to a Torso slot, list the Torso and applicable exhaust/head slots as twist parts, and set m_bHideRootMesh=1. Legs and hips stay on their original slots. The original root MeshObject resource and physics, damage, and weapon configs remain serialized/unchanged for safety; the split torso is the rendered body while active.
+- In the frame where SampleMech had no torso component, I added one.
+- All 25 revised mech prefabs retain their original filenames and resource GUIDs. Newly added torso-visual prefabs use their own new GUIDs and metadata.
+
+IMPORTANT BOSS EXCEPTION:
+I deliberately did NOT relocate the active Titan Warlord / 128-player boss body mesh or any of its custom 17 hitboxes. Its existing torso-component and weapon mounts can use the new shared Core mount/root weapon-follow code, but a complete visual torso split on this boss still needs a separate hitbox-alignment and performance test. Its 40,000 hull / 30,000 shield / 18 hardpoints / virtual AI stations and prior damage fixes were not edited in the MW boss prefabs by this pass.
+
+TESTING (not yet compiled in Workbench):
+1. Pull BOTH fix/torso-twist-all-mounts-20261025 branches. The MW branch includes prior MW4 laser-field cleanup and the Core branch includes the six-column group code.
+2. Compile scripts. Open and spawn a standard player light, medium, heavy, and assault mech.
+3. Walk forward but aim 40-60 degrees off the leg direction. The torso BODY + exhausts and all arm mount weapons should visibly rotate while hips/legs continue pointing along movement.
+4. Install torso, chest, shoulder and back guns in different weapon groups; all root-mounted weapons must physically follow torso yaw and their muzzle flash/beam/projectiles must originate from the new pose.
+5. Swap weapons during an active twist; the swapped weapon must follow without jumping or double rotating.
+6. Use the local Mech Lab and confirm the camera, selecting weapons, group 1-6 firing, and new body prefabs still appear correctly.
+7. Spawn nonboss OPFOR variants and verify that AI aiming swings their upper bodies and guns.
+8. Shoot/kill a test frame; check body and hitbox alignment and that the wreck does not duplicate upper-body visuals.
+9. When MP is available, verify clients render the same twist from Rpl-aim data. Test multiple players, frame rate and network load.
+10. Address Titan's visual torso + chest/weakpoint hitbox transformation separately, without risking the boss damage pipeline.
+
+STATUS: Source and prefab structure checked in GitHub; there is NO Workbench compiler pass, no dedicated multiplayer verification, and no changes to either main branch.
