@@ -1,0 +1,36 @@
+OCTOBER 26, 2026 - MW LRM AREA BARRAGE (TEST BRANCH)
+
+I added optional area-barrage functionality to my existing LRM system without replacing the precision lock/fire system.
+
+I enabled opt-in barrage on standard LRM-5, LRM-10, LRM-15 and LRM-20 racks. Precision fire remains the default. While seated in the mech I select the LRM weapon group, press Z to toggle barrage for that group, aim at a ground position and fire. The server accepts the toggle only from the actual controller of that crew station and refuses mode changes mid-salvo.
+
+I reuse CGS_Titan_Missile's existing tube order, 45-degree loft, turn-rate guidance, flight travel, server hit tracing, splash damage, heat, ammo, reload, active point defense tracking, and 100 ms replicated course corrections. Barrage snapshots the chosen world aim point before the salvo and assigns each missile a random destination within a configurable radius, default 18 metres. I prevent the current laser/follow-aim modes from retargeting a barrage missile once its target is assigned.
+
+I added the rebindable MechMissileMode key on Z and integrated it with the current station/group firing controls. SRMs, Streak SRMs, and Warlord boss racks are not opted in.
+
+I deliberately left the existing rocket particle assets and launch sounds unchanged for now. The first step is to confirm basic server-authoritative bombardment and matching remote trajectories before heavier smoke/flash FX work. I also have not added a replicated cockpit mode text indicator yet.
+
+TEST ORDER
+1. Switch BOTH Mech-Core-CGS and MW to feat/lrm-barrage-mode-20261026.
+2. Compile Enfusion Game scripts first. Do not merge main until the compiler and MP tests pass.
+3. Put LRM5/10/15/20 in a regular mech. Aim at terrain with NO target and fire: normal PRECISION must refuse because there is no lock.
+4. Select that LRM's weapon group, press Z, aim at ground, and fire. Verify all missiles leave individual tubes and arc toward dispersed impacts near the chosen ground point.
+5. Rotate camera after firing: missiles must keep their original target area. Press Z after the volley to return to precision lock behavior.
+6. Confirm no extra ammo/heat is used, blast damage is authoritative, reloads and point defense still function.
+7. Verify as two players on dedicated MP: both see appropriate missile courses/impacts. Check performance at high missile counts.
+8. Confirm normal SRM/Streak and Titan Warlord behavior is unchanged.
+
+SOURCE FILES
+Core Scripts/Game/CGS_Weapons/CGS_Titan_Missile.c
+Core Scripts/Game/Mech/BFA_MechPlayerController.c
+Core Scripts/Game/Mech/BFA_MechControllerComponent.c
+Core Configs/System/chimeraInputCommon.conf
+Core Configs/System/keyBindingMenu.conf
+MW Scripts/Game/RW_Weapons/Missile/RW_LRMWeapon.c
+MW Prefabs/Vehicles/Mech/Weapons/LRM/LRM5.et
+MW Prefabs/Vehicles/Mech/Weapons/LRM/LRM10.et
+MW Prefabs/Vehicles/Mech/Weapons/LRM/LRM15.et
+MW Prefabs/Vehicles/Mech/Weapons/LRM/LRM20.et
+MW Prefabs/Vehicles/Mech/Weapons/LRM/README.txt
+
+STATUS: The code is committed on matching isolated test branches, but I have not run Workbench compilation or an MP test yet. No main changes were made.
