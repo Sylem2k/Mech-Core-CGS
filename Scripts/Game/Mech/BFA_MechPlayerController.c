@@ -470,6 +470,53 @@ modded class SCR_PlayerController
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Toggle the selected group's LRM barrage mode. Never trust client crew claims.
+	void BFA_Mech_RequestToggleMissileBarrage(IEntity mech, string stationId, int weaponGroup)
+	{
+		if (!mech || stationId.IsEmpty() || weaponGroup < 1 || weaponGroup > 9)
+			return;
+		RplComponent rpl = RplComponent.Cast(mech.FindComponent(RplComponent));
+		if (!rpl)
+			return;
+		if (Replication.IsServer())
+		{
+			BFA_Mech_ServerToggleMissileBarrage(rpl.Id(), stationId, weaponGroup);
+			return;
+		}
+		Rpc(BFA_Mech_RpcAsk_ToggleMissileBarrage, rpl.Id(), stationId, weaponGroup);
+	}
+
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+	protected void BFA_Mech_RpcAsk_ToggleMissileBarrage(RplId mechId, string stationId, int weaponGroup)
+	{
+		BFA_Mech_ServerToggleMissileBarrage(mechId, stationId, weaponGroup);
+	}
+
+	protected void BFA_Mech_ServerToggleMissileBarrage(RplId mechId, string stationId, int weaponGroup)
+	{
+		if (!Replication.IsServer() || weaponGroup < 1 || weaponGroup > 9)
+			return;
+		IEntity mech = BFA_Mech_ResolveEntity(mechId);
+		if (!mech || !BFA_Mech_IsStationController(mech, stationId))
+			return;
+		BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(mech.FindComponent(BFA_MechCoreComponent));
+		if (core && !core.CanStationFireGroup(stationId, weaponGroup))
+			return;
+		BFA_MechHardpointComponent hardpoints = BFA_MechHardpointComponent.Cast(mech.FindComponent(BFA_MechHardpointComponent));
+		if (!hardpoints)
+			return;
+		for (int hp = 0; hp < hardpoints.GetHardpointCount(); hp++)
+		{
+			BFA_MechWeaponModuleComponent module = hardpoints.GetWeaponModuleAt(hp);
+			if (!module || !module.MatchesFireRoute(stationId, weaponGroup))
+				continue;
+			CGS_Titan_Missile missiles = CGS_Titan_Missile.Cast(module);
+			if (missiles && missiles.AllowsBarrage())
+				missiles.ServerToggleBarrageMode();
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! Reliable one-shot auxiliary fire, intended for shoulders/missiles/utility weapons.
 	void BFA_Mech_RequestFirePulse(IEntity mech, string stationId, int weaponGroup)
 	{

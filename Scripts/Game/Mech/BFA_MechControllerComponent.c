@@ -600,6 +600,16 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	void OnToggleMissileBarrageInput()
+	{
+		if (!m_bLocalPilot || m_bFireHeld)
+			return;
+		SCR_PlayerController pc = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		if (pc)
+			pc.BFA_Mech_RequestToggleMissileBarrage(GetOwner(), m_sCrewStationId, ResolveSelectedPrimaryWeaponGroup());
+	}
+
+	//------------------------------------------------------------------------------------------------
 	void OnLoadoutInput()
 	{
 		if (!m_bLocalPilot)
@@ -866,6 +876,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 			input.AddActionListener("MechSelectGroup5", EActionTrigger.DOWN, OnSelectMechGroup5);
 			input.AddActionListener("MechSelectGroup6", EActionTrigger.DOWN, OnSelectMechGroup6);
 			input.AddActionListener("MechLoadout", EActionTrigger.DOWN, OnLoadoutInput);
+			input.AddActionListener("MechMissileMode", EActionTrigger.DOWN, OnToggleMissileBarrageInput);
 		}
 		else if (input)
 		{
@@ -1006,6 +1017,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 			input.RemoveActionListener("MechSelectGroup5", EActionTrigger.DOWN, OnSelectMechGroup5);
 			input.RemoveActionListener("MechSelectGroup6", EActionTrigger.DOWN, OnSelectMechGroup6);
 			input.RemoveActionListener("MechLoadout", EActionTrigger.DOWN, OnLoadoutInput);
+			input.RemoveActionListener("MechMissileMode", EActionTrigger.DOWN, OnToggleMissileBarrageInput);
 			if (m_bUseMechControls && m_fMechLastFire > 0.5)
 				OnFireInput(0);
 			m_fMechLastFire = -1;
