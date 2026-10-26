@@ -44,6 +44,9 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	[Attribute("true", UIWidgets.CheckBox, "Rotate all root-mounted torso, chest, shoulder and back hardpoint weapons along with the torso. Aim-mount children are handled separately.", category: "Parts")]
 	protected bool m_bTwistRootMountedWeapons;
 
+	[Attribute("true", UIWidgets.CheckBox, "Independently aim root-mounted chest/torso/shoulder/back weapon modules up, down, left and right. Each hardpoint has its own limits. Disable on special bosses until visual/hitbox validation.", category: "Parts")]
+	protected bool m_bAimRootMountedWeapons;
+
 	[Attribute("false", UIWidgets.CheckBox, "Remove the mech root's own model (its slots stay visible). Use it when the root mesh is the whole body: put the same body model in a twisting 'Torso' slot instead.", category: "Parts")]
 	protected bool m_bHideRootMesh;
 
@@ -62,6 +65,7 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	protected float m_fNextCapture;
 	protected float m_fNextRefresh;
 	protected float m_fNextMountScan;
+	protected float m_fNextRootWeaponAim;
 
 	protected ref array<IEntity> m_aSlotEntities = {};
 	protected ref array<ref CGS_TwistRest> m_aSlotRest = {};
@@ -162,6 +166,8 @@ class CGS_TorsoTwistComponent : ScriptComponent
 				m_fNextCapture = now + 0.5;
 				Capture(owner);
 			}
+			// Root weapons still need pitch/yaw aiming while the torso is centered.
+			ApplyRootWeaponAims(owner, 0);
 			return;
 		}
 
@@ -181,12 +187,16 @@ class CGS_TorsoTwistComponent : ScriptComponent
 		// Re-apply now and then even when still: a loadout swap re-binds the arms to their
 		// untwisted pose.
 		if (!newWeapons && !newMounts && Math.AbsFloat(m_fTwist - m_fApplied) < 0.02 && now < m_fNextRefresh)
+		{
+			ApplyRootWeaponAims(owner, m_fTwist);
 			return;
+		}
 		m_fNextRefresh = now + 0.5;
 		HideRoot(owner);
 
 		Apply(owner, m_fTwist);
 		m_fApplied = m_fTwist;
+		ApplyRootWeaponAims(owner, m_fTwist, true);
 
 		if (m_bDebug && now >= m_fNextDebug)
 		{
@@ -233,8 +243,10 @@ class CGS_TorsoTwistComponent : ScriptComponent
 		m_aSlotEntities.Clear();
 		m_aSlotRest.Clear();
 		m_aMountRest.Clear();
-		m_aRootWeaponEntities.Clear();
-		m_aRootWeaponRest.Clear();
+		// Preserve the ORIGINAL root weapon rest poses across captures. If a gun
+		// is already aimed upwards, re-capturing its current transform would
+		// progressively bake aim into rest and make the barrel drift on each scan.
+		// RefreshRootWeapons handles additions, removals and swaps by entity ID.
 
 		SlotManagerComponent slots = SlotManagerComponent.Cast(owner.FindComponent(SlotManagerComponent));
 		if (slots && m_aTwistSlots)
@@ -379,6 +391,87 @@ class CGS_TorsoTwistComponent : ScriptComponent
 			owner.SetObject(null, "");
 	}
 
+
+	//------------------------------------------------------------------------------------------------
+	//! Aim each fitted root weapon toward its crew station's replicated camera
+	//! convergence point. Torso yaw is the base transform; independent per-weapon
+	//! yaw/pitch is applied on top, never to the chassis or to arm/bone mounts.
+	//! Run at 30 Hz when stable, or immediately when torso yaw changes.
+	protected void ApplyRootWeaponAims(IEntity owner, float torsoYaw, bool force = false)
+	{
+		if (!m_bTwistRootMountedWeapons || !owner)
+			return;
+
+		float now = Now();
+		if (!force && now < m_fNextRootWeaponAim)
+			return;
+		m_fNextRootWeaponAim = now + 0.033;
+
+		BFA_MechHardpointComponent hardpoints = BFA_MechHardpointComponent.Cast(owner.FindComponent(BFA_MechHardpointComponent));
+		BFA_MechAimComponent aim = BFA_MechAimComponent.Cast(owner.FindComponent(BFA_MechAimComponent));
+
+		vector torsoMat[4];
+		Math3D.AnglesToMatrix(Vector(torsoYaw, 0, 0), torsoMat);
+		torsoMat[3] = m_vPivot - (torsoMat[0] * m_vPivot[0] + torsoMat[1] * m_vPivot[1] + torsoMat[2] * m_vPivot[2]);
+
+		for (int hp = 0; hp < m_aRootWeaponEntities.Count(); hp++)
+		{
+			IEntity gun = m_aRootWeaponEntities[hp];
+			CGS_TwistRest rest = m_aRootWeaponRest[hp];
+			if (!gun || !rest)
+				continue;
+
+			vector base[4];
+			Math3D.MatrixMultiply4(torsoMat, rest.m_Mat, base);
+			vector finalMat[4];
+			for (int i = 0; i < 4; i++)
+				finalMat[i] = base[i];
+
+			string station;
+			float yawMin, yawMax, pitchMin, pitchMax;
+			if (m_bAimRootMountedWeapons && hardpoints && aim && hardpoints.GetRootWeaponAimConfig(hp, station, yawMin, yawMax, pitchMin, pitchMax))
+			{
+				vector toAim = aim.GetAimLocalPointForStation(station) - base[3];
+				if (toAim.LengthSq() > 0.000001)
+				{
+					toAim.Normalize();
+					vector right = base[0];
+					vector up = base[1];
+					vector forward = base[2];
+					if (right.LengthSq() > 0.000001 && up.LengthSq() > 0.000001 && forward.LengthSq() > 0.000001)
+					{
+						right.Normalize();
+						up.Normalize();
+						forward.Normalize();
+
+						// Same rest-space convergence method as BFA_MechWeaponMountComponent.
+						vector relative = Vector(vector.Dot(toAim, right), vector.Dot(toAim, up), vector.Dot(toAim, forward));
+						vector lookMat[4];
+						Math3D.DirectionAndUpMatrix(relative, vector.Up, lookMat);
+						vector angles = Math3D.MatrixToAngles(lookMat);
+
+						float yaw = angles[0];
+						while (yaw > 180)
+							yaw -= 360;
+						while (yaw < -180)
+							yaw += 360;
+						yaw = Math.Clamp(yaw, yawMin, yawMax);
+						float pitch = Math.Clamp(angles[1], pitchMin, pitchMax);
+
+						vector aimMat[4];
+						Math3D.AnglesToMatrix(Vector(yaw, pitch, 0), aimMat);
+						aimMat[3] = vector.Zero;
+						Math3D.MatrixMultiply4(base, aimMat, finalMat);
+						finalMat[3] = base[3];
+					}
+				}
+			}
+
+			gun.SetLocalTransform(finalMat);
+			gun.Update();
+		}
+	}
+
 	//------------------------------------------------------------------------------------------------
 	protected void Apply(IEntity owner, float twist)
 	{
@@ -397,20 +490,6 @@ class CGS_TorsoTwistComponent : ScriptComponent
 			Math3D.MatrixMultiply4(rot, m_aSlotRest[i].m_Mat, mat);
 			part.SetLocalTransform(mat);
 			part.Update();
-		}
-
-		// Keep all root-mounted guns aligned with the turning torso, irrespective
-		// of their fire-group number or whether they aim through a separate mount.
-		for (int hp = 0; hp < m_aRootWeaponEntities.Count(); hp++)
-		{
-			IEntity weapon = m_aRootWeaponEntities[hp];
-			CGS_TwistRest basePose = m_aRootWeaponRest[hp];
-			if (!weapon || !basePose)
-				continue;
-			vector gunMat[4];
-			Math3D.MatrixMultiply4(rot, basePose.m_Mat, gunMat);
-			weapon.SetLocalTransform(gunMat);
-			weapon.Update();
 		}
 
 		BFA_MechWeaponMountComponent mounts = BFA_MechWeaponMountComponent.Cast(owner.FindComponent(BFA_MechWeaponMountComponent));
