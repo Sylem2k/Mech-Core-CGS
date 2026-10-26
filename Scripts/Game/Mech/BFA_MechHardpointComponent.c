@@ -45,6 +45,23 @@ class BFA_MechHardpointDefinition
 
 	[Attribute("0", UIWidgets.Auto, "Weapon group this hardpoint fires on (e.g. 1 = main pair, 2 = secondary pair). 0 = use the weapon module's own setting. This is how one weapon prefab can be a main gun on one mech and a secondary on another.", category: "Routing")]
 	int m_iWeaponGroup;
+
+	// Independent turret-style aiming for an installed weapon attached directly to the mech root.
+	// Aim-mounted/animated/bone-mounted weapons keep their existing mount solver.
+	[Attribute("true", UIWidgets.CheckBox, "Allow a directly root-attached weapon to track the station reticle in yaw and pitch. Does not rotate the entire torso mesh.", category: "Root Weapon Aim")]
+	bool m_bRootWeaponAim;
+
+	[Attribute("-110", UIWidgets.Auto, "Minimum yaw relative to the weapon's authored forward direction (degrees).", category: "Root Weapon Aim")]
+	float m_fRootAimYawMin;
+
+	[Attribute("110", UIWidgets.Auto, "Maximum yaw relative to the weapon's authored forward direction (degrees).", category: "Root Weapon Aim")]
+	float m_fRootAimYawMax;
+
+	[Attribute("-60", UIWidgets.Auto, "Minimum pitch relative to the weapon's authored forward direction (degrees).", category: "Root Weapon Aim")]
+	float m_fRootAimPitchMin;
+
+	[Attribute("60", UIWidgets.Auto, "Maximum pitch relative to the weapon's authored forward direction (degrees).", category: "Root Weapon Aim")]
+	float m_fRootAimPitchMax;
 }
 
 //------------------------------------------------------------------------------------------------
@@ -604,6 +621,35 @@ class BFA_MechHardpointComponent : ScriptComponent
 			return false;
 		BFA_MechHardpointDefinition def = m_aHardpoints[hardpointIndex];
 		return def && def.m_sAimMountId.IsEmpty() && def.m_sAttachBone.IsEmpty();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Returns aim limits only for a fitted root-attached weapon. Arm/bone mounts
+	//! already receive their own aim; this prevents double rotation.
+	bool GetRootWeaponAimConfig(int hardpointIndex, out string stationId, out float yawMin, out float yawMax, out float pitchMin, out float pitchMax)
+	{
+		if (!IsRootMountedHardpoint(hardpointIndex))
+			return false;
+
+		BFA_MechHardpointDefinition def = m_aHardpoints[hardpointIndex];
+		if (!def || !def.m_bRootWeaponAim)
+			return false;
+
+		BFA_MechWeaponModuleComponent module = GetInstalledModuleAt(hardpointIndex);
+		if (!module)
+			return false;
+
+		stationId = def.m_sControlStation;
+		if (stationId.IsEmpty())
+			stationId = module.GetControlStation();
+		if (stationId.IsEmpty())
+			stationId = "DRIVER";
+
+		yawMin = Math.Min(def.m_fRootAimYawMin, def.m_fRootAimYawMax);
+		yawMax = Math.Max(def.m_fRootAimYawMin, def.m_fRootAimYawMax);
+		pitchMin = Math.Min(def.m_fRootAimPitchMin, def.m_fRootAimPitchMax);
+		pitchMax = Math.Max(def.m_fRootAimPitchMin, def.m_fRootAimPitchMax);
+		return true;
 	}
 
 	//------------------------------------------------------------------------------------------------
