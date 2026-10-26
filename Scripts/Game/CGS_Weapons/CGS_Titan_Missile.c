@@ -200,19 +200,37 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 			ApplyFireAtAimPoint(start, direction);
 		else
 			start = GetMuzzle(direction);
+
+		// Every rocket in one barrage should start toward the SAME frozen area,
+		// even if the gunner moves the camera between tube launch callbacks.
+		if (m_bSalvoBarrage)
+		{
+			vector towardsArea = m_vBarrageAimPoint - start;
+			if (towardsArea.LengthSq() > 0.000001)
+			{
+				towardsArea.Normalize();
+				direction = towardsArea;
+			}
+		}
 		vector aimDirection = direction;
 
 		// What is the crosshair on? (Straight line from the muzzle along the aim.)
 		IEntity lockHit;
 		vector lockPoint;
 		TraceSegment(start, start + aimDirection * Math.Max(m_fRange, 10.0), m_pMechOwner, lockHit, lockPoint);
+		if (m_bSalvoBarrage)
+		{
+			// Do not draw the first network shot toward a different entity lock.
+			lockHit = null;
+			lockPoint = m_vBarrageAimPoint;
+		}
 
 		CGS_TitanMissileInFlight missile = new CGS_TitanMissileInFlight();
 		missile.m_vTargetPoint = lockPoint;
 
 		// Laser guidance: a friendly spot in front of the launcher wins.
 		CGS_LaserSpotComponent laserSpot;
-		if (m_bHoming && GuidanceUsesLaser())
+		if (!m_bSalvoBarrage && m_bHoming && GuidanceUsesLaser())
 			laserSpot = CGS_LaserSpotComponent.FindBestSpot(CGS_LaserSpotComponent.FactionOf(m_pMechOwner), start, aimDirection, LaserRange(), m_fLaserConeDeg);
 		if (m_bDebug)
 		{
