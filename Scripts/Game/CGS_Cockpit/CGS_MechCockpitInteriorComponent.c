@@ -1,8 +1,9 @@
 //------------------------------------------------------------------------------------------------
-//! Tag the root entity of a future interior cockpit prefab with this component.
-//! The local-pilot exterior mask skips this entity and all children, so cockpit
-//! dials, glass, frame, seats and panels remain visible while external armor is hidden.
-//! Attach the cockpit as a separate child prefab/slot, not as part of the exterior XOB.
+//! Optional marker for the root of a modeled cockpit interior.
+//! The cockpit must occupy its own "Cockpit" slot. The local first-person
+//! visibility system hides ONLY the exterior model in the "Torso" slot,
+//! leaving the cockpit, legs, arm meshes and all other entities untouched.
+//! Keep cockpit geometry separate from the exterior torso XOB.
 //------------------------------------------------------------------------------------------------
 [ComponentEditorProps(category: "CGS MechCore/Cockpit", description: "Marks a cockpit interior sub-tree to remain visible to the local pilot.")]
 class CGS_MechCockpitInteriorComponentClass : ScriptComponentClass
