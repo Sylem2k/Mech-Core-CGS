@@ -1,0 +1,33 @@
+PILOT INTERIOR VIEW - OCTOBER 26, 2026
+
+MY GOAL
+When I sit in any standard mech, my local camera should see outside the mech without seeing the mech's outer body, head, arms, legs and mounted guns obstructing the view. Everybody else should still see the complete mech normally. When I add a modeled cockpit inside the mech later, its gauges, panels and frame should remain visible. It must never alter the real collision, gun behavior, movement, physics authority or global replication.
+
+WHAT I CHANGED
+In the Mech Core vehicle controller, I added the default-enabled "Hide Exterior In Pilot View" setting. It runs from StartLocalInput for the LOCAL driver and from BFA_MechCrewStationControllerComponent's local station lifecycle for LOCAL gunners; it never runs for a remote pilot or AI. It clears EntityFlags.VISIBLE only on individual exterior child meshes on the local client. For the root XOB only, it uses the already established SetObject(null, "") approach without hiding the root entity/slots. I cache its original VObject. It rescans every 200 ms while occupied, so newly equipped weapon modules also disappear from the camera. On StopLocalInput and destruction cleanup it restores only the visuals it hid and avoids bringing destroyed wreck meshes back.
+
+I created CGS_MechCockpitInteriorComponent as a marker. When I import my new cockpit model, I will place it as a separate child prefab in a mech slot and add this tag to the COCKPIT ENTITY. The script will skip that entity and all its descendants so it remains visible. I will not fuse the cockpit into the mech's exterior XOB or assign one of the exterior-only materials to it.
+
+In CGS-MW-Assets I separately added AllowUserAlphaBias 1 and DisableUserAphaInShadow 1 (engine spelling) to 44 shared physical exterior MatPBRBasic files. This follows the earlier pink-head treatment and prepares the meshes for camera-specific alpha handling. The Mech Bay structure material is explicitly excluded. The material opt-in on its own is not guaranteed to fade a vehicle: the Core local pilot visibility mask is the actual implementation under test.
+
+TEST ORDER
+1. Use Mech-Core-CGS branch feat/pilot-interior-view-20261026 and MW branch feat/pilot-interior-view-20261026. The assets test branch is feat/pilot-interior-alpha-exterior-20261026, if I want to test the material additions at the same time.
+2. Compile Game scripts in Enfusion Workbench. No compile result is available yet.
+3. In a normal light mech, enter the DRIVER seat. The outer body, arms, legs, guns and torso should disappear only from my own camera. I should still see landscape, enemies, projectiles and HUD.
+4. A second client standing beside the mech should STILL see its complete exterior, animations and firing effects.
+5. Exit. All original exterior meshes should return locally, including parts that were added or swapped during my ride. Repeat with medium, heavy, assault and Warlord test frames.
+6. Place a simple temporary visible box as a COCKPIT child entity and add CGS_MechCockpitInteriorComponent. Test from inside: the box must remain visible while the external body is hidden.
+7. Test weapon swaps, mech wreck/destruction, reconnects, switching seats, separate crew stations, and camera modes in two-client dedicated MP.
+8. Verify that no mesh root changes interfere with collision or with CGS_TorsoTwistComponent's split torso display. Adjust per-model exceptions if needed before release.
+
+LIMITATIONS / SAFETY
+The interior cockpit is not built yet; only the marker and masking pipeline exist. The visibility code now handles local driver and gunner stations when a BFA_MechControllerComponent is installed. Third-person/external camera mode still needs a dedicated visibility transition after it is implemented. The test branch has not been Workbench-compiled or multiplayer-validated. The camera's exact seating position is a separate prefab/camera setup task.
+
+SCRIPTS
+Core Scripts/Game/Mech/BFA_MechControllerComponent.c
+Core Scripts/Game/Mech/BFA_MechCrewStationControllerComponent.c
+Core Scripts/Game/CGS_Cockpit/CGS_MechCockpitInteriorComponent.c
+
+MATERIALS
+Assets Common/Models/*/Data/*.emat, 44 exterior materials only.
+No main merges.

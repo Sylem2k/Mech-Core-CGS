@@ -76,6 +76,16 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 	protected float m_fTurnRight;
 
 	protected IEntity m_pLocalPilotEntity;
+
+	// Local cockpit camera only. Never sent over the network or run for AI.
+	[Attribute("true", UIWidgets.CheckBox, "When the local driver enters, hide the exterior meshes from this client only. A separate cockpit prefab tagged CGS_MechCockpitInteriorComponent stays visible.", category: "Cockpit")]
+	protected bool m_bHideExteriorInPilotView;
+
+	protected ref array<IEntity> m_aCGSPilotHiddenMeshes = {};
+	protected VObject m_pCGSPilotOriginalRootModel;
+	protected bool m_bCGSPilotRootHidden;
+	protected bool m_bCGSLocalCrewSeat;
+	protected int m_iCGSPilotNextVisibilityScan;
 	protected IEntity m_pPendingPilotEntity;
 	protected IEntity m_pPendingPilotVehicle;
 
@@ -726,10 +736,111 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! The local gunner seat has a separate controller. Share this exact
+	//! view state rather than duplicating visual-restore logic across stations.
+	void CGS_BeginLocalCrewView()
+	{
+		m_bCGSLocalCrewSeat = true;
+		CGS_RefreshPilotExteriorMask();
+	}
+
+	void CGS_EndLocalCrewView()
+	{
+		m_bCGSLocalCrewSeat = false;
+		if (!m_bLocalPilot)
+			CGS_RestorePilotExteriorMask();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Hide only the exterior's visual entities for the LOCAL pilot. The world
+	//! mech is unchanged for other players, AI, weapon traces and the server.
+	//! A future cockpit prefab must have CGS_MechCockpitInteriorComponent
+	//! on its top-level child entity so its entire visual subtree is exempt.
+	void CGS_RefreshPilotExteriorMask()
+	{
+		if ((!m_bLocalPilot && !m_bCGSLocalCrewSeat) || !m_bHideExteriorInPilotView || !GetGame())
+			return;
+
+		int now = System.GetTickCount();
+		if (now < m_iCGSPilotNextVisibilityScan)
+			return;
+		m_iCGSPilotNextVisibilityScan = now + 200;
+
+		IEntity mech = GetOwner();
+		if (!mech)
+			return;
+
+		// The root can itself have a mech-body mesh. Remove ONLY its XOB,
+		// not the entity/children; otherwise the cockpit slot would vanish.
+		if (!m_bCGSPilotRootHidden && mech.GetVObject())
+		{
+			m_pCGSPilotOriginalRootModel = mech.GetVObject();
+			mech.SetObject(null, "");
+			m_bCGSPilotRootHidden = true;
+		}
+
+		CGS_HideExteriorChildren(mech);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Each dynamically spawned module is scanned after swaps as well.
+	//! Do not recursively hide a cockpit subtree: it will remain visible.
+	protected void CGS_HideExteriorChildren(IEntity parent)
+	{
+		if (!parent)
+			return;
+
+		IEntity part = parent.GetChildren();
+		while (part)
+		{
+			IEntity next = part.GetSibling();
+			if (!part.FindComponent(CGS_MechCockpitInteriorComponent))
+			{
+				if (part.GetVObject() && (part.GetFlags() & EntityFlags.VISIBLE) == EntityFlags.VISIBLE)
+				{
+					if (!m_aCGSPilotHiddenMeshes.Contains(part))
+						m_aCGSPilotHiddenMeshes.Insert(part);
+					part.ClearFlags(EntityFlags.VISIBLE, false);
+				}
+
+				CGS_HideExteriorChildren(part);
+			}
+			part = next;
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Restore precisely those visuals hidden for this local driver.
+	//! Never touch other players' replicas or a destroyed mech's wreck mesh.
+	protected void CGS_RestorePilotExteriorMask()
+	{
+		IEntity mech = GetOwner();
+		bool alive = mech && !BFA_MechExtension.IsMechDestroyed(mech);
+		if (alive && m_bCGSPilotRootHidden && m_pCGSPilotOriginalRootModel)
+			mech.SetObject(m_pCGSPilotOriginalRootModel, "");
+
+		if (alive)
+		{
+			foreach (IEntity part : m_aCGSPilotHiddenMeshes)
+			{
+				if (part && part.GetParent())
+					part.SetFlags(EntityFlags.VISIBLE, false);
+			}
+		}
+
+		m_aCGSPilotHiddenMeshes.Clear();
+		m_pCGSPilotOriginalRootModel = null;
+		m_bCGSPilotRootHidden = false;
+		m_iCGSPilotNextVisibilityScan = 0;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	protected void LocalInputTick()
 	{
 		if (!m_bLocalPilot)
 			return;
+
+		CGS_RefreshPilotExteriorMask();
 
 		InputManager input =
 			GetGame().GetInputManager();
@@ -825,6 +936,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 
 		m_bLocalPilot = true;
 		m_pLocalPilotEntity = occupant;
+		CGS_RefreshPilotExteriorMask();
 
 		m_bJumpHeld = false;
 		m_bSprintHeld = false;
@@ -993,6 +1105,9 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 	{
 		if (!m_bLocalPilot)
 			return;
+
+		if (!m_bCGSLocalCrewSeat)
+			CGS_RestorePilotExteriorMask();
 
 		ScriptCallQueue queue =
 			GetGame().GetCallqueue();

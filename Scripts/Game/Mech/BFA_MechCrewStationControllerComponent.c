@@ -259,6 +259,10 @@ class BFA_MechCrewStationControllerComponent : ScriptGameComponent
 
 		m_sLocalStation = stationId;
 		m_bLocalStationActive = true;
+
+		BFA_MechControllerComponent viewController = BFA_MechControllerComponent.Cast(GetOwner().FindComponent(BFA_MechControllerComponent));
+		if (viewController)
+			viewController.CGS_BeginLocalCrewView();
 		m_bFireHeld = false;
 		m_bInspectHeld = false;
 		m_iHeldPrimaryGroup = 0;
@@ -316,6 +320,10 @@ class BFA_MechCrewStationControllerComponent : ScriptGameComponent
 	{
 		if (!m_bLocalStationActive)
 			return;
+
+		BFA_MechControllerComponent viewController = BFA_MechControllerComponent.Cast(GetOwner().FindComponent(BFA_MechControllerComponent));
+		if (viewController)
+			viewController.CGS_EndLocalCrewView();
 
 		if (m_bFireHeld)
 			SetPrimaryFireHeld(false);
@@ -427,6 +435,10 @@ class BFA_MechCrewStationControllerComponent : ScriptGameComponent
 
 		if (m_bLocalStationActive)
 		{
+			BFA_MechControllerComponent viewController = BFA_MechControllerComponent.Cast(GetOwner().FindComponent(BFA_MechControllerComponent));
+			if (viewController)
+				viewController.CGS_RefreshPilotExteriorMask();
+
 			if (!m_pCore.IsControllerAtStation(pc, m_sLocalStation))
 				StopLocalStation();
 			return;
