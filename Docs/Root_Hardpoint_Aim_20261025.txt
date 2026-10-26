@@ -1,0 +1,33 @@
+ROOT-MOUNTED WEAPON YAW / PITCH - OCTOBER 25-26, 2026
+Branch: fix/root-hardpoint-yaw-pitch-20261025
+
+WHAT I FOUND
+I confirmed that the new torso-twist implementation rotates mounted guns around the waist in yaw, but chest, torso, waist, back and some shoulder hardpoints have no m_sAimMountId. Those modules were attached straight to the mech root and had no independent pitch/yaw solver. They physically followed the torso yaw, but could not elevate toward the crosshair.
+
+WHAT I CHANGED
+I added independent gun aiming to root-attached weapon modules inside CGS_TorsoTwistComponent. The aim uses the same station-local convergence point already replicated by BFA_MechAimComponent. I calculate the torso-yawed rest transform, aim each root gun relative to that rest frame, and preserve the original module position. The root gun now has yaw and pitch independent of chassis motion. Individual hardpoint definitions expose a Root Weapon Aim toggle plus minimum/maximum yaw and pitch angle attributes, default on for fitted root weapons.
+
+I leave aim-mounted, IK arm, bone-attached, and existing animated weapons on their established solver, avoiding double transforms. Weapon groups 1-6 and chain fire are untouched. Modules track new entities after a field refit; preserving original root transforms during a rest capture prevents progressively adding aim to the gun's rest pose. When torso yaw is stable I update at 30 Hz rather than requiring a new torso movement to aim.
+
+SPECIAL BOSS EXCEPTION
+I disabled the new root weapon articulation on the active Titan_WarLord_OPFOR prefab until I can separately validate its boss gun stations, 17 hitboxes, weak spots and damage collision. The existing torso-yaw behavior and Warlord shield settings remain unchanged.
+
+FILES CHANGED
+CORE: Scripts/Game/CGS_Movement/CGS_TorsoTwistComponent.c
+CORE: Scripts/Game/Mech/BFA_MechHardpointComponent.c
+MW: Prefabs/Vehicles/Mech/Enemies/Assault/Titan_WarLord_OPFOR.et (new aim feature explicitly off)
+
+TEST PLAN - WORKBENCH COMPILE FIRST
+1. Compile Game scripts with both matching fix/root-hardpoint-yaw-pitch-20261025 branches. I do not yet have an Enfusion compiler result.
+2. Spawn Assault_Gravemarch_Gun.et. Fit a gun to TORSO_GUN_L / TORSO_GUN_R / CHEST_GUN. With feet stationary, aim high, low, left, and right. The muzzle should track the reticle instead of remaining fixed.
+3. Turn the walking chassis separately from the upper body; confirm no double yaw, drifting rest poses, or gun snapping.
+4. Switch weapon groups 1-6 and chain-fire settings. Test projectile/hitscan impacts and muzzle FX from actual transformed barrel positions.
+5. Swap gun modules while looking upward. Verify the new module adopts its authored rest orientation before aiming.
+6. Check all normal frame weight classes, bot-controlled variants, wrecks, and two-client/dedicated multiplayer sight alignment, including high-latency aim.
+7. I will test the Warlord boss separately before enabling its new aiming mode.
+
+KNOWN LIMITATION
+This rotates individual installed weapon entities, not any barrel baked into a torso body mesh. A fixed mesh would require a separate modeled/bone articulated barrel for visible elevation.
+
+STATUS
+Code committed on matching test branches; source diff/brace checks only. Workbench compilation and runtime multiplayer behavior NOT verified. Main unchanged.
