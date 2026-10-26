@@ -35,6 +35,7 @@ class CGS_TitanMissileInFlight : BFA_MechRocketInFlight
 	IEntity m_pTarget;        // locked object (root), null = fly to m_vTargetPoint
 	vector m_vTargetLocal;    // aim spot on the target, in the target's own space
 	vector m_vTargetPoint;    // world aim point when nothing is locked
+	bool m_bFixedBarrageTarget; // true = ignore laser reacquisition/follow-aim for this salvo
 }
 
 //------------------------------------------------------------------------------------------------
@@ -110,6 +111,22 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 	[Attribute("100", UIWidgets.Auto, "How often (ms) the server sends each missile's real course to the players, so the visible missile curves the way the real one steers. 0 = never (visible missile flies straight to the launch aim point).", category: "Homing")]
 	protected int m_iCourseSyncMs;
 
+	// ---- Area barrage ----------------------------------------------------------------------
+	[Attribute("false", UIWidgets.CheckBox, "Allow switching between normal guided fire and ground-area barrage. Enable on LRM racks only.", category: "Barrage")]
+	protected bool m_bAllowBarrage;
+
+	[Attribute("18", UIWidgets.Auto, "Barrage impact radius in metres around the point aimed at when the trigger is pulled.", category: "Barrage")]
+	protected float m_fBarrageRadius;
+
+	[Attribute("true", UIWidgets.CheckBox, "Snap barrage aim height to terrain; off = bombard the exact camera aim point (roofs/bridges).", category: "Barrage")]
+	protected bool m_bBarrageGroundSnap;
+
+	// Mode and salvo snapshot are SERVER owned. Existing projectile course replication
+	// carries the physical trajectory to clients; no extra network traffic per rocket.
+	protected bool m_bBarrageMode;
+	protected bool m_bSalvoBarrage;
+	protected vector m_vBarrageAimPoint;
+
 	// ---- Runtime ---------------------------------------------------------------------------
 	protected int m_iLastSteerMs;
 	protected int m_iLastCourseSyncMs;
@@ -122,6 +139,55 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 
 		if (m_sModuleId == "WEAPON_MODULE")
 			m_sModuleId = "TITAN_MISSILE";
+	}
+
+
+	//------------------------------------------------------------------------------------------------
+	//! Server-only mode change. Called by the station-validated PlayerController.
+	//! Reject mid-salvo so one rack never changes guidance halfway through 20 missiles.
+	bool ServerToggleBarrageMode()
+	{
+		if (!Replication.IsServer() || !m_bAllowBarrage || m_iSalvoRemaining > 0)
+			return false;
+
+		m_bBarrageMode = !m_bBarrageMode;
+		if (m_bDebug)
+			Print(string.Format("[CGS MISSILE] %1 mode=%2", m_sModuleId, m_bBarrageMode));
+		return true;
+	}
+
+	bool AllowsBarrage()
+	{
+		return m_bAllowBarrage;
+	}
+
+	bool IsBarrageMode()
+	{
+		return m_bAllowBarrage && m_bBarrageMode;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Freeze the area target at the start of a salvo, even if the pilot moves
+	//! the mouse while the tubes fire. Other guidance modes remain unchanged.
+	override protected void TryStartSalvo(IEntity instigator)
+	{
+		if (m_iSalvoRemaining > 0)
+			return;
+
+		m_bSalvoBarrage = IsBarrageMode();
+		if (m_bSalvoBarrage)
+		{
+			if (!GetLiveAimPoint(m_vBarrageAimPoint))
+				return;
+
+			BaseWorld world = GetGame().GetWorld();
+			if (m_bBarrageGroundSnap && world)
+				m_vBarrageAimPoint[1] = world.GetSurfaceY(m_vBarrageAimPoint[0], m_vBarrageAimPoint[2]);
+
+			if (m_pMechOwner && vector.Distance(m_pMechOwner.GetOrigin(), m_vBarrageAimPoint) > Math.Max(m_fRange, 10.0))
+				return;
+		}
+		super.TryStartSalvo(instigator);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -195,6 +261,21 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 
 		if (m_bDebug)
 			Print(string.Format("[CGS TITAN MISSILE] LAUNCH %1 lock=%2 point=%3 rounds=%4", m_sHardpointName, missile.m_pTarget, lockPoint, m_iRoundsInMagazine));
+
+		// For a barrage, replace the normal target lock with a different spot
+		// for each tube. The rocket still uses the existing loft/turn/impact path,
+		// so damage, interception and multiplayer course sync remain authoritative.
+		if (m_bSalvoBarrage && m_aRockets.Count() > 0)
+		{
+			missile.m_pSpot = null;
+			missile.m_pTarget = null;
+			missile.m_bFixedBarrageTarget = true;
+
+			float spread = Math.Max(m_fBarrageRadius, 0.0);
+			float theta = Math.RandomFloat(0.0, Math.PI * 2.0);
+			float radial = Math.Sqrt(Math.RandomFloat(0.0, 1.0)) * spread;
+			missile.m_vTargetPoint = m_vBarrageAimPoint + Vector(Math.Cos(theta) * radial, 0, Math.Sin(theta) * radial);
+		}
 
 		StartFlightTick();
 	}
@@ -425,7 +506,7 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 			return;
 
 		// Follow Aim: the target is wherever the crosshair points right now.
-		if (m_eGuidance == CGS_EMissileGuidance.FOLLOW_AIM)
+		if (!missile.m_bFixedBarrageTarget && m_eGuidance == CGS_EMissileGuidance.FOLLOW_AIM)
 		{
 			vector livePoint;
 			if (GetLiveAimPoint(livePoint))
@@ -434,7 +515,7 @@ class CGS_Titan_Missile : BFA_MechRocketLauncherModuleComponent
 		}
 
 		// Laser: follow the spot while it is on; laser off = keep flying to where it last was.
-		if (GuidanceUsesLaser())
+		if (!missile.m_bFixedBarrageTarget && GuidanceUsesLaser())
 		{
 			if (missile.m_pSpot && !missile.m_pSpot.IsLasing())
 				missile.m_pSpot = null;
