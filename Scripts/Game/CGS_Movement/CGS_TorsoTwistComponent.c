@@ -423,6 +423,8 @@ class CGS_TorsoTwistComponent : ScriptComponent
 
 			vector base[4];
 			Math3D.MatrixMultiply4(torsoMat, rest.m_Mat, base);
+			float appliedYaw = 0;
+			float appliedPitch = 0;
 			vector finalMat[4];
 			for (int i = 0; i < 4; i++)
 				finalMat[i] = base[i];
@@ -457,6 +459,8 @@ class CGS_TorsoTwistComponent : ScriptComponent
 							yaw += 360;
 						yaw = Math.Clamp(yaw, yawMin, yawMax);
 						float pitch = Math.Clamp(angles[1], pitchMin, pitchMax);
+						appliedYaw = yaw;
+						appliedPitch = pitch;
 
 						vector aimMat[4];
 						Math3D.AnglesToMatrix(Vector(yaw, pitch, 0), aimMat);
@@ -467,6 +471,19 @@ class CGS_TorsoTwistComponent : ScriptComponent
 				}
 			}
 
+			// On large MP servers, skip mesh/physics transform writes unless the
+			// torso or barrel angles changed. Reapply twice a second to recover
+			// safely if another gameplay system adjusted the entity.
+			if (!force && now < rest.m_fNextRootReapply
+				&& Math.AbsFloat(torsoYaw - rest.m_fLastRootTorsoYaw) < 0.05
+				&& Math.AbsFloat(appliedYaw - rest.m_fLastRootYaw) < 0.05
+				&& Math.AbsFloat(appliedPitch - rest.m_fLastRootPitch) < 0.05)
+				continue;
+
+			rest.m_fLastRootTorsoYaw = torsoYaw;
+			rest.m_fLastRootYaw = appliedYaw;
+			rest.m_fLastRootPitch = appliedPitch;
+			rest.m_fNextRootReapply = now + 0.5;
 			gun.SetLocalTransform(finalMat);
 			gun.Update();
 		}
@@ -513,4 +530,9 @@ class CGS_TwistRest
 {
 	string m_sId;
 	vector m_Mat[4];
+	// Used for root gun aim only; each freshly captured module starts dirty.
+	float m_fLastRootYaw = 9999;
+	float m_fLastRootPitch = 9999;
+	float m_fLastRootTorsoYaw = 9999;
+	float m_fNextRootReapply;
 }
