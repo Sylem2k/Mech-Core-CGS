@@ -840,7 +840,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 	//! CGS_TorsoTwistComponent's split torso and existing destruction models.
 	protected void CGS_RestorePilotExteriorMask()
 	{
-		if (m_pCGSHiddenBody && m_pCGSHiddenBody.GetParent())
+		if (m_pCGSHiddenBody && !m_pCGSHiddenBody.IsDeleted())
 			m_pCGSHiddenBody.SetFlags(EntityFlags.VISIBLE, false);
 
 		m_pCGSHiddenBody = null;
