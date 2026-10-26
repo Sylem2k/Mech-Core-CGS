@@ -77,13 +77,15 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 
 	protected IEntity m_pLocalPilotEntity;
 
-	// Local cockpit camera only. Never sent over the network or run for AI.
-	[Attribute("true", UIWidgets.CheckBox, "When the local driver enters, hide the exterior meshes from this client only. A separate cockpit prefab tagged CGS_MechCockpitInteriorComponent stays visible.", category: "Cockpit")]
+	// Local cockpit camera ONLY. The torso is its own visual prefab, so the
+	// chassis, arms, legs and hardpoint weapons are NEVER touched.
+	[Attribute("true", UIWidgets.CheckBox, "Hide ONLY the visual in the Torso slot when the local crew camera is in first person. Third person and outside views show the complete mech.", category: "Cockpit")]
 	protected bool m_bHideExteriorInPilotView;
 
-	protected ref array<IEntity> m_aCGSPilotHiddenMeshes = {};
-	protected VObject m_pCGSPilotOriginalRootModel;
-	protected bool m_bCGSPilotRootHidden;
+	[Attribute("Torso", UIWidgets.EditBox, "Slot containing the separate exterior BODY visual (not the cockpit, legs or arm meshes). Leave as Torso for standard frames.", category: "Cockpit")]
+	protected string m_sPilotBodySlot;
+
+	protected IEntity m_pCGSHiddenBody;
 	protected bool m_bCGSLocalCrewSeat;
 	protected int m_iCGSPilotNextVisibilityScan;
 	protected IEntity m_pPendingPilotEntity;
@@ -752,85 +754,96 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! Hide only the exterior's visual entities for the LOCAL pilot. The world
-	//! mech is unchanged for other players, AI, weapon traces and the server.
-	//! A future cockpit prefab must have CGS_MechCockpitInteriorComponent
-	//! on its top-level child entity so its entire visual subtree is exempt.
+	//! The character camera API reports the player's actual 1P/3P view. Merely
+	//! being seated must NEVER hide the body while using an outside camera.
+	//! If local camera state is unavailable, default to showing the whole mech.
+	protected bool CGS_IsLocalFirstPerson()
+	{
+		if (!GetGame())
+			return false;
+
+		PlayerController pc = GetGame().GetPlayerController();
+		if (!pc)
+			return false;
+
+		CharacterControllerComponent characterController;
+		IEntity controlled = pc.GetControlledEntity();
+		if (controlled)
+			characterController = CharacterControllerComponent.Cast(controlled.FindComponent(CharacterControllerComponent));
+		if (!characterController && m_pLocalPilotEntity)
+			characterController = CharacterControllerComponent.Cast(m_pLocalPilotEntity.FindComponent(CharacterControllerComponent));
+		if (!characterController)
+			return false;
+
+		CameraHandlerComponent camera = characterController.GetCameraHandlerComponent();
+		if (camera)
+			return !camera.IsInThirdPerson();
+
+		return !characterController.IsInThirdPersonView();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Hide only one visual: the dedicated Torso slot's entity. NEVER walk
+	//! child meshes, hide the root XOB, or change arms, legs, guns and cockpit.
+	//! This affects only the local player's render flags, not the game server.
 	void CGS_RefreshPilotExteriorMask()
 	{
-		if ((!m_bLocalPilot && !m_bCGSLocalCrewSeat) || !m_bHideExteriorInPilotView || !GetGame())
+		if ((!m_bLocalPilot && !m_bCGSLocalCrewSeat) || !GetGame())
 			return;
 
 		int now = System.GetTickCount();
 		if (now < m_iCGSPilotNextVisibilityScan)
 			return;
-		m_iCGSPilotNextVisibilityScan = now + 200;
+		m_iCGSPilotNextVisibilityScan = now + 100;
+
+		if (!m_bHideExteriorInPilotView || !CGS_IsLocalFirstPerson())
+		{
+			CGS_RestorePilotExteriorMask();
+			return;
+		}
 
 		IEntity mech = GetOwner();
-		if (!mech)
+		if (!mech || m_sPilotBodySlot.IsEmpty())
 			return;
 
-		// The root can itself have a mech-body mesh. Remove ONLY its XOB,
-		// not the entity/children; otherwise the cockpit slot would vanish.
-		if (!m_bCGSPilotRootHidden && mech.GetVObject())
+		SlotManagerComponent slots = SlotManagerComponent.Cast(mech.FindComponent(SlotManagerComponent));
+		if (!slots)
+			return;
+
+		EntitySlotInfo slot = slots.GetSlotByName(m_sPilotBodySlot);
+		if (!slot)
+			return;
+
+		IEntity body = slot.GetAttachedEntity();
+		if (!body || body.FindComponent(CGS_MechCockpitInteriorComponent))
 		{
-			m_pCGSPilotOriginalRootModel = mech.GetVObject();
-			mech.SetObject(null, "");
-			m_bCGSPilotRootHidden = true;
+			CGS_RestorePilotExteriorMask();
+			return;
 		}
 
-		CGS_HideExteriorChildren(mech);
+		if (m_pCGSHiddenBody == body)
+			return;
+
+		// Refit or changed frame: restore the previous entity before hiding
+		// the replacement. Do not override somebody else's hidden state.
+		CGS_RestorePilotExteriorMask();
+		if (!body.GetVObject() || (body.GetFlags() & EntityFlags.VISIBLE) != EntityFlags.VISIBLE)
+			return;
+
+		m_pCGSHiddenBody = body;
+		body.ClearFlags(EntityFlags.VISIBLE, false);
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! Each dynamically spawned module is scanned after swaps as well.
-	//! Do not recursively hide a cockpit subtree: it will remain visible.
-	protected void CGS_HideExteriorChildren(IEntity parent)
-	{
-		if (!parent)
-			return;
-
-		IEntity part = parent.GetChildren();
-		while (part)
-		{
-			IEntity next = part.GetSibling();
-			if (!part.FindComponent(CGS_MechCockpitInteriorComponent))
-			{
-				if (part.GetVObject() && (part.GetFlags() & EntityFlags.VISIBLE) == EntityFlags.VISIBLE)
-				{
-					if (!m_aCGSPilotHiddenMeshes.Contains(part))
-						m_aCGSPilotHiddenMeshes.Insert(part);
-					part.ClearFlags(EntityFlags.VISIBLE, false);
-				}
-
-				CGS_HideExteriorChildren(part);
-			}
-			part = next;
-		}
-	}
-
-	//------------------------------------------------------------------------------------------------
-	//! Restore precisely those visuals hidden for this local driver.
-	//! Never touch other players' replicas or a destroyed mech's wreck mesh.
+	//! Restore body whenever switching to third person, leaving a seat,
+	//! respawning or changing views. No root SetObject calls; avoids breaking
+	//! CGS_TorsoTwistComponent's split torso and existing destruction models.
 	protected void CGS_RestorePilotExteriorMask()
 	{
-		IEntity mech = GetOwner();
-		bool alive = mech && !BFA_MechExtension.IsMechDestroyed(mech);
-		if (alive && m_bCGSPilotRootHidden && m_pCGSPilotOriginalRootModel)
-			mech.SetObject(m_pCGSPilotOriginalRootModel, "");
+		if (m_pCGSHiddenBody && m_pCGSHiddenBody.GetParent())
+			m_pCGSHiddenBody.SetFlags(EntityFlags.VISIBLE, false);
 
-		if (alive)
-		{
-			foreach (IEntity part : m_aCGSPilotHiddenMeshes)
-			{
-				if (part && part.GetParent())
-					part.SetFlags(EntityFlags.VISIBLE, false);
-			}
-		}
-
-		m_aCGSPilotHiddenMeshes.Clear();
-		m_pCGSPilotOriginalRootModel = null;
-		m_bCGSPilotRootHidden = false;
+		m_pCGSHiddenBody = null;
 		m_iCGSPilotNextVisibilityScan = 0;
 	}
 
