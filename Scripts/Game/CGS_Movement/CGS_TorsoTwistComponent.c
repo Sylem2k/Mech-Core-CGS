@@ -265,6 +265,23 @@ class CGS_TorsoTwistComponent : ScriptComponent
 			}
 		}
 
+		// A modeled cockpit stays separate from the exterior Torso slot but
+		// follows its upper-body twist automatically. No prefab edits needed
+		// to the existing explicit m_aTwistSlots array.
+		if (slots && (!m_aTwistSlots || !m_aTwistSlots.Contains("Cockpit")))
+		{
+			EntitySlotInfo torsoSlot = slots.GetSlotByName("Torso");
+			EntitySlotInfo cockpitSlot = slots.GetSlotByName("Cockpit");
+			if (torsoSlot && torsoSlot.GetAttachedEntity() && cockpitSlot && cockpitSlot.GetAttachedEntity())
+			{
+				IEntity interior = cockpitSlot.GetAttachedEntity();
+				CGS_TwistRest interiorRest = new CGS_TwistRest();
+				interior.GetLocalTransform(interiorRest.m_Mat);
+				m_aSlotEntities.Insert(interior);
+				m_aSlotRest.Insert(interiorRest);
+			}
+		}
+
 		BFA_MechWeaponMountComponent mounts = BFA_MechWeaponMountComponent.Cast(owner.FindComponent(BFA_MechWeaponMountComponent));
 		if (mounts)
 		{
