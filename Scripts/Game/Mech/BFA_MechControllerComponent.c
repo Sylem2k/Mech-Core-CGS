@@ -84,6 +84,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 	protected ref array<IEntity> m_aCGSPilotHiddenMeshes = {};
 	protected VObject m_pCGSPilotOriginalRootModel;
 	protected bool m_bCGSPilotRootHidden;
+	protected bool m_bCGSLocalCrewSeat;
 	protected int m_iCGSPilotNextVisibilityScan;
 	protected IEntity m_pPendingPilotEntity;
 	protected IEntity m_pPendingPilotVehicle;
@@ -735,13 +736,29 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! The local gunner seat has a separate controller. Share this exact
+	//! view state rather than duplicating visual-restore logic across stations.
+	void CGS_BeginLocalCrewView()
+	{
+		m_bCGSLocalCrewSeat = true;
+		CGS_RefreshPilotExteriorMask();
+	}
+
+	void CGS_EndLocalCrewView()
+	{
+		m_bCGSLocalCrewSeat = false;
+		if (!m_bLocalPilot)
+			CGS_RestorePilotExteriorMask();
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! Hide only the exterior's visual entities for the LOCAL pilot. The world
 	//! mech is unchanged for other players, AI, weapon traces and the server.
 	//! A future cockpit prefab must have CGS_MechCockpitInteriorComponent
 	//! on its top-level child entity so its entire visual subtree is exempt.
-	protected void CGS_RefreshPilotExteriorMask()
+	void CGS_RefreshPilotExteriorMask()
 	{
-		if (!m_bLocalPilot || !m_bHideExteriorInPilotView || !GetGame())
+		if ((!m_bLocalPilot && !m_bCGSLocalCrewSeat) || !m_bHideExteriorInPilotView || !GetGame())
 			return;
 
 		int now = System.GetTickCount();
@@ -1089,7 +1106,8 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 		if (!m_bLocalPilot)
 			return;
 
-		CGS_RestorePilotExteriorMask();
+		if (!m_bCGSLocalCrewSeat)
+			CGS_RestorePilotExteriorMask();
 
 		ScriptCallQueue queue =
 			GetGame().GetCallqueue();
