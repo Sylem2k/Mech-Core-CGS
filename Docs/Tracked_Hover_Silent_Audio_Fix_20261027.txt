@@ -1,0 +1,29 @@
+OCTOBER 27, 2026 (UTC) — TRACKED/HOVER AUDIO SILENT IN WORKBENCH
+
+SYMPTOM
+I tested my Light/Medium/Heavy/Assault tracked and hover frame variants, but neither tracks nor hover made any sound. The Workbench log from 2026-10-27 around 05:13 UTC shows the tracked and hover entities spawning successfully and the game running. The log does NOT show an explicit audio event failure, but it does contain unrelated SCR_VehicleTagData.InitData null-pointer errors on entering vehicles.
+
+ROOT CAUSE FOUND IN SOURCE
+In Core Sounds/SampleMech.acp, the five new SOUND_MECH_TRACK_CLANK, SOUND_MECH_TRACK_RUMBLE, SOUND_MECH_HOVER_THRUST, SOUND_MECH_HOVER_IDLE_PULSE and SOUND_MECH_HOVER_IDLE MixerClass connections had mistakenly been appended AFTER the closing brace of the mixer's ins block. All five new sound classes, shader nodes, banks and WAV references existed, but the output mixer's active ins block contained ONLY the two original walker sounds, SOUND_MECH_STEP and SOUND_MECH_SERVO.
+
+CORRECTION
+I moved all five ConnectionsClass con:97001 to con:97005 entries INTO MixerClass "8203" -> ins. I did not modify the samples, the event IDs or the original two sound paths. The structural validation finds all SEVEN connections inside the mixer input and balanced braces; this is an actual source fix, not a promise that Workbench audio playback has already been verified.
+
+The eight MW prefabs already have their correct audio components and three/two event mappings on the previous branch. I did not re-edit them unnecessarily. Both new repair branches have been merged forward with the latest main to preserve newer content, including any prefab edits.
+
+MY NEXT TEST IN WORKBENCH
+1. Select Mech-Core-CGS and MW branch fix/tracked-hover-silent-audio-20261027 in both projects (CGS-MW-Assets can stay at main).
+2. Reload / reimport Sounds/SampleMech.acp in Workbench and compile/rebuild resources. Inspect the audio mixer: OutputState 8 must now have 7 event connections, not just the old STEP/SERVO.
+3. Enter a Hover mech while stationary. The SOUND_MECH_HOVER_IDLE 4s bed should repeat after the short initial delay, with occasional pressure pulse; press movement to hear SOUND_MECH_HOVER_THRUST.
+4. Enter a Tracked mech. The rumble and clank events should trigger only on forward/reverse or turning movement, not while still.
+5. Verify outside listeners hear the spatialized sounds and walkers retain stomp/servo events. Check dedicated multiplayer separately.
+6. If sounds remain silent, check whether the audio project event nodes can be auditioned INSIDE Audio Editor. If they cannot, send exact audio resource/compiler errors. If they can, gather a runtime log after a vehicle moves and I will trace SoundDataComponent registration and playback calls.
+
+OTHER ERRORS FROM THE LOG
+- SCR_VehicleTagData.InitData null pointer is in Enfusion vehicle nametag UI (not the tracked/hover audio mixer).
+- SampleMech2/3 missing entity prefab refs and duplicate catalog registrations were already known.
+- 'One or more mounts failed to resolve' is an independent hardpoint prefab issue.
+Do not misattribute these to the sound fix.
+
+STATUS
+Mixer source repaired; existing 5 WAV refs and 8 prefab event maps preserved. No Workbench compile/Audio Editor audition or audible runtime result available to me. Main not modified.
