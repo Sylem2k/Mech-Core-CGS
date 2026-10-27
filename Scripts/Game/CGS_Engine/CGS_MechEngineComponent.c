@@ -164,7 +164,7 @@ class CGS_MechEngineComponent : ScriptComponent
 
 		if (GetGame() && GetGame().GetCallqueue())
 		{
-			int ms = Math.Max(1, m_fStartDuration * 1000);
+			int ms = (int)(Math.Max(m_fStartDuration, 0.001) * 1000.0);
 			GetGame().GetCallqueue().CallLater(FinishStartup, ms, false, m_iStartSequence);
 		}
 		return true;
