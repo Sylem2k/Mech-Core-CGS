@@ -1,0 +1,32 @@
+OCTOBER 27, 2026 - TRACKED AND HOVER PART PREFABS / AUDIO SOURCES
+
+I found that my tracked and hover sounds were configured on the LEG PREFABS, not just on the mech vehicle root. I pushed two copied leg prefabs in MW:
+- Prefabs/Vehicles/Mech/Mech_Parts/New_Mech_Tracked.et
+- Prefabs/Vehicles/Mech/Mech_Parts/New_Mech_Hover.et
+
+Those clones still had the walker mesh, IK animation, BFA_MechLegComponent, SOUND_MECH_STEP event, rigid-body collision and BFA_MechPartHitZone Leg. This was not appropriate for tracked or hover locomotion, and the MW frames were not attaching the copies to their empty slots.
+
+I fixed them as model-ready EMPTY PARTS. Both retain their original filename and component IDs, plus SignalsManagerComponent, SoundComponent, SCR_SoundDataComponent, RplComponent and Hierarchy. I removed the original leg MeshObject, leg IK and animation, unneeded collider and walker hit zone. I replaced the sound project and event mapping:
+- TRACKED part: {D21496B618117D7B}Sounds/Tracked.acp, SOUND_MECH_TRACK_CLANK, SOUND_MECH_TRACK_RUMBLE
+- HOVER part: {4B8D1AB9C2FD05BE}Sounds/Hover.acp, SOUND_MECH_HOVER_IDLE, SOUND_MECH_HOVER_IDLE_PULSE, SOUND_MECH_HOVER_THRUST
+
+I also added two new, completely empty model-ready base prefabs to Mech-Core-CGS, including meta resource IDs:
+- Prefabs/Vehicles/Mech/Core/Mech_Tracked_Part_Base.et, {BC2A615F4AD92E11}
+- Prefabs/Vehicles/Mech/Core/Mech_Hover_Part_Base.et, {BC2A615F4AD92E12}
+These are reusable sound-equipped blank part prefabs with no 3D mesh, leg IK or physics. They can be used as slot prefabs on other mech frames without requiring a MW-specific part.
+
+I installed New_Mech_Tracked.et and New_Mech_Hover.et on the proper Track_L1/Track_R1 and HoverPad_L1/HoverPad_R1 slots on ALL four mech classes (Light, Medium, Heavy and Assault). Assault also uses L2/R2. This makes 20 attached part instances across the eight test frame templates.
+
+I updated BFA_MechMovementComponent.c in Core. It still calculates movement/sound timing at the mech root but, when playing any of its five track/hover events, it resolves the fitted left Track_L1 or HoverPad_L1 audio-equipped part, then right R1 if needed. The part's SoundComponent and SCR_SoundDataComponent are the playback source, exactly as the existing walking-leg mechanism uses GetOwner() on a foot part. Only ONE emitter is used per mech to avoid four identical simultaneous engine loops on assault mechs. It falls back to the root emitter for old or incomplete frames. I did not add RPC traffic or change the movement physics.
+
+HOW I ADD MY MODEL LATER
+1. Use matching Core and MW branch fix/tracked-hover-part-emitters-20261027.
+2. In MW Workbench, open New_Mech_Tracked.et, add a MeshObject component, and set Object to my tracked .xob. Do not remove the sound, SoundData, Rpl, or Hierarchy components.
+3. Repeat for New_Mech_Hover.et with the imported hover pad/thruster mesh.
+4. Because the eight frames already attach these prefabs, the visuals automatically show in all weight classes after asset import. The same prefab appears on both left and right; create unique left/right visual models later if needed.
+5. Adjust Track_L1/R1, HoverPad_L1/R1 and assault L2/R2 slot offsets and rotations individually to fit each chassis. Set Ground Point at the actual tread contact plane or underside of the hover pad, then tune clearance and collider only on the CHASSIS (not on each empty part).
+6. The two Core part bases can be substituted in another frame by assigning their resource GUIDs instead of the MW New_Mech_* prefabs.
+7. Compile Game scripts and rebuild resources, then test both in-game as driver and as a remote listener with two clients. I have not run the Enfusion compiler or verified audible playback in this environment.
+
+IMPORTANT
+Do not attach a BFA_MechLegComponent or leg IK animation to tracked/hover part prefabs. They are NOT walking legs and must never trigger SOUND_MECH_STEP. Sound references live on the PART entities. Existing standard walker prefabs remain unchanged.
