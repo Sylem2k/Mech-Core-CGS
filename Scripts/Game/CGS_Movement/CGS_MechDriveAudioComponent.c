@@ -31,6 +31,12 @@ class CGS_MechDriveAudioComponent : ScriptComponent
 	[Attribute("false", UIWidgets.CheckBox, "Workbench test: print throttled audio diagnostics and fire one sound shortly after spawning. Disable after sound works.", category: "Drive Audio")]
 	protected bool m_bDebugSound;
 
+	// Temporary sound-chain control using the SAME original ACP event as a walking leg.
+	// Play once on spawn when debug is enabled. Remove the control after validation.
+	[Attribute("SOUND_MECH_STEP", UIWidgets.EditBox, "Debug only: known-good original walker stomp event. This is configured on each tracked/hover part in the paired MW test branch.", category: "Drive Audio")]
+	protected string m_sDiagnosticWalkerEvent;
+
+	protected bool m_bDebugFirstFrame;
 	protected bool m_bHaveSample;
 	protected bool m_bDebugFirstShot;
 	protected vector m_vPrevPosition;
@@ -46,6 +52,8 @@ class CGS_MechDriveAudioComponent : ScriptComponent
 	{
 		super.OnPostInit(owner);
 		SetEventMask(owner, EntityEvent.FRAME);
+		if (m_bDebugSound)
+			BFA_MechLog.Log(string.Format("[CGS DRIVE AUDIO INIT] root=%1 driveType=%2 testEvent=%3", owner, m_iDriveType, m_sDiagnosticWalkerEvent));
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -105,7 +113,10 @@ class CGS_MechDriveAudioComponent : ScriptComponent
 	protected bool PlayDriveAudio(IEntity root, string eventName, float now)
 	{
 		if (eventName.IsEmpty())
+		{
+			LogDriveAudio("EMPTY_EVENT", eventName, now);
 			return false;
+		}
 
 		IEntity emitter = FindDriveEmitter(root);
 		if (!emitter)
@@ -115,14 +126,38 @@ class CGS_MechDriveAudioComponent : ScriptComponent
 		}
 
 		SCR_SoundDataComponent data = SCR_SoundDataComponent.Cast(emitter.FindComponent(SCR_SoundDataComponent));
-		if (!data || !data.GetAudioSourceConfiguration(eventName))
+		if (!data)
+		{
+			LogDriveAudio("NO_SOUND_DATA_COMPONENT", eventName, now);
+			return false;
+		}
+
+		SCR_AudioSourceConfiguration config = data.GetAudioSourceConfiguration(eventName);
+		if (!config)
 		{
 			LogDriveAudio("EVENT_NOT_MAPPED_ON_PART", eventName, now);
 			return false;
 		}
 
-		SCR_SoundManagerModule.CreateAndPlayAudioSource(emitter, eventName);
-		LogDriveAudio("PLAY_REQUESTED", eventName, now);
+		SCR_SoundManagerModule manager = SCR_SoundManagerModule.GetInstance(emitter.GetWorld());
+		if (!manager)
+		{
+			LogDriveAudio("NO_SOUND_MANAGER", eventName, now);
+			return false;
+		}
+
+		// The walker helper hides all early returns; checking the source tells us
+		// whether Enfusion actually recognizes this event as audible.
+		// Do not claim that an event was played until its source was created.
+		SCR_AudioSource source = manager.CreateAudioSource(emitter, eventName);
+		if (!source)
+		{
+			LogDriveAudio("CREATE_AUDIO_SOURCE_FAILED (unavailable or inaudible)", eventName, now);
+			return false;
+		}
+
+		manager.PlayAudioSource(source);
+		LogDriveAudio("SOURCE_CREATED_PLAY_SUBMITTED", eventName, now);
 		return true;
 	}
 
@@ -136,6 +171,14 @@ class CGS_MechDriveAudioComponent : ScriptComponent
 		if (m_iDriveType != 1 && m_iDriveType != 2)
 			return;
 		BFA_MechMovementComponent movement = BFA_MechMovementComponent.Cast(owner.FindComponent(BFA_MechMovementComponent));
+		if (m_bDebugSound && !m_bDebugFirstFrame)
+		{
+			m_bDebugFirstFrame = true;
+			int mode = -1;
+			if (movement)
+				mode = movement.GetLocomotionMode();
+			BFA_MechLog.Log(string.Format("[CGS DRIVE AUDIO FIRST_FRAME] root=%1 driveType=%2 movementMode=%3", owner, m_iDriveType, mode));
+		}
 		if (!movement || movement.GetLocomotionMode() != m_iDriveType)
 			return;
 
@@ -183,14 +226,13 @@ class CGS_MechDriveAudioComponent : ScriptComponent
 		// Normalized speeds instead of distance-per-render-frame thresholds.
 		bool moving = (delta.Length() / dt) > 0.15 || (Math.AbsFloat(yawDelta) / dt) > 2.0;
 
-		// Single proof-of-wiring sound in the two debug-only Light test frames.
+		// A/B CONTROL: the original working leg stomp through the SAME
+		// track/hover part and sound manager. If the stomp works but the engine
+		// does not, the problem is in the new ACP/event, not the script or slots.
 		if (m_bDebugSound && !m_bDebugFirstShot && now >= m_fNextEffectTime)
 		{
 			m_bDebugFirstShot = true;
-			if (m_iDriveType == 1)
-				PlayDriveAudio(owner, m_sTrackClank, now);
-			else
-				PlayDriveAudio(owner, m_sHoverIdle, now);
+			PlayDriveAudio(owner, m_sDiagnosticWalkerEvent, now);
 		}
 
 		// Audio files are short, approximately 4 s engine-bed samples.
