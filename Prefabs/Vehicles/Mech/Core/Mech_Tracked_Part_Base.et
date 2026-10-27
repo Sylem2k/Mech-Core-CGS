@@ -1,0 +1,28 @@
+GenericEntity {
+ ID "BC2A615F4AD92E21"
+ components {
+  SignalsManagerComponent "{BC2A615F4AD92E22}" {
+  }
+  SoundComponent "{BC2A615F4AD92E23}" {
+   Filenames {
+    "{D21496B618117D7B}Sounds/Tracked.acp"
+   }
+  }
+  SCR_SoundDataComponent "{BC2A615F4AD92E24}" {
+   m_aAudioSourceConfiguration {
+    SCR_AudioSourceConfiguration "{BC2A615F4AD93001}" {
+     m_sSoundProject "{D21496B618117D7B}Sounds/Tracked.acp"
+     m_sSoundEventName "SOUND_MECH_TRACK_CLANK"
+    }
+    SCR_AudioSourceConfiguration "{BC2A615F4AD93002}" {
+     m_sSoundProject "{D21496B618117D7B}Sounds/Tracked.acp"
+     m_sSoundEventName "SOUND_MECH_TRACK_RUMBLE"
+    }
+   }
+  }
+  RplComponent "{BC2A615F4AD92E25}" {
+  }
+  Hierarchy "{BC2A615F4AD92E26}" {
+  }
+ }
+}
