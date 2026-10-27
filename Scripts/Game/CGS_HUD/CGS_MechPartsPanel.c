@@ -377,7 +377,32 @@ class CGS_MechPartsPanel
 		m_aRightLegs.Clear();
 		BFA_MechMovementComponent movement = BFA_MechMovementComponent.Cast(mech.FindComponent(BFA_MechMovementComponent));
 		SlotManagerComponent slots = SlotManagerComponent.Cast(mech.FindComponent(SlotManagerComponent));
-		if (!movement || !slots || !movement.m_aLegPairs)
+		if (!movement || !slots)
+			return;
+
+		// Tracked / hover frames use locomotion slots rather than walker leg pairs.
+		// Slot entities are included here so the normal part scan / hit-zone HUD
+		// continues working without a replacement display.
+		if (movement.GetLocomotionMode() == 1 || movement.GetLocomotionMode() == 2)
+		{
+			array<string> leftNames = {"Track_L1", "Track_L2", "HoverPad_L1", "HoverPad_L2"};
+			array<string> rightNames = {"Track_R1", "Track_R2", "HoverPad_R1", "HoverPad_R2"};
+			foreach (string leftName : leftNames)
+			{
+				EntitySlotInfo leftSlot = slots.GetSlotByName(leftName);
+				if (leftSlot && leftSlot.GetAttachedEntity())
+					m_aLeftLegs.Insert(leftSlot.GetAttachedEntity());
+			}
+			foreach (string rightName : rightNames)
+			{
+				EntitySlotInfo rightSlot = slots.GetSlotByName(rightName);
+				if (rightSlot && rightSlot.GetAttachedEntity())
+					m_aRightLegs.Insert(rightSlot.GetAttachedEntity());
+			}
+			return;
+		}
+
+		if (!movement.m_aLegPairs)
 			return;
 
 		foreach (BFA_MechLegPair pair : movement.m_aLegPairs)
