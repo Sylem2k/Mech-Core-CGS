@@ -69,7 +69,7 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	protected float m_fNextRefresh;
 	protected float m_fNextMountScan;
 	protected float m_fNextRootWeaponAim;
-	// All upper-body parts use the same local pivot within one tick.
+	// Fixed mech-local waist joint shared across all torso/mount/weapon updates.
 	protected vector m_vEffectivePivot;
 
 	protected ref array<IEntity> m_aSlotEntities = {};
@@ -82,6 +82,9 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	override void OnPostInit(IEntity owner)
 	{
 		super.OnPostInit(owner);
+		// Capture the static gizmo position BEFORE HideRoot removes the root XOB.
+		// A torso waist joint must not drift with animated/moved visual parts.
+		m_vEffectivePivot = ResolvePivotLocal(owner);
 		if (!s_aAll.Contains(this))
 			s_aAll.Insert(this);
 		EnsureTick();
@@ -169,7 +172,6 @@ class CGS_TorsoTwistComponent : ScriptComponent
 		IEntity owner = GetOwner();
 		if (!owner)
 			return;
-		m_vEffectivePivot = ResolvePivotLocal(owner);
 		float now = Now();
 		float dt = Math.Clamp(now - m_fLastTime, 0, 0.1);
 		m_fLastTime = now;
