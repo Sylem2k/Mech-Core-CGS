@@ -1,0 +1,53 @@
+OCTOBER 27, 2026 — STABLE RECOVERY: TRACKED / HOVER, PHASE 1 (MOVEMENT + MODELS ONLY)
+
+MY RECOVERY BASELINE
+I had to restore working Core and MW project snapshots on my laptop because recent commits and Git operations caused compilation problems. The working snapshots I recovered were:
+- Mech-Core-CGS commit 827ad180aea01f64f9eca16e2d0caa3359e1fc6a
+- MW project commit a02d24a990efb7bc0cc920e92d166121e8ffa5c2
+- CGS-MW-Assets remains on its current main (contains the four .xob samples)
+
+I want the stable scripts and standard walking mechs left alone while I recover tracked and hover as independent work. I am not merging newer Core/MW main histories into this branch.
+
+MY PHASE 1 CHANGES
+In Core BFA_MechMovementComponent.c I selectively reintroduced ONLY the experimental locomotion mechanics:
+- mode 0 = original walker; this remains the default and all legacy gait/IK code behaves exactly as before
+- mode 1 = tracked; no leg pairs required, A/D steer instead of strafing, Q/E continue to turn, W/S throttle
+- mode 2 = hover; no leg pairs required, terrain-relative hover clearance, small bob and inertial gliding, W/A/S/D movement and Q/E turning
+- leg IK / retries / missing leg-pair warning are walker-only, and LegDamageSlows no longer penalizes tracked/hover profiles
+- all existing network prediction, root snapshots, body stabilizer, torso, weapon and cockpit logic remains from the recovered stable scripts
+- no audio events, sound manager calls, ACP files, WAV files or debug diagnostics were transplanted from the experimental branches
+
+I created the two optional BLANK reusable Core part prefabs (including their original .meta resource IDs):
+- Prefabs/Vehicles/Mech/Core/Mech_Tracked_Part_Base.et
+- Prefabs/Vehicles/Mech/Core/Mech_Hover_Part_Base.et
+They have no animation rig, mesh or audio yet, and remain independent of the MW visual parts.
+
+In MW I copied over only 8 added test FRAME .et/.meta files from the later branch:
+- Light_Mech_Frame_Tracked / Light_Mech_Frame_Hover
+- Med_Mech_Frame_Tracked / Med_Mech_Frame_Hover
+- Heavy_Judiciar_Gun_Tracked / Heavy_Judiciar_Gun_Hover
+- Assault_Gravemarch_Gun_Tracked / Assault_Gravemarch_Gun_Hover
+
+Each frame keeps its separate Torso and Cockpit, existing movement values and named Track_L/R or HoverPad_L/R model slots (Assault has an extra pair). Tracked/hover frames do NOT define procedural walker leg pairs or attach walker-leg prefabs. I removed ONLY their experimental SoundComponent, SCR_SoundDataComponent, track/hover event strings and runtime test flags.
+
+In MW I also brought back the four model parts with their original .et/.meta paths and GUIDs:
+- New_Mech_Tracked_Left.et: {6A673BE677191F67}Common/Models/Mech Track/CGS_Track_L.xob
+- New_Mech_Tracked_Right.et: {9B6C03B204462A8B}Common/Models/Mech Track/CGS_Track_R.xob
+- New_Mech_Hover_Left.et: {08182C30B6AE4C3B}Common/Models/Mech Hover/CGS_HoverPad_L.xob
+- New_Mech_Hover_Right.et: {F9131464C5F179D7}Common/Models/Mech Hover/CGS_HoverPad_R.xob
+
+All four parts retain their visual MeshObject, SignalsManagerComponent, RplComponent and Hierarchy. SoundComponent and SCR_SoundDataComponent were removed to prevent project/event references to ACP files absent from the recovered Core. No walking-leg IK, character animation, or footstep logic was imported.
+
+MY WORKBENCH TEST PLAN
+1. BACK UP my known working laptop Core and MW folders outside the active Workbench mod directory.
+2. Download the two PHASE 1 matching GitHub ZIP archives. Replace only Core and MW with the extracted files. Do not mix one PHASE 1 project with an old or latest-main version of the other project.
+3. Keep CGS-MW-Assets on main so all four mesh resource IDs exist.
+4. Open MW's addon.gproj in Workbench and confirm both Core CGS and Assets are loaded as dependencies. Rebuild resources and compile Game scripts first.
+5. Spawn an ORIGINAL walker to ensure weapon groups, cockpit, torso rotation, steps/servo sounds and original movement still function.
+6. Spawn Light Tracked and Light Hover. Tracked: W/S throttle, A/D turns, Q/E turns, no strafing. Hover: forward/reverse, A/D strafing, Q/E turning, terrain clearance maintained.
+7. Repeat Heavy and Assault, test slopes and multiplayer outside observers. Check left/right model orientation, position and grounded clearance. No procedural walker animations should execute on these frames.
+8. Do NOT expect tracks to spin (sample XOB meshes are static, not rigged). Do NOT expect track rumble, clank or hover sounds — Phase 2 audio is intentionally excluded.
+9. When this phase compiles and plays without stability bugs, I will reintroduce audio on a separate descendant test branch, with proven ACP mixer connections and runtime diagnostics rather than merging the old audio experiments wholesale. Then rig/tread animation can be developed independently.
+
+STATUS
+Source and GUID/reference checks complete on GitHub. I have not compiled Game scripts in Enfusion Workbench or verified gameplay/multiplayer. Recovery main branches are unchanged. The old test code is still recoverable on GitHub but excluded from Phase 1.
