@@ -11,7 +11,7 @@ class CGS_MechRepairSite
 	[Attribute("", UIWidgets.EditBox, "For weapon/module repair: exact BFA hardpoint name. Empty for structural parts.", category: "Repair")]
 	string m_sHardpoint;
 
-	[Attribute("", UIWidgets.EditBox, "For structural repair: exact named child entity carrying BFA_MechPartHitZone. Empty for weapon hardpoints.", category: "Repair")]
+	[Attribute("", UIWidgets.EditBox, "For structural repair: exact chassis slot name or child entity name. Empty for weapon hardpoints.", category: "Repair")]
 	string m_sPartEntityName;
 
 	[Attribute(desc: "Local PointInfo for this repair access location. Multiple sites may target the same part.", category: "Repair")]
@@ -100,7 +100,16 @@ class CGS_MechRepairComponent : ScriptComponent
 		}
 
 		if (!site.m_sPartEntityName.IsEmpty())
+		{
+			SlotManagerComponent slots = SlotManagerComponent.Cast(owner.FindComponent(SlotManagerComponent));
+			if (slots)
+			{
+				EntitySlotInfo slot = slots.GetSlotByName(site.m_sPartEntityName);
+				if (slot)
+					return slot.GetAttachedEntity();
+			}
 			return FindPartByName(owner, site.m_sPartEntityName, 0);
+		}
 		return null;
 	}
 
