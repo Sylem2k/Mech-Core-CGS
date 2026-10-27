@@ -1,0 +1,54 @@
+CGS MECH CORE — ENGINE STARTUP FOUNDATION — OCTOBER 27, 2026
+
+GOAL
+I'm building a shared reusable engine, cockpit, fuel and repair system for walkers, tracked mechs and hover mechs. I will adjust physical switch, engine, fuel and repair points independently on each mech size using Workbench PointInfo controls.
+
+WHAT I ADDED TO CORE
+- Scripts/Game/CGS_Engine/CGS_MechEngineComponent.c
+  - Server-authoritative OFF -> STARTING -> RUNNING -> OFF state machine.
+  - Adjustable startup time (3 seconds in these test frames); default OFF in these tests.
+  - RplProp state for multiplayer clients; versioned startup completion avoids completing an aborted start.
+  - Methods for future HUD use: GetEngineState, IsRunning, IsStarting, GetEngineStateName.
+  - Five optional editable root-local PointInfo positions: EnginePoint, StartButtonPoint, StopButtonPoint, FuelPoint and RepairPoint.
+  - Fuel and repair positions are reserved for the next components and DO NOT consume fuel or repair damage yet.
+  - ServerStart/ServerStop check the actor is the actual occupant of the pilot compartment.
+- Scripts/Game/CGS_Engine/CGS_MechEngineActions.c
+  - CGS_MechEngineStartAction and CGS_MechEngineStopAction.
+  - These follow the existing ScriptedUserAction pattern, and the server performs the final pilot permission check.
+
+WHAT I ADDED TO MW TEST FRAMES
+Only three Light frame .et files were modified:
+- Prefabs/Vehicles/Mech/Frames/Light_Mech_Base.et (existing walker)
+- Prefabs/Vehicles/Mech/Frames/Light_Mech_Frame_Tracked.et
+- Prefabs/Vehicles/Mech/Frames/Light_Mech_Frame_Hover.et
+
+Each test root has the optional CGS_MechEngineComponent, its five PointInfo offsets, two independently repositionable ActionsManager UserActionContext Position PointInfo buttons, and the start/stop scripted actions.
+The offsets used are provisional and must be placed onto the visible cockpit console on each prefab in Workbench.
+The actions use short interaction ranges and only show for the seated pilot.
+
+IMPORTANT CURRENT LIMITS
+This is a SMALL TEST FOUNDATION. I have NOT yet:
+- connected OFF/STARTING state to drive lockout or weapon/sprint permission
+- added fuel quantity, consumption, refueling, engine health, repair actions or repair materials
+- added engine sounds, startup/shutdown ACP events or VFX
+- added fuel/engine indicators to BFA_MechHUDDisplay
+- built separate physical button meshes or demonstrated that root-owned interaction prompts can be selected while seated inside the cockpit
+- configured medium, heavy or assault test prefabs
+
+I intentionally left all existing movement scripts, walker IK, torso twist, weapon and cockpit scripts, and existing audio projects untouched. Existing mechs NOT in the three test frames are unaffected.
+This should not be merged into main before Enfusion compilation and seat-action testing.
+
+MY WORKBENCH TEST
+1. Back up my working Core and MW mod folders.
+2. Load both matching branches feat/mech-engine-startup-foundation-20261027; keep CGS-MW-Assets on its current main.
+3. Compile Game scripts and open the three Light frames, confirming CGS_MechEngineComponent and CGS_MechEngineStartAction/StopAction resolve.
+4. Inspect engine component fields and move StartButtonPoint / StopButtonPoint. ALSO move the matching ActionsManager action-context Position PointInfo entries; those are the actual interaction-target locations.
+5. Enter the actual pilot seat. Look for ENGINE: START CORE interaction at the provisional cockpit button location. Activate it.
+6. Check [CGS ENGINE] logs: initialized state=OFF, then STARTING, then RUNNING roughly 3 s later. Stop should return OFF and cancel startup if pressed early.
+7. Test after exiting and from a non-pilot occupant. Neither should be able to change engine state.
+8. Confirm walker gait, tracked steering, hover clearance, cockpit and weapons are unchanged. Engine OFF will NOT yet stop movement during this foundation test.
+9. If the seated pilot cannot target an action on the vehicle-root context, we will move the existing action classes onto an actual interactive button entity inside the cockpit (with an interaction geometry), without rewriting the engine state component.
+10. After test passes, add engine state checks to movement, sound/startup trigger routing, then fuel quantity/consumption with replicated HUD readouts. Finally refuel and repair point interactions.
+
+STATUS
+Core script and action sources created; three MW test frame .et files modified. Source sanity checks performed. NOT compiled or tested in Enfusion Workbench yet. Changes are on isolated feature branches and do not affect main.
