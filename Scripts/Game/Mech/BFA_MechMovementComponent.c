@@ -1689,6 +1689,45 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Walker footsteps play from the leg prefab. Tracked and hover audio must
+	//! likewise play from their mounted PART prefab, not from the mech root.
+	//! The visual model can be added later without changing sound routing.
+	//! For old mechs without a fitted part, preserve root emitter fallback.
+	protected IEntity ResolveLocomotionAudioEmitter(IEntity root)
+	{
+		if (!root || m_iLocomotionMode == 0)
+			return root;
+
+		SlotManagerComponent slots = SlotManagerComponent.Cast(root.FindComponent(SlotManagerComponent));
+		if (!slots)
+			return root;
+
+		string leftSlot = "Track_L1";
+		string rightSlot = "Track_R1";
+		if (m_iLocomotionMode == 2)
+		{
+			leftSlot = "HoverPad_L1";
+			rightSlot = "HoverPad_R1";
+		}
+
+		EntitySlotInfo left = slots.GetSlotByName(leftSlot);
+		if (left)
+		{
+			IEntity part = left.GetAttachedEntity();
+			if (part && part.FindComponent(SoundComponent) && part.FindComponent(SCR_SoundDataComponent))
+				return part;
+		}
+		EntitySlotInfo right = slots.GetSlotByName(rightSlot);
+		if (right)
+		{
+			IEntity part = right.GetAttachedEntity();
+			if (part && part.FindComponent(SoundComponent) && part.FindComponent(SCR_SoundDataComponent))
+				return part;
+		}
+		return root;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! Reconstruct sound locally from the root motion each client actually sees.
 	//! No sound RPCs; dedicated headless servers never instantiate audio.
 	protected void UpdateLocomotionSounds(IEntity owner)
@@ -1738,12 +1777,12 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		{
 			if (m_iLocomotionMode == 1 && moving && !m_sTrackRumbleEvent.IsEmpty())
 			{
-				SCR_SoundManagerModule.CreateAndPlayAudioSource(owner, m_sTrackRumbleEvent);
+				SCR_SoundManagerModule.CreateAndPlayAudioSource(ResolveLocomotionAudioEmitter(owner), m_sTrackRumbleEvent);
 				m_fNextDriveLoopAt = now + 3.95;
 			}
 			else if (m_iLocomotionMode == 2 && !m_sHoverIdleLoopEvent.IsEmpty())
 			{
-				SCR_SoundManagerModule.CreateAndPlayAudioSource(owner, m_sHoverIdleLoopEvent);
+				SCR_SoundManagerModule.CreateAndPlayAudioSource(ResolveLocomotionAudioEmitter(owner), m_sHoverIdleLoopEvent);
 				m_fNextDriveLoopAt = now + 3.95;
 			}
 		}
@@ -1753,19 +1792,19 @@ class BFA_MechMovementComponent : ScriptGameComponent
 
 		if (m_iLocomotionMode == 1 && moving && !m_sTrackClankEvent.IsEmpty())
 		{
-			SCR_SoundManagerModule.CreateAndPlayAudioSource(owner, m_sTrackClankEvent);
+			SCR_SoundManagerModule.CreateAndPlayAudioSource(ResolveLocomotionAudioEmitter(owner), m_sTrackClankEvent);
 			m_fNextDriveSoundAt = now + 0.75;
 		}
 		else if (m_iLocomotionMode == 2)
 		{
 			if (moving && !m_sHoverThrustEvent.IsEmpty())
 			{
-				SCR_SoundManagerModule.CreateAndPlayAudioSource(owner, m_sHoverThrustEvent);
+				SCR_SoundManagerModule.CreateAndPlayAudioSource(ResolveLocomotionAudioEmitter(owner), m_sHoverThrustEvent);
 				m_fNextDriveSoundAt = now + 1.15;
 			}
 			else if (!moving && !m_sHoverIdlePulseEvent.IsEmpty())
 			{
-				SCR_SoundManagerModule.CreateAndPlayAudioSource(owner, m_sHoverIdlePulseEvent);
+				SCR_SoundManagerModule.CreateAndPlayAudioSource(ResolveLocomotionAudioEmitter(owner), m_sHoverIdlePulseEvent);
 				m_fNextDriveSoundAt = now + 3.5;
 			}
 		}
