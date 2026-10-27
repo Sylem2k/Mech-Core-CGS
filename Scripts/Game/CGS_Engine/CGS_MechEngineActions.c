@@ -29,6 +29,15 @@ class CGS_MechEngineStartAction : ScriptedUserAction
 		return false;
 	}
 
+	// Execute on the pilot's local client. A reliable RPC on that
+	// player's controller asks the dedicated server to change engine state.
+	// Running PerformAction only on the server cannot obtain the client's
+	// GetGame().GetPlayerController() on a headless dedicated server.
+	override bool HasLocalEffectOnlyScript()
+	{
+		return true;
+	}
+
 	override void PerformAction(IEntity pOwnerEntity, IEntity pUserEntity)
 	{
 		CGS_MechEngineComponent engine = CGS_MechEngineComponent.Find(pOwnerEntity);
@@ -66,6 +75,13 @@ class CGS_MechEngineStopAction : ScriptedUserAction
 			return true;
 		SetCannotPerformReason("Pilot only. Engine is already OFF.");
 		return false;
+	}
+
+	// See the START action: send this from the owner client over
+	// CGS_Mech_RequestEnginePower's reliable, server-validated RPC.
+	override bool HasLocalEffectOnlyScript()
+	{
+		return true;
 	}
 
 	override void PerformAction(IEntity pOwnerEntity, IEntity pUserEntity)
