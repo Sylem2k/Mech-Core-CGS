@@ -1,7 +1,7 @@
-// CGS MECH CORE - startup/shutdown cockpit actions.
-// Assign each action to its own ActionsManagerComponent context whose Position
-// is a DRAGGABLE PointInfo in the chassis or cockpit prefab.
-// The server validates the seated pilot before changing engine state.
+// CGS MechCore - cockpit START / SHUT DOWN actions.
+// Add both actions to an ActionsManagerComponent on the mech or a cockpit child.
+// Position the action context independently with its own PointInfo in Workbench.
+// Engine component PointInfo fields are reference locations, NOT action creators.
 class CGS_MechEngineStartAction : ScriptedUserAction
 {
 	protected CGS_MechEngineComponent GetEngine()
@@ -31,16 +31,16 @@ class CGS_MechEngineStartAction : ScriptedUserAction
 
 	override void PerformAction(IEntity pOwnerEntity, IEntity pUserEntity)
 	{
-		if (!Replication.IsServer())
+		CGS_MechEngineComponent engine = CGS_MechEngineComponent.Find(pOwnerEntity);
+		if (!engine)
 			return;
 
-		CGS_MechEngineComponent engine = CGS_MechEngineComponent.Find(pOwnerEntity);
-		if (engine)
-			engine.ServerStart(pUserEntity);
+		SCR_PlayerController pc = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		if (pc)
+			pc.CGS_Mech_RequestEnginePower(engine.GetOwner(), true);
 	}
 }
 
-//------------------------------------------------------------------------------------------------
 class CGS_MechEngineStopAction : ScriptedUserAction
 {
 	protected CGS_MechEngineComponent GetEngine()
@@ -70,11 +70,12 @@ class CGS_MechEngineStopAction : ScriptedUserAction
 
 	override void PerformAction(IEntity pOwnerEntity, IEntity pUserEntity)
 	{
-		if (!Replication.IsServer())
+		CGS_MechEngineComponent engine = CGS_MechEngineComponent.Find(pOwnerEntity);
+		if (!engine)
 			return;
 
-		CGS_MechEngineComponent engine = CGS_MechEngineComponent.Find(pOwnerEntity);
-		if (engine)
-			engine.ServerStop(pUserEntity);
+		SCR_PlayerController pc = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		if (pc)
+			pc.CGS_Mech_RequestEnginePower(engine.GetOwner(), false);
 	}
 }
