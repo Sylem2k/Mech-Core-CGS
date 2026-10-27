@@ -177,7 +177,6 @@ AudioClass {
       }
      }
     }
-   }
     ConnectionsClass "con:97001" {
      id 97001
      links {
@@ -223,6 +222,7 @@ AudioClass {
       }
      }
     }
+   }
    pi {
     8192 0
    }

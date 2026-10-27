@@ -1,0 +1,28 @@
+OCTOBER 27, 2026 (UTC) — TRACKED/HOVER SILENT AUDIO FIX
+
+I found why none of my eight tracked and hover frames could produce sound: my new five SoundClass events were referenced from mixer ConnectionsClass nodes that were accidentally written OUTSIDE MixerClass "8203" -> ins, so the output mixer received only SOUND_MECH_STEP and SOUND_MECH_SERVO.
+
+I repaired all three Core audio projects without changing their resource GUIDs or original WAV references:
+- Sounds/SampleMech.acp — original walker project resource {8B7D7D9A72F30BAD}
+- Sounds/Tracked.acp — dedicated tracked resource {D21496B618117D7B}
+- Sounds/Hover.acp — dedicated hover resource {4B8D1AB9C2FD05BE}
+
+All five new mixer links (con:97001 through con:97005) are now INSIDE the mixer ins block, alongside the two original step/servo mixer links, in ALL THREE ACP files.
+
+I updated the MW project so the four Tracked frame prefabs use Tracked.acp for both SoundComponent and SCR_SoundDataComponent. The four Hover prefabs now use Hover.acp. Every prefab retains the correct individual event mappings:
+- Tracked — SOUND_MECH_TRACK_CLANK and SOUND_MECH_TRACK_RUMBLE
+- Hover — SOUND_MECH_HOVER_THRUST, SOUND_MECH_HOVER_IDLE_PULSE and SOUND_MECH_HOVER_IDLE.
+
+No existing frame filenames, leg/track/hover slots, torso pivots, cockpit, weapon systems or gameplay behavior were altered. The locomotion component already calls the event playback methods and schedules the short rumble/engine-bed WAV samples locally. No sound RPCs were added.
+
+My supplied Workbench log shows all eight variant mech entities spawning. It has no sound-specific error message, but does have separate SCR_VehicleTagData.InitData null-pointer errors, obsolete SampleMech2/3 prefab references and repeated mount-resolution warnings; these are NOT evidence of an audio event failure.
+
+NEXT WORKBENCH TEST
+1. Switch BOTH Core and MW to fix/tracked-hover-silent-audio-20261027, leaving Assets at main.
+2. Rebuild/reload audio resources and compile Game scripts.
+3. Open Tracked.acp and Hover.acp in the Audio Editor and audition their events; each mixer should contain seven wired inputs, including the five new ones.
+4. In-game, hover engines should produce idle bed/pulses while stationary; hover movement adds thrust. Tracked clank and rumble should happen while moving/turning, not while parked.
+5. Test as driver and outside listener, then in dedicated multiplayer. Walker stomp/servo must remain unchanged.
+6. If still silent, capture a new runtime log and verify whether the Audio Editor can audition those events. That will separate a project-graph problem from script/runtime playback.
+
+STATUS: source-verified and committed on matching TEST branches; NOT Workbench-compiled, Audio Editor-auditioned or proven audible in-game yet. No merges into main.
