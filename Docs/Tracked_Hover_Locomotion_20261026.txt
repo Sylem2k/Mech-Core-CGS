@@ -1,0 +1,53 @@
+OCTOBER 26, 2026 — CGS LOCOMOTION: WALKER / TRACKED / HOVER
+
+MY GOAL
+I want one Mech Core framework that can build a normal biped, a tank-tracked mech, or a hovering mech without legs. Each uses the same hardpoints, torso twist, controls, crew seats, authoritative root movement, and network interpolation. The non-walkers cannot produce fake IK footsteps.
+
+WHAT I ADDED
+I introduced BFA_MechMovementComponent > Locomotion > m_iLocomotionMode:
+  0 WALKER (default): existing procedural leg pairs, IK, footsteps and servo lift. No behavior changes for existing mechs.
+  1 TRACKED: zero leg pairs permitted; W/S throttle, A/D steer left/right (and Q/E still turns), no lateral strafing. My real left/right tank-track modules are purely visual attachments.
+  2 HOVER: zero leg pairs permitted; W/A/S/D glide/strafe; Q/E turn; the existing ground-sampling servo maintains configured hover clearance. I can tune m_fHoverClearance (default 1.25m), m_fHoverBob (0.08m), m_fHoverBobHz (0.65) and m_fHoverGlideTime (0.35s).
+
+AUDIO
+The local client derives track / hover sounds from the mech root movement it actually displays and does not send an extra RPC per noise. An event throttle limits the number of sound instances. The Sound Events remain BLANK by default so no other mech suddenly tries to play an undefined event.
+  Track Clank Event = e.g. SOUND_MECH_TRACK_CLANK (rolling/turning rattles)
+  Hover Thrust Event = e.g. SOUND_MECH_HOVER_THRUST (when moving/turning)
+  Hover Idle Pulse Event = e.g. SOUND_MECH_HOVER_IDLE_PULSE (occasional quiet pressure pulse)
+
+For a continuous sound bed, I set up a separate looping SoundComponent/Audio Project source on the vehicle root:
+  SOUND_MECH_TRACK_RUMBLE (while moving)
+  SOUND_MECH_HOVER_IDLE (while hovering)
+
+My new original sound starter kit CGS_Tracked_Hover_Starter_Audio.zip has five prototype 44.1 kHz mono WAVs: CGS_Track_Clank.wav, CGS_Track_Rumble_Loop.wav, CGS_Hover_Idle_Loop.wav, CGS_Hover_Thrust.wav and CGS_Hover_Idle_Pulse.wav. This ZIP is a conversation artifact, not an imported asset or GitHub binary commit. I must import files in Workbench, create audio events in an ACP sound project, and configure a SoundComponent + SCR_SoundDataComponent on each mech root before the sounds play.
+
+HOW I BUILD A TRACKED MECH
+1. Copy a standard player mech frame to a NEW prefab, keep the real dynamic body physics, MechCore crew, weapons, torso and camera systems, and avoid duplicating existing GUIDs when creating new entities.
+2. Replace visual left/right legs with separate Track_Left and Track_Right child slots and import my own left/right track assembly models. Use animated wheel bones/UV scrolling for visible track movement later.
+3. On BFA_MechMovementComponent set Locomotion Mode 1, clear ALL m_aLegPairs entries and do not require BFA_MechLegComponent on tread parts.
+4. Use the Ground Point gizmo at the lowest tread contact surface; tune the body collider's ground clearance and support probes (forward and side width) for a wide tank chassis.
+5. Set Tank A/D Steering ON; adjust m_fSpeed, m_fSprintSpeed, m_fAngularSpeed and turn responsiveness. Q/E remains an alternate hull turning input. Test collision on slopes and spin-in-place.
+6. Attach the root audio project, put SOUND_MECH_TRACK_CLANK in Track Clank Event and add a real looping rumble as a separate audio source.
+7. Keep cockpit, Torso PointInfo and all hardpoints separate exactly like on normal mechs.
+
+HOW I BUILD A HOVER MECH
+1. Copy a standard frame into a new prefab, replace leg visuals with hover-pad/thruster models mounted as separate children. Do NOT attach the procedural leg components.
+2. Set Locomotion Mode 2, clear m_aLegPairs, and place the Ground Point at the BOTTOM of the hull/pads at zero clearance. Hover Clearance adds the desired metres above this ground reference.
+3. Adjust m_fHoverClearance, m_fHoverBob, m_fHoverBobHz, m_fHoverGlideTime, and the existing Ground Rise/Fall Speed, Ground Probe dimensions and Body Speed.
+4. Ensure the rigidbody collider does NOT hang below the lift pads into the ground; otherwise hover height will fight contact physics. Tune incline and drop behavior on the test range.
+5. Give each thruster a Particle/VFX child with a visual exhaust effect; the hover controller itself does not yet control particles or animate pad joints.
+6. Put SOUND_MECH_HOVER_THRUST / SOUND_MECH_HOVER_IDLE_PULSE in the new event fields and add a separate looping hover-engine bed if desired.
+7. Verify 1P/3P camera body-only masking and torso pivot/weapon modules as with walkers.
+
+WHAT IS DONE / WHAT REMAINS
+DONE: selectable root motion profiles, walker default preserved, leg-pair requirement bypassed for tracked/hover, tank steering/no strafe, hover extra altitude/bob/glide, movement-driven audio-event hooks, isolated test branches.
+NOT DONE: tank track animated mesh/bones/UV scrolling, hover particle VFX, full automatic audio loop startup/shutdown, new production prefab models, actual ACP event project import, Enfusion Workbench compilation or dedicated MP validation. I must not claim any of these are complete.
+No main merges made by me in this development pass.
+
+TEST ORDER
+1. Use matching feat/tracked-hover-locomotion-20261026 Core and MW branches. These branches start from current main, which already contains the prior merged torso-point additions.
+2. Compile the Game scripts first.
+3. Duplicate a frame in Workbench and clear leg pairs; mode 1 should move W/S and pivot with A/D. No invalid missing-leg errors and no footstep stomps.
+4. Mode 2 should keep clearance while traveling up/down hills, strafe with A/D and turn Q/E.
+5. Add the starter audio and event project on each mech. Confirm stationary treads are silent while hovering is given a separate idle bed; verify correct event spatialization in two-client multiplayer.
+6. Profile multiple tracked and hover NPCs with 128 players and confirm no new per-step server RPCs; check root reconciliation.
