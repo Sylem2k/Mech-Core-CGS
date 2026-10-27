@@ -1,0 +1,27 @@
+OCTOBER 26, 2026 - MECH TORSO POINTINFO PIVOT
+
+I noticed that the CGS_TorsoTwistComponent only exposed m_vPivot as numeric local coordinates. I could not grab the pivot with a PointInfo gizmo in Workbench to decide exactly where the torso starts turning.
+
+I added the editable m_TorsoPivotPoint PointInfo to CGS_TorsoTwistComponent. I initialize it against the mech ROOT and read its model-local position once in OnPostInit before the system can remove the obsolete root visual. I use that single local point for all three existing twist calculations: desired aim yaw, the Torso/Cockpit/arm mount transformation, and root-mounted weapon yaw/pitch aiming. It changes the rotation ORIGIN; it does not rotate the mech legs, root entity or whole vehicle.
+
+I retained the old m_vPivot field as a fallback. This preserves my unusual legacy mech configurations when they have not been assigned a PointInfo. Adding a PointInfo overrides the fallback. A workbench prefab needs to be respawned after moving its gizmo because the pivot is read once on spawn.
+
+I preconfigured a real m_TorsoPivotPoint PointInfo on all 25 standard production mechs: 10 standard player frames and 15 regular OPFOR mechs. Each starts with Offset 0 0 0 to match its former default. I can now open any of those mechs, select CGS_TorsoTwistComponent > Twist > Torso Pivot Point, and drag the green/blue/red PointInfo gizmo to the intended waist joint (usually centered between the hips at the rotation seam). The value is unique to each prefab, so a light, medium, heavy, or assault can have its own pivot.
+
+I did NOT modify Titan_WarLord_OPFOR, Titan_WarLord_BOSS_128_Test or the two old root-only prototype bases. The boss has an existing nonzero numeric pivot (-0.2166 12.339 7.5671), bespoke hitboxes and unusual visuals. It retains the fallback until its body split and collision are validated. New prefabs with CGS_TorsoTwistComponent can manually add m_TorsoPivotPoint.
+
+TEST PLAN
+1. Use BOTH the Core and MW branches feat/torso-twist-pointinfo-pivot-20261026. CGS-MW-Assets remains on main.
+2. Open Assault_Gravemarch_Gun.et in Workbench and inspect CGS_TorsoTwistComponent > Twist > Torso Pivot Point. Confirm the gizmo is present and starts at the previous origin.
+3. Move that gizmo UP to the actual mechanical waist seam between upper armor and hips. Save the prefab and respawn a mech. Turn left/right and inspect the seam. Only the upper body rotates around the selected waist origin.
+4. Verify cockpit and torso continue following the same yaw. The arms and direct-mounted chest weapons should remain aligned; guns should still pitch up/down separately.
+5. Move the point away from the waist on a temporary copy to confirm it controls rotation ORIGIN, restore it and retest.
+6. In first-person confirm only body visual hides; in third-person it returns. This update should not alter camera rules.
+7. Validate one mech of each class, reloading and weapon swaps. Run a two-client dedicated MP test to verify both clients see the same pivot. Check Warlord original twist and shield/weak spots separately.
+8. Compile Game scripts in Enfusion Workbench first; the compile and gameplay results have not yet been verified.
+
+COMPONENT SOURCE
+Scripts/Game/CGS_Movement/CGS_TorsoTwistComponent.c
+
+STATUS
+Committed as an isolated descendant of fix/cockpit-body-only-1p-3p-20261026 in Core and MW. No main merge and no changes to Core weapon group / barrage / Mech Bay logic.
