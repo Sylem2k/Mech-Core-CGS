@@ -29,7 +29,10 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	[Attribute("true", UIWidgets.CheckBox, "Turn back to centre when nobody is in the aim station.", category: "Twist")]
 	protected bool m_bCentreWhenEmpty;
 
-	[Attribute("0 0 0", UIWidgets.Auto, "Point the torso turns around, in the mech's own space (usually the waist).", category: "Twist")]
+	[Attribute(desc: "DRAGGABLE TORSO PIVOT: move this PointInfo gizmo to the mech's waist rotation joint. It is in mech-root local space and drives torso, cockpit, weapon mounts, and root-mounted guns. If blank, the Legacy Pivot is used.", category: "Twist")]
+	protected ref PointInfo m_TorsoPivotPoint;
+
+	[Attribute("0 0 0", UIWidgets.Auto, "Legacy local-space pivot. Used ONLY when Torso Pivot Point has not been configured, preserving old prefabs.", category: "Twist")]
 	protected vector m_vPivot;
 
 	[Attribute("", UIWidgets.Auto, "Slot names (in the mech's SlotManager) that turn with the torso: the torso model, back pack, exhausts ... NOT the legs or hips.", category: "Parts")]
@@ -66,6 +69,8 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	protected float m_fNextRefresh;
 	protected float m_fNextMountScan;
 	protected float m_fNextRootWeaponAim;
+	// All upper-body parts use the same local pivot within one tick.
+	protected vector m_vEffectivePivot;
 
 	protected ref array<IEntity> m_aSlotEntities = {};
 	protected ref array<ref CGS_TwistRest> m_aSlotRest = {};
@@ -142,9 +147,29 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Read the PointInfo gizmo's MODEL-LOCAL location, not its world position.
+	//! This preserves rotation math when the mech rotates or moves in the world.
+	//! When no PointInfo is configured, older m_vPivot values still work.
+	protected vector ResolvePivotLocal(IEntity owner)
+	{
+		if (!m_TorsoPivotPoint || !owner)
+			return m_vPivot;
+
+		if (!m_TorsoPivotPoint.GetOwner())
+			m_TorsoPivotPoint.Init(owner);
+
+		vector pivotMat[4];
+		m_TorsoPivotPoint.GetModelTransform(pivotMat);
+		return pivotMat[3];
+	}
+
+	//------------------------------------------------------------------------------------------------
 	protected void Tick()
 	{
 		IEntity owner = GetOwner();
+		if (!owner)
+			return;
+		m_vEffectivePivot = ResolvePivotLocal(owner);
 		float now = Now();
 		float dt = Math.Clamp(now - m_fLastTime, 0, 0.1);
 		m_fLastTime = now;
@@ -223,7 +248,7 @@ class CGS_TorsoTwistComponent : ScriptComponent
 		if (!aim)
 			return 0;
 
-		vector local = aim.GetAimLocalPointForStation(m_sAimStation) - m_vPivot;
+		vector local = aim.GetAimLocalPointForStation(m_sAimStation) - m_vEffectivePivot;
 		if (local[0] * local[0] + local[2] * local[2] < 1.0)
 			return m_fTwist;
 
@@ -429,7 +454,7 @@ class CGS_TorsoTwistComponent : ScriptComponent
 
 		vector torsoMat[4];
 		Math3D.AnglesToMatrix(Vector(torsoYaw, 0, 0), torsoMat);
-		torsoMat[3] = m_vPivot - (torsoMat[0] * m_vPivot[0] + torsoMat[1] * m_vPivot[1] + torsoMat[2] * m_vPivot[2]);
+		torsoMat[3] = m_vEffectivePivot - (torsoMat[0] * m_vEffectivePivot[0] + torsoMat[1] * m_vEffectivePivot[1] + torsoMat[2] * m_vEffectivePivot[2]);
 
 		for (int hp = 0; hp < m_aRootWeaponEntities.Count(); hp++)
 		{
@@ -512,7 +537,7 @@ class CGS_TorsoTwistComponent : ScriptComponent
 		// Rotation around the vertical axis through the pivot (mech space).
 		vector rot[4];
 		Math3D.AnglesToMatrix(Vector(twist, 0, 0), rot);
-		rot[3] = m_vPivot - (rot[0] * m_vPivot[0] + rot[1] * m_vPivot[1] + rot[2] * m_vPivot[2]);
+		rot[3] = m_vEffectivePivot - (rot[0] * m_vEffectivePivot[0] + rot[1] * m_vEffectivePivot[1] + rot[2] * m_vEffectivePivot[2]);
 
 		for (int i = 0; i < m_aSlotEntities.Count(); i++)
 		{
