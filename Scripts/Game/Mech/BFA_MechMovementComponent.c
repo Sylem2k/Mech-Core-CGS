@@ -42,6 +42,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	[Attribute("", UIWidgets.EditBox, "Hover-engine bed event. Set to SOUND_MECH_HOVER_IDLE. Automatically replays the four-second WAV while the skimmer is active.", category: "Locomotion Audio")]
 	string m_sHoverIdleLoopEvent;
 
+	[Attribute("false", UIWidgets.CheckBox, "TEST ONLY: log failures from the actual Enfusion audio source API; when seated as local driver, play one initial clank/hover test sound. Disable after validation.", category: "Locomotion Audio")]
+	bool m_bDebugLocomotionSound;
+
 	[Attribute("1", UIWidgets.Auto, "Normal forward/reverse speed in m/s.", category: "Body")]
 	float m_fSpeed;
 
@@ -287,6 +290,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	// Independent timer so a low-frequency engine bed never suppresses
 	// track clanks, thrust whooshes or the existing quiet hover pulse.
 	protected float m_fNextDriveLoopAt;
+	protected float m_fLastDriveAudioSampleTime;
+	protected float m_fNextDriveAudioDiagnostic;
+	protected bool m_bDriveAudioDriverSelfTestDone;
 
 	//------------------------------------------------------------------------------------------------
 	void SetPilot(IEntity pilot)
@@ -1728,14 +1734,85 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! Reconstruct sound locally from the root motion each client actually sees.
-	//! No sound RPCs; dedicated headless servers never instantiate audio.
-	protected void UpdateLocomotionSounds(IEntity owner)
+	//! The old static helper failed silently when a component configuration
+	//! was absent or AudioSystem.IsAudible() refused an event. Resolve the
+	//! source on the fitted part first and then FALL BACK to the root.
+	//! This method makes no sound RPCs and is called only on listening clients.
+	protected bool TryPlayDriveAudio(IEntity root, string soundEvent)
 	{
-		if (m_iLocomotionMode == 0 || System.IsConsoleApp() || !owner)
+		if (!root || soundEvent.IsEmpty() || !GetGame())
+			return false;
+
+		SCR_SoundManagerModule soundManager = SCR_SoundManagerModule.GetInstance(root.GetWorld());
+		if (!soundManager)
+		{
+			LogDriveAudioDiagnostic("NO_SOUND_MANAGER", soundEvent);
+			return false;
+		}
+
+		IEntity part = ResolveLocomotionAudioEmitter(root);
+		SCR_AudioSource source;
+		if (part && part != root)
+			source = soundManager.CreateAudioSource(part, soundEvent);
+
+		// The root has its own SoundData mapping on all eight MW frames.
+		// This also recovers from unloaded or unaudible child emitters.
+		if (!source)
+			source = soundManager.CreateAudioSource(root, soundEvent);
+
+		if (!source)
+		{
+			string reason = "UNRESOLVED_OR_INAUDIBLE";
+			SCR_SoundDataComponent soundData = SCR_SoundDataComponent.Cast(root.FindComponent(SCR_SoundDataComponent));
+			if (!soundData)
+				reason = "ROOT_MISSING_SOUND_DATA";
+			else
+			{
+				SCR_AudioSourceConfiguration config = soundData.GetAudioSourceConfiguration(soundEvent);
+				if (!config)
+					reason = "ROOT_EVENT_NOT_MAPPED";
+				else if (!config.IsValid())
+					reason = "ROOT_EVENT_INVALID";
+				else
+				{
+					float distance = AudioSystem.IsAudible(config.m_sSoundProject, config.m_sSoundEventName, root.GetOrigin());
+					if (distance < 0)
+						reason = "AUDIO_GRAPH_NOT_AUDIBLE";
+				}
+			}
+			LogDriveAudioDiagnostic(reason, soundEvent);
+			return false;
+		}
+
+		soundManager.PlayAudioSource(source);
+		LogDriveAudioDiagnostic("SUBMITTED_TO_AUDIO_MANAGER", soundEvent);
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Diagnostics are throttled PER MECH, and enabled only on explicit test
+	//! prefabs. One log line every 3 seconds max, never per frame or per NPC.
+	protected void LogDriveAudioDiagnostic(string reason, string soundEvent)
+	{
+		if (!m_bDebugLocomotionSound)
 			return;
 
-		// Do not spawn audio events for remote mechs beyond hearing range.
+		float now = System.GetTickCount() * 0.001;
+		if (now < m_fNextDriveAudioDiagnostic)
+			return;
+		m_fNextDriveAudioDiagnostic = now + 3.0;
+		BFA_MechLog.Log(string.Format("[CGS LOCOMOTION AUDIO] mode=%1 event=%2 result=%3", m_iLocomotionMode, soundEvent, reason));
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Determine motion in METRES/SECOND and DEGREES/SECOND instead of a
+	//! hard-coded displacement per frame. The old threshold could suppress
+	//! sound at slow speeds/high FPS even when the treads were moving.
+	protected void UpdateLocomotionSounds(IEntity owner)
+	{
+		if (m_iLocomotionMode == 0 || System.IsConsoleApp() || !owner || !GetGame())
+			return;
+
 		PlayerController pc = GetGame().GetPlayerController();
 		if (pc && pc.GetControlledEntity())
 		{
@@ -1752,11 +1829,14 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			m_bDriveSoundSampleReady = true;
 			m_vLastDriveSoundPos = pos;
 			m_fLastDriveSoundYaw = yaw;
+			m_fLastDriveAudioSampleTime = now;
 			m_fNextDriveSoundAt = now + 0.3;
 			m_fNextDriveLoopAt = now + 0.3;
 			return;
 		}
 
+		float dt = Math.Clamp(now - m_fLastDriveAudioSampleTime, 0.001, 0.5);
+		m_fLastDriveAudioSampleTime = now;
 		vector delta = pos - m_vLastDriveSoundPos;
 		delta[1] = 0;
 		float yawDelta = yaw - m_fLastDriveSoundYaw;
@@ -1768,21 +1848,31 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		m_vLastDriveSoundPos = pos;
 		m_fLastDriveSoundYaw = yaw;
 
-		bool moving = delta.LengthSq() > 0.000036 || Math.AbsFloat(yawDelta) > 0.18;
+		float speed = delta.Length() / dt;
+		float turnSpeed = Math.AbsFloat(yawDelta) / dt;
+		bool moving = speed > 0.15 || turnSpeed > 2.0;
 
-		// These samples are 4 s mono WAVs. Play the engine beds locally
-		// on a separate timer; they follow the vehicle and do not emit RPCs.
-		// Start a new playback slightly before the previous bed ends.
+		// Local pilot sound check: ONE deliberate sound after taking control.
+		// Track sound is tested even while stationary so it can be diagnosed.
+		if (m_bDebugLocomotionSound && HasLocalPilot() && !m_bDriveAudioDriverSelfTestDone)
+		{
+			m_bDriveAudioDriverSelfTestDone = true;
+			if (m_iLocomotionMode == 1)
+				TryPlayDriveAudio(owner, m_sTrackClankEvent);
+			else if (m_iLocomotionMode == 2)
+				TryPlayDriveAudio(owner, m_sHoverIdleLoopEvent);
+		}
+
 		if (now >= m_fNextDriveLoopAt)
 		{
 			if (m_iLocomotionMode == 1 && moving && !m_sTrackRumbleEvent.IsEmpty())
 			{
-				SCR_SoundManagerModule.CreateAndPlayAudioSource(ResolveLocomotionAudioEmitter(owner), m_sTrackRumbleEvent);
+				TryPlayDriveAudio(owner, m_sTrackRumbleEvent);
 				m_fNextDriveLoopAt = now + 3.95;
 			}
 			else if (m_iLocomotionMode == 2 && !m_sHoverIdleLoopEvent.IsEmpty())
 			{
-				SCR_SoundManagerModule.CreateAndPlayAudioSource(ResolveLocomotionAudioEmitter(owner), m_sHoverIdleLoopEvent);
+				TryPlayDriveAudio(owner, m_sHoverIdleLoopEvent);
 				m_fNextDriveLoopAt = now + 3.95;
 			}
 		}
@@ -1792,19 +1882,19 @@ class BFA_MechMovementComponent : ScriptGameComponent
 
 		if (m_iLocomotionMode == 1 && moving && !m_sTrackClankEvent.IsEmpty())
 		{
-			SCR_SoundManagerModule.CreateAndPlayAudioSource(ResolveLocomotionAudioEmitter(owner), m_sTrackClankEvent);
+			TryPlayDriveAudio(owner, m_sTrackClankEvent);
 			m_fNextDriveSoundAt = now + 0.75;
 		}
 		else if (m_iLocomotionMode == 2)
 		{
 			if (moving && !m_sHoverThrustEvent.IsEmpty())
 			{
-				SCR_SoundManagerModule.CreateAndPlayAudioSource(ResolveLocomotionAudioEmitter(owner), m_sHoverThrustEvent);
+				TryPlayDriveAudio(owner, m_sHoverThrustEvent);
 				m_fNextDriveSoundAt = now + 1.15;
 			}
 			else if (!moving && !m_sHoverIdlePulseEvent.IsEmpty())
 			{
-				SCR_SoundManagerModule.CreateAndPlayAudioSource(ResolveLocomotionAudioEmitter(owner), m_sHoverIdlePulseEvent);
+				TryPlayDriveAudio(owner, m_sHoverIdlePulseEvent);
 				m_fNextDriveSoundAt = now + 3.5;
 			}
 		}
