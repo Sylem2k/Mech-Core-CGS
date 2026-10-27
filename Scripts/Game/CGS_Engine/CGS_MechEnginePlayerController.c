@@ -1,5 +1,6 @@
-// CGS MechCore - engine control requests, isolated from existing mech movement RPCs.
-// Requests travel on the player's owned controller; the server validates DRIVER station.
+// CGS MechCore - reliable engine control through the requesting player's controller.
+// Kept self-contained: other SCR_PlayerController extensions expose private/protected
+// helpers that cannot safely be referenced from this separate file.
 modded class SCR_PlayerController
 {
 	void CGS_Mech_RequestEnginePower(IEntity mech, bool start)
@@ -32,31 +33,39 @@ modded class SCR_PlayerController
 
 	protected void CGS_Mech_ServerEnginePower(RplId mechId, bool start)
 	{
-		if (!Replication.IsServer())
+		if (!Replication.IsServer() || !GetGame())
 			return;
 
-		IEntity mech = BFA_Mech_ResolveEntity(mechId);
+		RplComponent rpl = RplComponent.Cast(Replication.FindItem(mechId));
+		if (!rpl)
+			return;
+
+		IEntity mech = rpl.GetEntity();
 		if (!mech)
 			return;
+
+		IEntity root = mech.GetRootParent();
+		if (root)
+			mech = root;
 
 		CGS_MechEngineComponent engine = CGS_MechEngineComponent.Cast(mech.FindComponent(CGS_MechEngineComponent));
 		if (!engine)
 			return;
 
-		// The authenticated player controller must own the exact DRIVER station.
-		// Never trust the client's user entity or a client-supplied pilot ID.
-		if (!BFA_Mech_IsStationController(mech, "DRIVER"))
+		// If this mech uses multi-crew stations, require the exact DRIVER seat.
+		BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(mech.FindComponent(BFA_MechCoreComponent));
+		if (core && !core.IsControllerAtStation(this, "DRIVER"))
 			return;
 
-		IEntity pilot = null;
 		BFA_MechControllerComponent controls = BFA_MechControllerComponent.Cast(mech.FindComponent(BFA_MechControllerComponent));
-		if (controls)
-			pilot = controls.BFA_GetPilotOccupant();
-
-		// A seat occupant must exist, and must be controlled by this requester.
-		if (!pilot || !GetGame())
+		if (!controls)
 			return;
 
+		IEntity pilot = controls.BFA_GetPilotOccupant();
+		if (!pilot)
+			return;
+
+		// Bind the physical driver occupant to the RPC sender, not to a supplied user ID.
 		PlayerManager manager = GetGame().GetPlayerManager();
 		if (!manager)
 			return;
