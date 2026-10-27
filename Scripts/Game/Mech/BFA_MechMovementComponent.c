@@ -7,6 +7,26 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	[Attribute("", UIWidgets.Object, "One entry per LEFT/RIGHT leg pair: the two slot names of the legs (see MECH_LEGS_GUIDE). Biped = 1, quad = 2, spider = 3.", category: "Legs")]
 	ref array<ref BFA_MechLegPair> m_aLegPairs;
 
+	// Stable recovery Phase 1: only movement. No audio code added.
+	// 0 preserves the entire existing walker behavior.
+	[Attribute("0", UIWidgets.Auto, "Locomotion: 0 = walking legs; 1 = tank tracks (A/D steer); 2 = ground hover (A/D strafe).", category: "Locomotion")]
+	int m_iLocomotionMode;
+
+	[Attribute("true", UIWidgets.CheckBox, "Tracked mode only: A/D steer the vehicle instead of strafing. Q/E still steer.", category: "Locomotion")]
+	bool m_bTrackedADSteering;
+
+	[Attribute("1.25", UIWidgets.Auto, "Hover mode only: additional clearance above the chassis Ground Point.", category: "Locomotion")]
+	float m_fHoverClearance;
+
+	[Attribute("0.08", UIWidgets.Auto, "Hover mode only: idle vertical bob in metres. Zero disables bob.", category: "Locomotion")]
+	float m_fHoverBob;
+
+	[Attribute("0.65", UIWidgets.Auto, "Hover mode only: number of bob cycles per second.", category: "Locomotion")]
+	float m_fHoverBobHz;
+
+	[Attribute("0.35", UIWidgets.Auto, "Hover mode only: lateral/forward glide response time in seconds.", category: "Locomotion")]
+	float m_fHoverGlideTime;
+
 	[Attribute("1", UIWidgets.Auto, "Normal forward/reverse speed in m/s.", category: "Body")]
 	float m_fSpeed;
 
@@ -815,6 +835,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	protected void QueueLegRetry()
 	{
+		if (m_iLocomotionMode != 0)
+			return;
 		if (m_bLegRetryQueued || m_bLegPairsReady)
 			return;
 
@@ -830,6 +852,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	protected void TryInitializeLegPairs()
 	{
 		m_bLegRetryQueued = false;
+		if (m_iLocomotionMode != 0)
+			return;
 
 		IEntity owner = GetOwner();
 		if (!owner || !m_SlotManager || !m_aLegPairs || m_aLegPairs.IsEmpty())
@@ -935,6 +959,13 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		float forwardInput = GetEffectiveForwardInput();
 		float strafeInput = GetEffectiveStrafeInput();
 		float turnInput = GetEffectiveTurnInput();
+		if (m_iLocomotionMode == 1)
+		{
+			// Pivot like a tracked tank, while keeping the original Q/E option.
+			if (m_bTrackedADSteering)
+				turnInput = Math.Clamp(turnInput + strafeInput, -1.0, 1.0);
+			strafeInput = 0;
+		}
 		BFA_MechExtension extension = BFA_MechExtension.Get();
 		bool sprinting = m_bCanSprint && GetEffectiveSprintInput() && extension.CanMechSprint(owner);
 		float speedScale = Math.Clamp(extension.GetMechSpeedScale(owner), 0.0, 2.0);
@@ -992,6 +1023,16 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		// Exact horizontal drive. Forward and lateral movement are authored independently;
 		// vertical motion stays owned by the terrain/jump controller.
 		vector velocity = localFwd * forwardSpeed + localRight * strafeSpeed;
+		if (m_iLocomotionMode == 2)
+		{
+			// Preserve the established server/client movement path. Ease only
+			// the planar response to produce a controlled floating glide.
+			vector horizontal = currentVelocity;
+			horizontal[1] = 0;
+			float response = Math.Max(m_fHoverGlideTime, 0.02);
+			float alpha = Math.Clamp(timeSlice / response, 0.0, 1.0);
+			velocity = horizontal + (velocity - horizontal) * alpha;
+		}
 
 		// Driver client only: blend the prediction back toward the server root (#4).
 		if (!Replication.IsServer() && HasLocalPilot())
@@ -1062,6 +1103,16 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		}
 
 		float targetY = m_fFilteredSupportY + m_fBodyHeight;
+		if (m_iLocomotionMode == 2)
+		{
+			// Add clearance relative to the original prefab's ground datum.
+			targetY += Math.Max(m_fHoverClearance, 0.0);
+			if (m_fHoverBob > 0 && GetGame() && GetGame().GetWorld())
+			{
+				float phase = GetGame().GetWorld().GetWorldTime() * 0.001 * Math.Max(m_fHoverBobHz, 0) * 2.0 * Math.PI;
+				targetY += Math.Sin(phase) * m_fHoverBob;
+			}
+		}
 		float currentY = owner.GetOrigin()[1];
 		float error = targetY - currentY;
 
@@ -1095,6 +1146,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//! Drive the visual leg rig from the mech root frame on every machine.
 	protected void UpdateProceduralLegs(float timeSlice)
 	{
+		if (m_iLocomotionMode != 0)
+			return;
 		if (!m_bLegPairsReady || !m_aAllLegs || m_aAllLegs.IsEmpty())
 			return;
 
@@ -1800,9 +1853,12 @@ class BFA_MechMovementComponent : ScriptGameComponent
 
 		SetPilot(null);
 
+		// Tracks/hover deliberately have no IK legs or mandatory leg pairs.
+		if (m_iLocomotionMode != 0)
+			return;
 		if (!m_aLegPairs || m_aLegPairs.IsEmpty())
 		{
-			BFA_MechLog.Log("[BFA MechCore] No leg pairs configured on mech.", LogLevel.ERROR);
+			BFA_MechLog.Log("[BFA MechCore] Walker frame requires at least one leg pair.", LogLevel.ERROR);
 			return;
 		}
 
