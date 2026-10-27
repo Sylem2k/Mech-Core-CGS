@@ -1,0 +1,41 @@
+OCTOBER 27, 2026 — WHY WALKER AUDIO WORKS BUT TRACKED/HOVER AUDIO IS SILENT
+
+I confirmed that the normal walker system works, and tracked/hover movement itself is functional. I do NOT need to rewrite the movement physics. This controlled test is meant to isolate the sound fault before I copy another vehicle audio library.
+
+ROOT DIFFERENCE
+My walkers trigger SOUND_MECH_STEP and SOUND_MECH_SERVO directly from BFA_MechLegComponent at the swing/plant transitions. The leg part is the audio source. Its SOUND_MECH_STEP maps to the known-working {8B7D7D9A72F30BAD}Sounds/SampleMech.acp.
+
+The tracked/hover frame instead has a separate CGS_MechDriveAudioComponent on the root. It runs a frame tick, checks locomotion mode, measures speed and yaw, searches the root SlotManagerComponent for Track_L1/Track_R1 or HoverPad_L1/HoverPad_R1, checks that part's SoundComponent and SCR_SoundDataComponent, and requests its event. These are additional possible failure points.
+
+IMPORTANT BUG IN PREVIOUS DIAGNOSTICS
+The helper SCR_SoundManagerModule.CreateAndPlayAudioSource returns void and can silently skip the sound. It may be unable to create an audio source because AudioSystem.IsAudible returned a negative value or the sound project did not resolve. My previous PLAY_REQUESTED status meant only the call was made, NOT that an actual sound source existed.
+
+CONTROLLED A/B TEST CHANGES (TEMPORARY)
+On Core test branch fix/tracked-hover-audio-source-diagnostic-20261027:
+- I changed ONLY Scripts/Game/CGS_Movement/CGS_MechDriveAudioComponent.c.
+- For an actual engine event, it asks SCR_SoundManagerModule.GetInstance for the manager, attempts CreateAudioSource and checks whether that returns null. It calls PlayAudioSource only with a nonnull source. It prints status NO_PART_SOUND_EMITTER / EVENT_NOT_MAPPED_ON_PART / NO_SOUND_MANAGER / CREATE_AUDIO_SOURCE_FAILED / SOURCE_CREATED_PLAY_SUBMITTED, throttled to 4 seconds.
+- It also emits [CGS DRIVE AUDIO INIT] when the component initializes and [CGS DRIVE AUDIO FIRST_FRAME] when the audio frame loop first executes. This tells me whether the script is running at all and whether its locomotion mode matches the movement component.
+- The debug test event is exactly SOUND_MECH_STEP, triggered ONCE by each debug-enabled mech shortly after the first nearby tick. The original engine clanks, rumble, idle and thrust event logic remains present.
+- The working BFA_MechMovementComponent.c and BFA_MechLegComponent.c were NOT modified.
+
+On MW test branch with the same name:
+- I added the known-working Core SampleMech.acp to the SoundComponent filenames on each of the FOUR track/hover parts, preserving their original Tracked/Hover.acp filenames.
+- I added one SCR_AudioSourceConfiguration mapping SOUND_MECH_STEP to {8B7D7D9A72F30BAD}Sounds/SampleMech.acp on each part.
+- I temporarily enabled m_bDebugSound 1 on ALL EIGHT tracked/hover frame root audio components because my prior test logs included Assault variants while only Light had debugging enabled.
+- I left the attached model resources, existing engine/hover audio mappings and every movement / weapon / walker frame intact.
+
+HOW I TEST
+1. I back up my functioning project folders first and load BOTH matching diagnostic branches (Core + MW). CGS-MW-Assets stays on main.
+2. In Workbench I compile Game scripts, rebuild audio resources, then load Light or Assault tracked/hover frame nearby.
+3. I look for [CGS DRIVE AUDIO INIT] and [CGS DRIVE AUDIO FIRST_FRAME] on the listening client. Missing INIT means the new component or new files are not loaded. INIT but no FIRST_FRAME means the audio frame tick isn't running. FIRST_FRAME followed by mode mismatch means the wrong mode.
+4. I should hear exactly one known-good walker stomp from the track/hover part when it starts its audio test; this is a test sound, NOT a permanent mech audio design.
+5. If the walker stomp IS audible but the track/hover engine sounds aren't, the core event path is working; next I will fix the new ACP mixer, event/shader, bank attenuation or audio samples.
+6. If there is NO stomp, I use the exact status logs to distinguish missing attached sound-emitter entity or event mapping from an actual source-creation failure.
+7. SOURCE_CREATED_PLAY_SUBMITTED still does not prove that human ears heard sound. I must independently listen and confirm the expected event.
+8. I remove the walker test sound mapping and turn off m_bDebugSound once the actual track/hover sounds work. I do not merge this debug branch into main.
+
+IMPORTANT NOTE
+The copied BRDM-2 and UH1H vehicle ACPs in MW are useful references for future sound quality, but they depend on vanilla signal graphs, RPM/load and base game samples; those files alone do not fix a missing sound playback path. This A/B test is the proper first step before integrating them.
+
+STATUS
+Source changes were committed on separate test branches. Compilation and audible output of this diagnostic version are pending my Workbench test. The working Phase 1 locomotion is not changed.
