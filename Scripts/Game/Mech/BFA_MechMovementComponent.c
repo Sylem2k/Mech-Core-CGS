@@ -7,25 +7,43 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	[Attribute("", UIWidgets.Object, "One entry per LEFT/RIGHT leg pair: the two slot names of the legs (see MECH_LEGS_GUIDE). Biped = 1, quad = 2, spider = 3.", category: "Legs")]
 	ref array<ref BFA_MechLegPair> m_aLegPairs;
 
-	// Stable recovery Phase 1: only movement. No audio code added.
-	// 0 preserves the entire existing walker behavior.
-	[Attribute("0", UIWidgets.Auto, "Locomotion: 0 = walking legs; 1 = tank tracks (A/D steer); 2 = ground hover (A/D strafe).", category: "Locomotion")]
+	// Locomotion 0 = existing legged mech, 1 = tracks, 2 = hover.
+	// Both new types intentionally use zero IK leg pairs.
+	[Attribute("0", UIWidgets.Auto, "0 = Walker (IK leg pairs); 1 = Tracked (tank); 2 = Hover (terrain-following skimmer).", category: "Locomotion")]
 	int m_iLocomotionMode;
 
-	[Attribute("true", UIWidgets.CheckBox, "Tracked mode only: A/D steer the vehicle instead of strafing. Q/E still steer.", category: "Locomotion")]
+	[Attribute("true", UIWidgets.CheckBox, "Tracked: A/D inputs steer the chassis in addition to Q/E; lateral strafing is disabled.", category: "Locomotion")]
 	bool m_bTrackedADSteering;
 
-	[Attribute("1.25", UIWidgets.Auto, "Hover mode only: additional clearance above the chassis Ground Point.", category: "Locomotion")]
+	[Attribute("1.25", UIWidgets.Auto, "Hover: extra ground clearance in metres, in addition to the normal Ground Point height.", category: "Locomotion")]
 	float m_fHoverClearance;
 
-	[Attribute("0.08", UIWidgets.Auto, "Hover mode only: idle vertical bob in metres. Zero disables bob.", category: "Locomotion")]
+	[Attribute("0.08", UIWidgets.Auto, "Hover: small visual/body height bob in metres. 0 = no idle bob.", category: "Locomotion")]
 	float m_fHoverBob;
 
-	[Attribute("0.65", UIWidgets.Auto, "Hover mode only: number of bob cycles per second.", category: "Locomotion")]
+	[Attribute("0.65", UIWidgets.Auto, "Hover: bob cycles per second.", category: "Locomotion")]
 	float m_fHoverBobHz;
 
-	[Attribute("0.35", UIWidgets.Auto, "Hover mode only: lateral/forward glide response time in seconds.", category: "Locomotion")]
+	[Attribute("0.35", UIWidgets.Auto, "Hover: acceleration/braking easing time in seconds. Bigger = more floating glide.", category: "Locomotion")]
 	float m_fHoverGlideTime;
+
+	[Attribute("", UIWidgets.EditBox, "Track clank one-shot audio event. Set to SOUND_MECH_TRACK_CLANK on tracked chassis.", category: "Locomotion Audio")]
+	string m_sTrackClankEvent;
+
+	[Attribute("", UIWidgets.EditBox, "Track moving rumble bed. Set to SOUND_MECH_TRACK_RUMBLE. The project contains a 4 second seamless WAV.", category: "Locomotion Audio")]
+	string m_sTrackRumbleEvent;
+
+	[Attribute("", UIWidgets.EditBox, "Hover thrust/whoosh one-shot sound EVENT on the root's audio project. Plays during movement/turning. Empty = silent.", category: "Locomotion Audio")]
+	string m_sHoverThrustEvent;
+
+	[Attribute("", UIWidgets.EditBox, "Quiet occasional idle lift-pulse event. Set to SOUND_MECH_HOVER_IDLE_PULSE.", category: "Locomotion Audio")]
+	string m_sHoverIdlePulseEvent;
+
+	[Attribute("", UIWidgets.EditBox, "Hover-engine bed event. Set to SOUND_MECH_HOVER_IDLE. Automatically replays the four-second WAV while the skimmer is active.", category: "Locomotion Audio")]
+	string m_sHoverIdleLoopEvent;
+
+	[Attribute("false", UIWidgets.CheckBox, "TEST ONLY: log failures from the actual Enfusion audio source API; when seated as local driver, play one initial clank/hover test sound. Disable after validation.", category: "Locomotion Audio")]
+	bool m_bDebugLocomotionSound;
 
 	[Attribute("1", UIWidgets.Auto, "Normal forward/reverse speed in m/s.", category: "Body")]
 	float m_fSpeed;
@@ -263,6 +281,18 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	// they do not own, which was enough to defeat the old watchdog without actually
 	// producing usable visual updates.
 	protected bool m_bRemoteVisualTickRunning;
+
+	// Per-client audio pacing, derived from locally observed root transforms.
+	protected bool m_bDriveSoundSampleReady;
+	protected vector m_vLastDriveSoundPos;
+	protected float m_fLastDriveSoundYaw;
+	protected float m_fNextDriveSoundAt;
+	// Independent timer so a low-frequency engine bed never suppresses
+	// track clanks, thrust whooshes or the existing quiet hover pulse.
+	protected float m_fNextDriveLoopAt;
+	protected float m_fLastDriveAudioSampleTime;
+	protected float m_fNextDriveAudioDiagnostic;
+	protected bool m_bDriveAudioDriverSelfTestDone;
 
 	//------------------------------------------------------------------------------------------------
 	void SetPilot(IEntity pilot)
@@ -503,7 +533,6 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	bool LegDamageSlows()
 	{
-		// Tracked/hover chassis have no procedural leg hit zones.
 		return m_iLocomotionMode == 0 && m_bLegDamageSlows;
 	}
 
@@ -967,7 +996,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		float turnInput = GetEffectiveTurnInput();
 		if (m_iLocomotionMode == 1)
 		{
-			// Pivot like a tracked tank, while keeping the original Q/E option.
+			// Tank: A/D and Q/E turn the chassis. No sideways sliding.
 			if (m_bTrackedADSteering)
 				turnInput = Math.Clamp(turnInput + strafeInput, -1.0, 1.0);
 			strafeInput = 0;
@@ -1031,12 +1060,11 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		vector velocity = localFwd * forwardSpeed + localRight * strafeSpeed;
 		if (m_iLocomotionMode == 2)
 		{
-			// Preserve the established server/client movement path. Ease only
-			// the planar response to produce a controlled floating glide.
+			// Existing server/driver prediction remains intact. Smooth the
+			// horizontal motion only, never terrain-follow vertical velocity.
 			vector horizontal = currentVelocity;
 			horizontal[1] = 0;
-			float response = Math.Max(m_fHoverGlideTime, 0.02);
-			float alpha = Math.Clamp(timeSlice / response, 0.0, 1.0);
+			float alpha = Math.Clamp(timeSlice / Math.Max(m_fHoverGlideTime, 0.02), 0.0, 1.0);
 			velocity = horizontal + (velocity - horizontal) * alpha;
 		}
 
@@ -1111,12 +1139,11 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		float targetY = m_fFilteredSupportY + m_fBodyHeight;
 		if (m_iLocomotionMode == 2)
 		{
-			// Add clearance relative to the original prefab's ground datum.
-			targetY += Math.Max(m_fHoverClearance, 0.0);
+			targetY = targetY + Math.Max(m_fHoverClearance, 0.0);
 			if (m_fHoverBob > 0 && GetGame() && GetGame().GetWorld())
 			{
 				float phase = GetGame().GetWorld().GetWorldTime() * 0.001 * Math.Max(m_fHoverBobHz, 0) * 2.0 * Math.PI;
-				targetY += Math.Sin(phase) * m_fHoverBob;
+				targetY = targetY + Math.Sin(phase) * m_fHoverBob;
 			}
 		}
 		float currentY = owner.GetOrigin()[1];
@@ -1668,6 +1695,212 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Walker footsteps play from the leg prefab. Tracked and hover audio must
+	//! likewise play from their mounted PART prefab, not from the mech root.
+	//! The visual model can be added later without changing sound routing.
+	//! For old mechs without a fitted part, preserve root emitter fallback.
+	protected IEntity ResolveLocomotionAudioEmitter(IEntity root)
+	{
+		if (!root || m_iLocomotionMode == 0)
+			return root;
+
+		SlotManagerComponent slots = SlotManagerComponent.Cast(root.FindComponent(SlotManagerComponent));
+		if (!slots)
+			return root;
+
+		string leftSlot = "Track_L1";
+		string rightSlot = "Track_R1";
+		if (m_iLocomotionMode == 2)
+		{
+			leftSlot = "HoverPad_L1";
+			rightSlot = "HoverPad_R1";
+		}
+
+		EntitySlotInfo left = slots.GetSlotByName(leftSlot);
+		if (left)
+		{
+			IEntity part = left.GetAttachedEntity();
+			if (part && part.FindComponent(SoundComponent) && part.FindComponent(SCR_SoundDataComponent))
+				return part;
+		}
+		EntitySlotInfo right = slots.GetSlotByName(rightSlot);
+		if (right)
+		{
+			IEntity part = right.GetAttachedEntity();
+			if (part && part.FindComponent(SoundComponent) && part.FindComponent(SCR_SoundDataComponent))
+				return part;
+		}
+		return root;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! The old static helper failed silently when a component configuration
+	//! was absent or AudioSystem.IsAudible() refused an event. Resolve the
+	//! source on the fitted part first and then FALL BACK to the root.
+	//! This method makes no sound RPCs and is called only on listening clients.
+	protected bool TryPlayDriveAudio(IEntity root, string soundEvent)
+	{
+		if (!root || soundEvent.IsEmpty() || !GetGame())
+			return false;
+
+		SCR_SoundManagerModule soundManager = SCR_SoundManagerModule.GetInstance(root.GetWorld());
+		if (!soundManager)
+		{
+			LogDriveAudioDiagnostic("NO_SOUND_MANAGER", soundEvent);
+			return false;
+		}
+
+		IEntity part = ResolveLocomotionAudioEmitter(root);
+		SCR_AudioSource source;
+		if (part && part != root)
+			source = soundManager.CreateAudioSource(part, soundEvent);
+
+		// The root has its own SoundData mapping on all eight MW frames.
+		// This also recovers from unloaded or unaudible child emitters.
+		if (!source)
+			source = soundManager.CreateAudioSource(root, soundEvent);
+
+		if (!source)
+		{
+			string reason = "UNRESOLVED_OR_INAUDIBLE";
+			SCR_SoundDataComponent soundData = SCR_SoundDataComponent.Cast(root.FindComponent(SCR_SoundDataComponent));
+			if (!soundData)
+				reason = "ROOT_MISSING_SOUND_DATA";
+			else
+			{
+				SCR_AudioSourceConfiguration config = soundData.GetAudioSourceConfiguration(soundEvent);
+				if (!config)
+					reason = "ROOT_EVENT_NOT_MAPPED";
+				else if (!config.IsValid())
+					reason = "ROOT_EVENT_INVALID";
+				else
+				{
+					float distance = AudioSystem.IsAudible(config.m_sSoundProject, config.m_sSoundEventName, root.GetOrigin());
+					if (distance < 0)
+						reason = "AUDIO_GRAPH_NOT_AUDIBLE";
+				}
+			}
+			LogDriveAudioDiagnostic(reason, soundEvent);
+			return false;
+		}
+
+		soundManager.PlayAudioSource(source);
+		LogDriveAudioDiagnostic("SUBMITTED_TO_AUDIO_MANAGER", soundEvent);
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Diagnostics are throttled PER MECH, and enabled only on explicit test
+	//! prefabs. One log line every 3 seconds max, never per frame or per NPC.
+	protected void LogDriveAudioDiagnostic(string reason, string soundEvent)
+	{
+		if (!m_bDebugLocomotionSound)
+			return;
+
+		float now = System.GetTickCount() * 0.001;
+		if (now < m_fNextDriveAudioDiagnostic)
+			return;
+		m_fNextDriveAudioDiagnostic = now + 3.0;
+		BFA_MechLog.Log(string.Format("[CGS LOCOMOTION AUDIO] mode=%1 event=%2 result=%3", m_iLocomotionMode, soundEvent, reason));
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Determine motion in METRES/SECOND and DEGREES/SECOND instead of a
+	//! hard-coded displacement per frame. The old threshold could suppress
+	//! sound at slow speeds/high FPS even when the treads were moving.
+	protected void UpdateLocomotionSounds(IEntity owner)
+	{
+		if (m_iLocomotionMode == 0 || System.IsConsoleApp() || !owner || !GetGame())
+			return;
+
+		PlayerController pc = GetGame().GetPlayerController();
+		if (pc && pc.GetControlledEntity())
+		{
+			if (vector.Distance(pc.GetControlledEntity().GetOrigin(), owner.GetOrigin()) > 250.0)
+				return;
+		}
+
+		float now = System.GetTickCount() * 0.001;
+		vector pos = owner.GetOrigin();
+		float yaw = owner.GetYawPitchRoll()[0];
+
+		if (!m_bDriveSoundSampleReady)
+		{
+			m_bDriveSoundSampleReady = true;
+			m_vLastDriveSoundPos = pos;
+			m_fLastDriveSoundYaw = yaw;
+			m_fLastDriveAudioSampleTime = now;
+			m_fNextDriveSoundAt = now + 0.3;
+			m_fNextDriveLoopAt = now + 0.3;
+			return;
+		}
+
+		float dt = Math.Clamp(now - m_fLastDriveAudioSampleTime, 0.001, 0.5);
+		m_fLastDriveAudioSampleTime = now;
+		vector delta = pos - m_vLastDriveSoundPos;
+		delta[1] = 0;
+		float yawDelta = yaw - m_fLastDriveSoundYaw;
+		while (yawDelta > 180)
+			yawDelta -= 360;
+		while (yawDelta < -180)
+			yawDelta += 360;
+
+		m_vLastDriveSoundPos = pos;
+		m_fLastDriveSoundYaw = yaw;
+
+		float speed = delta.Length() / dt;
+		float turnSpeed = Math.AbsFloat(yawDelta) / dt;
+		bool moving = speed > 0.15 || turnSpeed > 2.0;
+
+		// Local pilot sound check: ONE deliberate sound after taking control.
+		// Track sound is tested even while stationary so it can be diagnosed.
+		if (m_bDebugLocomotionSound && HasLocalPilot() && !m_bDriveAudioDriverSelfTestDone)
+		{
+			m_bDriveAudioDriverSelfTestDone = true;
+			if (m_iLocomotionMode == 1)
+				TryPlayDriveAudio(owner, m_sTrackClankEvent);
+			else if (m_iLocomotionMode == 2)
+				TryPlayDriveAudio(owner, m_sHoverIdleLoopEvent);
+		}
+
+		if (now >= m_fNextDriveLoopAt)
+		{
+			if (m_iLocomotionMode == 1 && moving && !m_sTrackRumbleEvent.IsEmpty())
+			{
+				TryPlayDriveAudio(owner, m_sTrackRumbleEvent);
+				m_fNextDriveLoopAt = now + 3.95;
+			}
+			else if (m_iLocomotionMode == 2 && !m_sHoverIdleLoopEvent.IsEmpty())
+			{
+				TryPlayDriveAudio(owner, m_sHoverIdleLoopEvent);
+				m_fNextDriveLoopAt = now + 3.95;
+			}
+		}
+
+		if (now < m_fNextDriveSoundAt)
+			return;
+
+		if (m_iLocomotionMode == 1 && moving && !m_sTrackClankEvent.IsEmpty())
+		{
+			TryPlayDriveAudio(owner, m_sTrackClankEvent);
+			m_fNextDriveSoundAt = now + 0.75;
+		}
+		else if (m_iLocomotionMode == 2)
+		{
+			if (moving && !m_sHoverThrustEvent.IsEmpty())
+			{
+				TryPlayDriveAudio(owner, m_sHoverThrustEvent);
+				m_fNextDriveSoundAt = now + 1.15;
+			}
+			else if (!moving && !m_sHoverIdlePulseEvent.IsEmpty())
+			{
+				TryPlayDriveAudio(owner, m_sHoverIdlePulseEvent);
+				m_fNextDriveSoundAt = now + 3.5;
+			}
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
 	void OnUpdate(float timeSlice)
 	{
 		IEntity owner = GetOwner();
@@ -1731,6 +1964,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			// the previous frame's local-space target upward with the body.
 			ApplyServerTransform(owner, timeSlice);
 			UpdateProceduralLegs(timeSlice);
+			UpdateLocomotionSounds(owner);
 			return;
 		}
 
@@ -1752,6 +1986,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		}
 
 		Move(timeSlice);
+		UpdateLocomotionSounds(owner);
 
 		if (localPrediction)
 			ApplyReconcileYaw(owner, timeSlice);
@@ -1859,12 +2094,13 @@ class BFA_MechMovementComponent : ScriptGameComponent
 
 		SetPilot(null);
 
-		// Tracks/hover deliberately have no IK legs or mandatory leg pairs.
+		// Tracked hulls and hover mechs have no procedural leg rigs by design.
 		if (m_iLocomotionMode != 0)
 			return;
+
 		if (!m_aLegPairs || m_aLegPairs.IsEmpty())
 		{
-			BFA_MechLog.Log("[BFA MechCore] Walker frame requires at least one leg pair.", LogLevel.ERROR);
+			BFA_MechLog.Log("[BFA MechCore] Walker has no leg pairs configured.", LogLevel.ERROR);
 			return;
 		}
 
@@ -1946,6 +2182,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	{
 		super.OnPostInit(owner);
 		SetEventMask(owner, EntityEvent.INIT | EntityEvent.FRAME);
+
+		if (m_bDebugLocomotionSound && !System.IsConsoleApp())
+			BFA_MechLog.Log(string.Format("[CGS LOCOMOTION AUDIO] INITIALIZED mode=%1", m_iLocomotionMode));
 
 		ApplySizeScale();
 

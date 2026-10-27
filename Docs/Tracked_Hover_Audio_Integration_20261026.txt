@@ -1,0 +1,38 @@
+OCTOBER 26, 2026 — TRACKED AND HOVER SOUND EVENTS CONNECTED
+
+I found that the five WAV files from my original CGS tracked/hover starter pack had ALREADY been added to Mech-Core-CGS under Sounds/Mech. However, Sounds/SampleMech.acp still had ONLY two defined sound events: SOUND_MECH_STEP and SOUND_MECH_SERVO. That's why I couldn't hear the tracked and hover events just by selecting locomotion modes.
+
+WHAT I DID IN MECH CORE
+I extended the existing Sounds/SampleMech.acp project (same project GUID) with five spatialized sound events. I reused the established SoundClass > Shader > LocalBank > Mixer wiring from the working footstep and servo sounds, changing each sample resource to its already-imported CGS WAV with its correct resource ID. I left the walker footstep and servo event graphs unchanged.
+
+- SOUND_MECH_TRACK_CLANK uses Sounds/Mech/CGS_Track_Clank.wav
+- SOUND_MECH_TRACK_RUMBLE uses Sounds/Mech/CGS_Track_Rumble_Loop.wav
+- SOUND_MECH_HOVER_THRUST uses Sounds/Mech/CGS_Hover_Thrust.wav
+- SOUND_MECH_HOVER_IDLE_PULSE uses Sounds/Mech/CGS_Hover_Idle_Pulse.wav
+- SOUND_MECH_HOVER_IDLE uses Sounds/Mech/CGS_Hover_Idle_Loop.wav
+
+I updated Scripts/Game/Mech/BFA_MechMovementComponent.c with two additional configurable event fields (m_sTrackRumbleEvent and m_sHoverIdleLoopEvent). The existing three one-shot fields are preserved. The client automatically schedules the approximately four-second rolling-track sample while treads move/turn, or a low hover idle bed on hover mechs. Existing track clank, hover whoosh and hover pressure-pulse timings run independently of those beds. The code uses local audio only, with no new sound RPC traffic.
+
+WHAT I DID IN MW
+I connected ALL EIGHT tracked/hover frame prefabs (Light, Medium, Heavy, Assault). Each has:
+- A root SoundComponent loading Core's {8B7D7D9A72F30BAD}Sounds/SampleMech.acp
+- A root SCR_SoundDataComponent with SCR_AudioSourceConfiguration entries for just its track or hover events
+- The appropriate locomotion sound-event fields set on BFA_MechMovementComponent
+
+The tracked frames receive SOUND_MECH_TRACK_CLANK and SOUND_MECH_TRACK_RUMBLE, while hover frames receive SOUND_MECH_HOVER_THRUST, SOUND_MECH_HOVER_IDLE_PULSE and SOUND_MECH_HOVER_IDLE.
+
+The eight prefabs were already structurally validated as no-leg-pair profiles. I did not add or rename any leg prefabs, cockpit parts, torso models, weapons or gameplay controls.
+
+WHAT I MUST DO IN WORKBENCH
+1. Set Core to fix/tracked-hover-auto-audio-20261026.
+2. Set MW to fix/tracked-hover-auto-audio-20261026.
+3. Rebuild resources and compile Game scripts. If the Audio Editor flags one of the graph connections/IDs, inspect Sounds/SampleMech.acp and fix against Workbench's generated representation before deploying.
+4. Open the WAVs in Workbench: all five source resources must resolve correctly. Open Sounds/SampleMech.acp and confirm the seven total event nodes (2 walker + 5 new).
+5. Spawn tracked Light then tracked Heavy. They should make clanks and engine rumble ONLY while driving/pivoting.
+6. Spawn hover Light then hover Heavy. They should play quiet repeated hover idle while stationary and thrust/whoosh events when moving/turning.
+7. Test 128-player/dedicated multiplayer. The server has no extra audio RPCs; observer clients should hear vehicles nearby, not across the map. Also test existing walker foot impacts remain unaffected.
+
+IMPORTANT NOTES
+I chose client-side repeats of the seamless ~4-second WAVs at 3.95 s as a simple first pass instead of modifying source WAV files or adding unknown ACP sound-loop flags. This is not a validated native engine loop. If I hear a seam/retrigger, I'll convert those two project events to native looping sounds in Workbench and implement proper start/stop audio handles.
+
+I do not have Enfusion Workbench in this environment, so the scripts, ACP and prefab mappings are source-validated but NOT Workbench-compiled or gameplay-tested. No files are merged to main.
