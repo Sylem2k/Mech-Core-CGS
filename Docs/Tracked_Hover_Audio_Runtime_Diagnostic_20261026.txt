@@ -1,0 +1,41 @@
+OCTOBER 26, 2026 — TRACK/HOVER SOUND RUNTIME DIAGNOSTICS
+
+PROBLEM
+I still could not hear tracked or hover sounds after the earlier ACP mixer and prefab wiring changes. I checked my current main source again. All eight MW tracked/hover frames have m_iLocomotionMode set (1 = tracked, 2 = hover), the five string event names set on the movement component, and sound components on both the root and the attached left/right model parts. All WAV resource IDs resolve in their ACP project text. Previous changes did not prove that Enfusion was actually creating and playing those events.
+
+WHAT I CHANGED IN CORE
+I changed BFA_MechMovementComponent.c to use the actual SCR_SoundManagerModule instance and CreateAudioSource -> PlayAudioSource path instead of the helper method that returns silently. The new method TryPlayDriveAudio:
+- Locates the fitted Track_L1 or HoverPad_L1 emitter through SlotManagerComponent, as before.
+- Calls CreateAudioSource(part, eventName).
+- If that failed, tries CreateAudioSource(root, eventName) because the eight MW roots also map the corresponding sound events.
+- If still null, tests whether root has SCR_SoundDataComponent and matching valid SCR_AudioSourceConfiguration; calls AudioSystem.IsAudible on the real ACP event and reports which stage failed.
+- Logs SUBMITTED_TO_AUDIO_MANAGER if an audio source is created and passed to PlayAudioSource. This DOES NOT guarantee an audible sound; Workbench must still be used to listen.
+- Does not generate any new network RPC. It does not touch default walker leg events.
+
+I fixed the moving check to use distance/time and degrees/time rather than distance per frame. Thresholds are 0.15 m/s or 2 degrees/s, so slow tracks and high-frame-rate clients have a fair chance of triggering clanks. Hover idle should play without vehicle motion regardless.
+
+TEST ONLY OPTION
+I added m_bDebugLocomotionSound. It defaults OFF. I turned it ON only on two MW test prefabs:
+- Light_Mech_Frame_Tracked.et
+- Light_Mech_Frame_Hover.et
+
+They now print "[CGS LOCOMOTION AUDIO] INITIALIZED mode=1/2" on client component initialization. On the local pilot's first update they additionally request one track clank or hover engine-bed event even before the mech moves. Any playback-status logs are limited to once every 3 seconds per test mech so the server/other mechs don't flood logs.
+
+WORKBENCH TEST
+1. Use matching Core and MW branches fix/tracked-hover-audio-runtime-20261026. Keep CGS-MW-Assets on main. DO NOT mix a new Core script with an old MW frame/part, or the diagnostic attribute may not be recognized.
+2. Recompile Game scripts. Spawn Light_Mech_Frame_Tracked.et and look for INITIALIZED mode=1 in the CLIENT log.
+3. Enter its DRIVER seat. I should hear one clank without needing to move, then track clank/rumble as I drive. Look at the client log for [CGS LOCOMOTION AUDIO].
+4. Repeat with Light_Mech_Frame_Hover.et; I should hear an initial hum and repeated hover idle sound, and a whoosh upon movement.
+5. Interpret the diagnostic:
+   INITIALIZED: prefab loaded the new Core class on this client.
+   ROOT_MISSING_SOUND_DATA: no SCR_SoundDataComponent was loaded on vehicle root.
+   ROOT_EVENT_NOT_MAPPED / ROOT_EVENT_INVALID: ACP resource/event fields or SCR_SoundDataComponent config missing.
+   AUDIO_GRAPH_NOT_AUDIBLE: Enfusion AudioSystem.IsAudible rejected the project/event at the camera location. Audition the same event directly in Workbench Audio Editor, and check sample/mixer configuration.
+   NO_SOUND_MANAGER: sound manager module is unavailable in this world.
+   UNRESOLVED_OR_INAUDIBLE: manager could not construct either the part or root source.
+   SUBMITTED_TO_AUDIO_MANAGER: event creation succeeded and was sent to sound manager; if I hear nothing, the problem is downstream (ACP graph, mixer, volume/attenuation, output routing, or listener/camera).
+   No initial log at all: prefab/branch isn't the one running or the movement component isn't ticking/initializing.
+6. Share the new CLIENT log lines containing [CGS LOCOMOTION AUDIO] together with the result of Audio Editor audition if still silent.
+
+STATUS
+This is a controlled runtime playback/path correction and diagnostic instrument, not proof of sound output. I have source-checked changes and confirmed the script/properties still preserve walker defaults. Workbench compile, Audio Editor audition, player and observer playback, and MP validation remain to be done. No changes were merged into main.
