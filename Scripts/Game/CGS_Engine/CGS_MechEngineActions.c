@@ -100,3 +100,49 @@ class CGS_MechEngineStopAction : ScriptedUserAction
 			pc.CGS_Mech_RequestEnginePower(engine.GetOwner(), false);
 	}
 }
+
+
+// ------------------------------------------------------------------------------------------------
+// TEMPORARY WORKBENCH DIAGNOSTIC: unconditional action in the default vehicle context.
+// If this action does not appear, the cause is NOT CanOperate(), but the loaded
+// prefab/action context/addon. It never changes engine state.
+class CGS_MechEngineStatusProbeAction : ScriptedUserAction
+{
+	override bool GetActionNameScript(out string outName)
+	{
+		CGS_MechEngineComponent engine = CGS_MechEngineComponent.Find(GetOwner());
+		if (!engine)
+			outName = "ENGINE DIAG: COMPONENT MISSING";
+		else
+			outName = "ENGINE DIAG: " + engine.GetEngineStateName() + " (CLICK TO LOG)";
+		return true;
+	}
+
+	override bool CanBeShownScript(IEntity user)
+	{
+		return true;
+	}
+
+	override bool CanBePerformedScript(IEntity user)
+	{
+		return true;
+	}
+
+	override bool HasLocalEffectOnlyScript()
+	{
+		return true;
+	}
+
+	override void PerformAction(IEntity pOwnerEntity, IEntity pUserEntity)
+	{
+		CGS_MechEngineComponent engine = CGS_MechEngineComponent.Find(pOwnerEntity);
+		if (!engine)
+		{
+			BFA_MechLog.Log("[CGS ENGINE DIAG] No engine component found on action owner or root!", LogLevel.WARNING);
+			return;
+		}
+
+		BFA_MechLog.Log(string.Format("[CGS ENGINE DIAG] engine=%1 pilotAllowed=%2 actor=%3 vehicle=%4",
+			engine.GetEngineStateName(), engine.CanOperate(pUserEntity), pUserEntity, engine.GetOwner()));
+	}
+}
