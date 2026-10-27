@@ -1,4 +1,4 @@
-// CGS MechCore - cockpit START / SHUT DOWN actions.
+// CGS MechCore - cockpit START / SHUT DOWN actions (temporary visibility probe).
 // Add both actions to an ActionsManagerComponent on the mech or a cockpit child.
 // Position the action context independently with its own PointInfo in Workbench.
 // Engine component PointInfo fields are reference locations, NOT action creators.
@@ -18,12 +18,15 @@ class CGS_MechEngineStartAction : ScriptedUserAction
 	override bool CanBeShownScript(IEntity user)
 	{
 		CGS_MechEngineComponent engine = GetEngine();
-		return engine && engine.CanOperate(user) && engine.GetEngineState() == CGS_MechEngineComponent.ENGINE_OFF;
+		// Diagnostic only: expose the prompt regardless of local pilot-seat resolution.
+		// Activation still requires CanOperate() and is revalidated by server RPC.
+		return engine && engine.GetEngineState() == CGS_MechEngineComponent.ENGINE_OFF;
 	}
 
 	override bool CanBePerformedScript(IEntity user)
 	{
-		if (CanBeShownScript(user))
+		CGS_MechEngineComponent engine = GetEngine();
+		if (engine && engine.CanOperate(user) && CanBeShownScript(user))
 			return true;
 		SetCannotPerformReason("Pilot only. Engine must be OFF.");
 		return false;
@@ -66,12 +69,14 @@ class CGS_MechEngineStopAction : ScriptedUserAction
 	override bool CanBeShownScript(IEntity user)
 	{
 		CGS_MechEngineComponent engine = GetEngine();
-		return engine && engine.CanOperate(user) && engine.GetEngineState() != CGS_MechEngineComponent.ENGINE_OFF;
+		// Diagnostic only: do not hide prompt when client pilot-seat lookup fails.
+		return engine && engine.GetEngineState() != CGS_MechEngineComponent.ENGINE_OFF;
 	}
 
 	override bool CanBePerformedScript(IEntity user)
 	{
-		if (CanBeShownScript(user))
+		CGS_MechEngineComponent engine = GetEngine();
+		if (engine && engine.CanOperate(user) && CanBeShownScript(user))
 			return true;
 		SetCannotPerformReason("Pilot only. Engine is already OFF.");
 		return false;
