@@ -1,0 +1,46 @@
+OCTOBER 27, 2026 — MECH ENGINE START / STOP BUTTONS NOT APPEARING (ASSAULT TRACKED)
+
+I compiled the startup Core scripts but could not see the cockpit START and STOP prompts on my MW Assault Tracked mech. This is why:
+
+1. The PointInfo fields only position markers. They DO NOT create ScriptedUserAction interactions or actual 3D switch meshes.
+2. My first MW Assault Tracked prefab had START / STOP UserActionContext markers without matching CGS_MechEngineStartAction and CGS_MechEngineStopAction entries in additionalActions.
+3. I had set m_bStartRunning 1 (engine already RUNNING at spawn). The START action is purposely hidden unless the engine is OFF.
+4. These are PILOT-ONLY actions, not external service actions; I must enter the actual DRIVER compartment. Someone standing outside should not get the cockpit controls.
+5. My original action handler called GetGame().GetPlayerController() without HasLocalEffectOnlyScript. On a dedicated server, that local controller may be unavailable.
+
+WORK THAT NOW EXISTS IN MY PROJECT
+MW main includes merged pull request #89, attaching START and STOP to the existing Assault Tracked named contexts and changing m_bStartRunning to 0. The earlier Light Tracked and Light Hover frames were already set up with these actions.
+I did NOT overwrite that user-edited prefab. I based this next branch on the newest MW main.
+
+ADDITIONAL FIXES ON MATCHED TEST BRANCHES
+Mech Core branch: fix/engine-buttons-visible-20261027
+- Scripts/Game/CGS_Engine/CGS_MechEngineActions.c
+- Added HasLocalEffectOnlyScript() = true to both action classes. The action now executes on the requesting pilot's local player controller and sends the existing reliable server-validated CGS_Mech_RequestEnginePower RPC. The server still validates driver identity and changes replicated state.
+- I did not alter BFA_MechMovementComponent, weapons, Sound components, fuel or HUD.
+
+MW branch: fix/engine-buttons-visible-20261027
+- Prefabs/Vehicles/Mech/Frames/Assault_Gravemarch_Gun_Tracked.et
+- Preserved engine, startup, stop, fuel, repair PointInfo GUIDs and the exact custom offsets I set.
+- START and STOP contexts remain named "Start Mech" and "StopMech", with matched action ParentContextList values.
+- Adjusted their test interaction Radius from 1.5 m to 8 m, and action VisibilityRange from 4 m to 14 m to avoid large-vehicle pilot seat distance culling.
+- Fixed stop context label to "Stop Mech".
+- Enabled m_bDebugEngine 1, and kept m_bStartRunning 0.
+- No movement, armor, body, cockpit mesh or weapon data was changed.
+
+TESTING
+1. Back up both working projects.
+2. Switch BOTH repositories to fix/engine-buttons-visible-20261027; Assets remains on main.
+3. Compile Game scripts and reload prefabs in Workbench.
+4. Spawn Assault_Gravemarch_Gun_Tracked. Enter the DRIVER/PILOT seat, NOT an exterior position. Look toward the start context and use the interaction menu.
+5. "ENGINE: START CORE" should be available while engine state is OFF; activate it, wait the configured 4 second startup, then "ENGINE: SHUT DOWN" should become available. At any given moment the opposite action is intentionally hidden.
+6. For actual state changes, look for [CGS ENGINE] STARTING, RUNNING, OFF on server logs. For a dedicated server verify a remote pilot can operate the controls.
+7. If no prompt appears, first verify the pilot compartment occupant matches the action user and the cockpit's action-context position is reachable; the next step would be a pilot input/HUD fallback.
+8. These are contextual user-action prompts near the modeled panel. They are NOT yet independently modeled, animated 3D switches; mesh buttons would require separate geometry/prefabs.
+
+STILL NOT BUILT
+- OFF does not yet gate movement or weapons. This stage validates startup state only.
+- FuelPoint and RepairPoint are position placeholders; NO refuel/repair interactions are wired yet.
+- Fuel capacity/consumption, HUD fuel gauge, engine damage, engine audio transition and multiple repair points are future stages.
+
+STATUS
+The source and prefab changes were committed and structurally reviewed on isolated branches, but I still need to compile the two-branch combination and verify gameplay before merging anything to main.
