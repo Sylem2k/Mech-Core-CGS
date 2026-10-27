@@ -2183,6 +2183,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		super.OnPostInit(owner);
 		SetEventMask(owner, EntityEvent.INIT | EntityEvent.FRAME);
 
+		if (m_bDebugLocomotionSound && !System.IsConsoleApp())
+			BFA_MechLog.Log(string.Format("[CGS LOCOMOTION AUDIO] INITIALIZED mode=%1", m_iLocomotionMode));
+
 		ApplySizeScale();
 
 		ApplyGroundPoint(owner);
