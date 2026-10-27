@@ -27,14 +27,20 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	[Attribute("0.35", UIWidgets.Auto, "Hover: acceleration/braking easing time in seconds. Bigger = more floating glide.", category: "Locomotion")]
 	float m_fHoverGlideTime;
 
-	[Attribute("", UIWidgets.EditBox, "Track clank one-shot sound EVENT on the root's audio project. Plays during movement/turning. Empty = silent.", category: "Locomotion Audio")]
+	[Attribute("", UIWidgets.EditBox, "Track clank one-shot audio event. Set to SOUND_MECH_TRACK_CLANK on tracked chassis.", category: "Locomotion Audio")]
 	string m_sTrackClankEvent;
+
+	[Attribute("", UIWidgets.EditBox, "Track moving rumble bed. Set to SOUND_MECH_TRACK_RUMBLE. The project contains a 4 second seamless WAV.", category: "Locomotion Audio")]
+	string m_sTrackRumbleEvent;
 
 	[Attribute("", UIWidgets.EditBox, "Hover thrust/whoosh one-shot sound EVENT on the root's audio project. Plays during movement/turning. Empty = silent.", category: "Locomotion Audio")]
 	string m_sHoverThrustEvent;
 
-	[Attribute("", UIWidgets.EditBox, "Quiet occasional idle lift-pulse EVENT (NOT a sound loop). Configure persistent hover engine hum separately in the SoundComponent. Empty = silent.", category: "Locomotion Audio")]
+	[Attribute("", UIWidgets.EditBox, "Quiet occasional idle lift-pulse event. Set to SOUND_MECH_HOVER_IDLE_PULSE.", category: "Locomotion Audio")]
 	string m_sHoverIdlePulseEvent;
+
+	[Attribute("", UIWidgets.EditBox, "Hover-engine bed event. Set to SOUND_MECH_HOVER_IDLE. Automatically replays the four-second WAV while the skimmer is active.", category: "Locomotion Audio")]
+	string m_sHoverIdleLoopEvent;
 
 	[Attribute("1", UIWidgets.Auto, "Normal forward/reverse speed in m/s.", category: "Body")]
 	float m_fSpeed;
@@ -278,6 +284,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	protected vector m_vLastDriveSoundPos;
 	protected float m_fLastDriveSoundYaw;
 	protected float m_fNextDriveSoundAt;
+	// Independent timer so a low-frequency engine bed never suppresses
+	// track clanks, thrust whooshes or the existing quiet hover pulse.
+	protected float m_fNextDriveLoopAt;
 
 	//------------------------------------------------------------------------------------------------
 	void SetPilot(IEntity pilot)
@@ -1705,6 +1714,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			m_vLastDriveSoundPos = pos;
 			m_fLastDriveSoundYaw = yaw;
 			m_fNextDriveSoundAt = now + 0.3;
+			m_fNextDriveLoopAt = now + 0.3;
 			return;
 		}
 
@@ -1719,10 +1729,28 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		m_vLastDriveSoundPos = pos;
 		m_fLastDriveSoundYaw = yaw;
 
+		bool moving = delta.LengthSq() > 0.000036 || Math.AbsFloat(yawDelta) > 0.18;
+
+		// These samples are 4 s mono WAVs. Play the engine beds locally
+		// on a separate timer; they follow the vehicle and do not emit RPCs.
+		// Start a new playback slightly before the previous bed ends.
+		if (now >= m_fNextDriveLoopAt)
+		{
+			if (m_iLocomotionMode == 1 && moving && !m_sTrackRumbleEvent.IsEmpty())
+			{
+				SCR_SoundManagerModule.CreateAndPlayAudioSource(owner, m_sTrackRumbleEvent);
+				m_fNextDriveLoopAt = now + 3.95;
+			}
+			else if (m_iLocomotionMode == 2 && !m_sHoverIdleLoopEvent.IsEmpty())
+			{
+				SCR_SoundManagerModule.CreateAndPlayAudioSource(owner, m_sHoverIdleLoopEvent);
+				m_fNextDriveLoopAt = now + 3.95;
+			}
+		}
+
 		if (now < m_fNextDriveSoundAt)
 			return;
 
-		bool moving = delta.LengthSq() > 0.000036 || Math.AbsFloat(yawDelta) > 0.18;
 		if (m_iLocomotionMode == 1 && moving && !m_sTrackClankEvent.IsEmpty())
 		{
 			SCR_SoundManagerModule.CreateAndPlayAudioSource(owner, m_sTrackClankEvent);
