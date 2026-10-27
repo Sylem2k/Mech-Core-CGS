@@ -52,31 +52,53 @@ modded class SCR_PlayerController
 		if (!engine)
 			return;
 
-		// If this mech uses multi-crew stations, require the exact DRIVER seat.
-		BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(mech.FindComponent(BFA_MechCoreComponent));
-		if (core && !core.IsControllerAtStation(this, "DRIVER"))
+		// Always resolve the operator from THIS authenticated PlayerController.
+		// Never accept a claimed operator identity from the client's RPC arguments.
+		PlayerManager manager = GetGame().GetPlayerManager();
+		if (!manager)
 			return;
 
+		IEntity user;
 		BFA_MechControllerComponent controls = BFA_MechControllerComponent.Cast(mech.FindComponent(BFA_MechControllerComponent));
 		if (!controls)
 			return;
 
 		IEntity pilot = controls.BFA_GetPilotOccupant();
-		if (!pilot)
-			return;
+		if (pilot)
+		{
+			int pilotId = manager.GetPlayerIdFromControlledEntity(pilot);
+			if (pilotId > 0 && manager.GetPlayerController(pilotId) == this)
+			{
+				// Preserve exact DRIVER station verification for in-seat control.
+				BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(mech.FindComponent(BFA_MechCoreComponent));
+				if (core && !core.IsControllerAtStation(this, "DRIVER"))
+					return;
 
-		// Bind the physical driver occupant to the RPC sender, not to a supplied user ID.
-		PlayerManager manager = GetGame().GetPlayerManager();
-		if (!manager)
-			return;
+				user = pilot;
+			}
+		}
 
-		int pilotId = manager.GetPlayerIdFromControlledEntity(pilot);
-		if (pilotId <= 0 || manager.GetPlayerController(pilotId) != this)
+		if (!user)
+		{
+			// No valid seated pilot identity: permit ONLY a player controlling
+			// their own on-foot character close to the physical exterior switch.
+			user = GetControlledEntity();
+			if (!user || !ChimeraCharacter.Cast(user))
+				return;
+
+			int userId = manager.GetPlayerIdFromControlledEntity(user);
+			if (userId <= 0 || manager.GetPlayerController(userId) != this)
+				return;
+		}
+
+		// Revalidate physical distance, chosen START/STOP point and opt-in flag
+		// on the authoritative server. Out-of-range RPCs change nothing.
+		if (!engine.CanOperateSwitch(user, start))
 			return;
 
 		if (start)
-			engine.ServerStart(pilot);
+			engine.ServerStart(user);
 		else
-			engine.ServerStop(pilot);
+			engine.ServerStop(user);
 	}
 }

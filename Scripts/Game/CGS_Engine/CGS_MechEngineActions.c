@@ -26,9 +26,9 @@ class CGS_MechEngineStartAction : ScriptedUserAction
 	override bool CanBePerformedScript(IEntity user)
 	{
 		CGS_MechEngineComponent engine = GetEngine();
-		if (engine && engine.CanOperate(user) && CanBeShownScript(user))
+		if (engine && engine.CanOperateSwitch(user, true) && CanBeShownScript(user))
 			return true;
-		SetCannotPerformReason("Pilot only. Engine must be OFF.");
+		SetCannotPerformReason("Use the START switch on foot nearby, or operate as pilot. Engine must be OFF.");
 		return false;
 	}
 
@@ -76,9 +76,9 @@ class CGS_MechEngineStopAction : ScriptedUserAction
 	override bool CanBePerformedScript(IEntity user)
 	{
 		CGS_MechEngineComponent engine = GetEngine();
-		if (engine && engine.CanOperate(user) && CanBeShownScript(user))
+		if (engine && engine.CanOperateSwitch(user, false) && CanBeShownScript(user))
 			return true;
-		SetCannotPerformReason("Pilot only. Engine is already OFF.");
+		SetCannotPerformReason("Use the STOP switch on foot nearby, or operate as pilot. Engine must be running.");
 		return false;
 	}
 
@@ -142,7 +142,7 @@ class CGS_MechEngineStatusProbeAction : ScriptedUserAction
 			return;
 		}
 
-		BFA_MechLog.Log(string.Format("[CGS ENGINE DIAG] engine=%1 pilotAllowed=%2 actor=%3 vehicle=%4",
-			engine.GetEngineStateName(), engine.CanOperate(pUserEntity), pUserEntity, engine.GetOwner()));
+		BFA_MechLog.Log(string.Format("[CGS ENGINE DIAG] engine=%1 switchAllowed=%2 actor=%3 vehicle=%4",
+			engine.GetEngineStateName(), engine.CanOperateSwitch(pUserEntity, engine.GetEngineState() == CGS_MechEngineComponent.ENGINE_OFF), pUserEntity, engine.GetOwner()));
 	}
 }
