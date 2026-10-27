@@ -1,0 +1,11 @@
+GenericEntity {
+ ID "BC2A615F4AD92E31"
+ components {
+  SignalsManagerComponent "{BC2A615F4AD92E32}" {
+  }
+  RplComponent "{BC2A615F4AD92E35}" {
+  }
+  Hierarchy "{BC2A615F4AD92E36}" {
+  }
+ }
+}
