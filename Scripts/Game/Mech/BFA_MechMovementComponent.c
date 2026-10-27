@@ -503,7 +503,13 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	bool LegDamageSlows()
 	{
-		return m_bLegDamageSlows;
+		// Tracked/hover chassis have no procedural leg hit zones.
+		return m_iLocomotionMode == 0 && m_bLegDamageSlows;
+	}
+
+	int GetLocomotionMode()
+	{
+		return m_iLocomotionMode;
 	}
 
 	//------------------------------------------------------------------------------------------------
