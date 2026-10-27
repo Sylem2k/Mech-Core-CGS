@@ -446,8 +446,22 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	// Opt-in power interlock: legacy mechs without an engine component retain normal movement.
+	protected bool CGS_IsEngineDriveLocked()
+	{
+		IEntity owner = GetOwner();
+		if (!owner)
+			return false;
+
+		CGS_MechEngineComponent engine = CGS_MechEngineComponent.Cast(owner.FindComponent(CGS_MechEngineComponent));
+		return engine && !engine.IsRunning();
+	}
+
 	protected float GetEffectiveForwardInput()
 	{
+		if (CGS_IsEngineDriveLocked())
+			return 0;
+
 		if (HasLocalPilot())
 			return m_fLocalFwd;
 
@@ -457,6 +471,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	protected float GetEffectiveStrafeInput()
 	{
+		if (CGS_IsEngineDriveLocked())
+			return 0;
+
 		if (HasLocalPilot())
 			return m_fLocalStrafe;
 
@@ -466,6 +483,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	protected float GetEffectiveTurnInput()
 	{
+		if (CGS_IsEngineDriveLocked())
+			return 0;
+
 		if (HasLocalPilot())
 			return m_fLocalTurn;
 
@@ -475,6 +495,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	protected bool GetEffectiveSprintInput()
 	{
+		if (CGS_IsEngineDriveLocked())
+			return false;
+
 		if (HasLocalPilot())
 			return m_bLocalSprint;
 
@@ -496,6 +519,14 @@ class BFA_MechMovementComponent : ScriptGameComponent
 				return;
 
 			m_iServerLastInputSeq = inputSeq;
+		}
+
+		if (CGS_IsEngineDriveLocked())
+		{
+			forward = 0;
+			strafe = 0;
+			turn = 0;
+			sprint = false;
 		}
 
 		float newFwd = Math.Clamp(forward, -1.0, 1.0);
