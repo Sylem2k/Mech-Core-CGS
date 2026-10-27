@@ -1,0 +1,68 @@
+OCTOBER 27, 2026 — PHASE 2 TRACKED AND HOVER SOUNDS (RECOVERED, ISOLATED)
+
+STATUS FROM MY TEST
+I confirmed that ALL Phase 1 tests passed: Workbench Game scripts compile, normal walkers remain functional, tracked tank steering works and hover movement/clearance works. I am therefore treating Phase 1 as my proven foundation. I will not merge the experimental tracked/hover audio patches into my movement component again.
+
+BRANCH FOUNDATION
+Core: feat/tracked-hover-audio-phase2-20261027 derives from recovery/tracked-hover-phase1-20261027.
+MW: feat/tracked-hover-audio-phase2-20261027 derives from current MW main, which contains the exact eight Phase 1 frame/part files I already validated.
+Assets: CGS-MW-Assets stays on main. I do not have to reimport XOB models.
+
+WHAT I CHANGED
+I added only ONE NEW Core gameplay script:
+  Scripts/Game/CGS_Movement/CGS_MechDriveAudioComponent.c
+
+I install this component ON THE MECH ROOT once per tracked/hover chassis, rather than on every wheel/tread. It reads the MODE from the known-working BFA_MechMovementComponent, gets locally observed root displacement and yaw over elapsed time, and triggers appropriate sound events. It then resolves the part mounted in Track_L1 or HoverPad_L1 using the root SlotManagerComponent; if the left part is missing, it tries the R1 part.
+
+The playback call is the SAME stable pattern used by normal BFA_MechLegComponent:
+  SCR_SoundManagerModule.CreateAndPlayAudioSource(emitter, eventName)
+Here emitter is the attached track/hover PART, which has a SoundComponent and SCR_SoundDataComponent. The audio component prevents duplicate playback by selecting just one part per vehicle, even on Assault frames with four track or hover parts. Sound effects are generated locally on listeners, without per-sound network RPCs.
+
+I restored dedicated Core audio project resources and their existing .meta IDs, and all five source WAV files:
+- Sounds/Tracked.acp
+- Sounds/Hover.acp
+- Sounds/Mech/CGS_Track_Clank.wav
+- Sounds/Mech/CGS_Track_Rumble_Loop.wav
+- Sounds/Mech/CGS_Hover_Idle_Loop.wav
+- Sounds/Mech/CGS_Hover_Idle_Pulse.wav
+- Sounds/Mech/CGS_Hover_Thrust.wav
+
+I source-verified that the two ACP graphs contain all five new sound events, each has the five new inputs INSIDE the active MixerClass "8203" ins block, each referenced .wav resource GUID matches its .meta file, and the ACP braces are balanced. I did not touch the original walker SampleMech.acp, stomp or servo sounds.
+
+In MW I added SoundComponent + SCR_SoundDataComponent event configurations to all FOUR original left/right track and hover part prefabs, keeping their original names, mesh objects and .meta GUIDs.
+
+I added one CGS_MechDriveAudioComponent to each of the EIGHT root frame prefabs:
+- Light_Mech_Frame_Tracked / Light_Mech_Frame_Hover
+- Med_Mech_Frame_Tracked / Med_Mech_Frame_Hover
+- Heavy_Judiciar_Gun_Tracked / Heavy_Judiciar_Gun_Hover
+- Assault_Gravemarch_Gun_Tracked / Assault_Gravemarch_Gun_Hover
+
+I enabled m_bDebugSound on only the Light Tracked and Light Hover test frames. Those fire one short proof-of-wiring sound when nearby and report [CGS DRIVE AUDIO] diagnostics at most once every four seconds. All other frames have diagnostics disabled.
+
+EVENTS / MOVEMENT
+Tracked, while translating or pivoting:
+- SOUND_MECH_TRACK_CLANK approximately every 0.7 s
+- SOUND_MECH_TRACK_RUMBLE approximately every 3.85 s (sample-based rumble, NOT a native seamless loop)
+Hover:
+- SOUND_MECH_HOVER_IDLE sample retriggered approximately every 3.85 s
+- SOUND_MECH_HOVER_IDLE_PULSE approximately every 3.4 s while stationary
+- SOUND_MECH_HOVER_THRUST approximately every 1.1 s while translating or pivoting
+
+Movement detection uses local root displacement and yaw divided by elapsed time, not a frame-count-dependent distance threshold. The controller samples at most about 7 times per second. It can ignore far-away vehicles to avoid unnecessary sound processing; actual audible range is also governed by the audio project.
+
+WHAT I LEFT UNCHANGED
+The BFA_MechMovementComponent.c script is EXACTLY the known-working Phase 1 version. No torso/pilot/cockpit, weapons, AI, walking-leg scripts, walking frame prefabs, or hardpoints were modified. I didn't touch Core/MW main branches.
+
+TEST PROCEDURE
+1. Keep the working Phase 1 Core and MW installation backed up OFF the active Workbench mod folder.
+2. Switch Core and MW BOTH to feat/tracked-hover-audio-phase2-20261027 and keep CGS-MW-Assets on main.
+3. Compile Game scripts in Workbench and rebuild ACP resources. Open Tracked.acp and Hover.acp, play each sound in the Audio Editor first. If the editor cannot play them, the issue is the audio project/resources, not the movement controller.
+4. Spawn Light_Mech_Frame_Tracked.et near the listening player. A single debug clank should play soon after spawn even before driving. Drive and pivot; tread clanks plus periodic rumble should be audible.
+5. Spawn Light_Mech_Frame_Hover.et near the player. It should play a hover-engine sample even while stationary, periodic idle pulses, and moving thrust sounds.
+6. Check the CLIENT console for [CGS DRIVE AUDIO] messages. NO_PART_SOUND_EMITTER means a prefab/slot is missing the expected audio-equipped part. EVENT_NOT_MAPPED_ON_PART means the part's SCR_SoundDataComponent is missing the event. PLAY_REQUESTED confirms only that the script dispatched the static playback call, not that the audio hardware actually played a sound.
+7. Verify an OUTSIDE listener hears moving remote tracked/hover mechs and a dedicated multiplayer client does not produce huge logs. Normal walkers should still sound/behave exactly as before.
+8. After validation, disable m_bDebugSound on the two Light frame prefabs. If the engine bed audibly loops with a click or gap, configure proper native audio looping and a handle-based start/stop implementation in a later focused pass.
+9. Do not merge to main until the two-client sound test passes.
+
+CURRENT STATUS
+New sound component, 5 WAV files, 2 ACPs and 12 MW prefabs committed and structurally source-checked. The old walker audio project and Phase 1 movement script are untouched. Enfusion Workbench compilation, Audio Editor audition and actual runtime playback of this NEW version have not yet been independently verified.
