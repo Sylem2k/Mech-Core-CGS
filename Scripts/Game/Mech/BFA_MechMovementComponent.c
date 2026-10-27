@@ -7,6 +7,35 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	[Attribute("", UIWidgets.Object, "One entry per LEFT/RIGHT leg pair: the two slot names of the legs (see MECH_LEGS_GUIDE). Biped = 1, quad = 2, spider = 3.", category: "Legs")]
 	ref array<ref BFA_MechLegPair> m_aLegPairs;
 
+	// Locomotion 0 = existing legged mech, 1 = tracks, 2 = hover.
+	// Both new types intentionally use zero IK leg pairs.
+	[Attribute("0", UIWidgets.Auto, "0 = Walker (IK leg pairs); 1 = Tracked (tank); 2 = Hover (terrain-following skimmer).", category: "Locomotion")]
+	int m_iLocomotionMode;
+
+	[Attribute("true", UIWidgets.CheckBox, "Tracked: A/D inputs steer the chassis in addition to Q/E; lateral strafing is disabled.", category: "Locomotion")]
+	bool m_bTrackedADSteering;
+
+	[Attribute("1.25", UIWidgets.Auto, "Hover: extra ground clearance in metres, in addition to the normal Ground Point height.", category: "Locomotion")]
+	float m_fHoverClearance;
+
+	[Attribute("0.08", UIWidgets.Auto, "Hover: small visual/body height bob in metres. 0 = no idle bob.", category: "Locomotion")]
+	float m_fHoverBob;
+
+	[Attribute("0.65", UIWidgets.Auto, "Hover: bob cycles per second.", category: "Locomotion")]
+	float m_fHoverBobHz;
+
+	[Attribute("0.35", UIWidgets.Auto, "Hover: acceleration/braking easing time in seconds. Bigger = more floating glide.", category: "Locomotion")]
+	float m_fHoverGlideTime;
+
+	[Attribute("", UIWidgets.EditBox, "Track clank one-shot sound EVENT on the root's audio project. Plays during movement/turning. Empty = silent.", category: "Locomotion Audio")]
+	string m_sTrackClankEvent;
+
+	[Attribute("", UIWidgets.EditBox, "Hover thrust/whoosh one-shot sound EVENT on the root's audio project. Plays during movement/turning. Empty = silent.", category: "Locomotion Audio")]
+	string m_sHoverThrustEvent;
+
+	[Attribute("", UIWidgets.EditBox, "Quiet occasional idle lift-pulse EVENT (NOT a sound loop). Configure persistent hover engine hum separately in the SoundComponent. Empty = silent.", category: "Locomotion Audio")]
+	string m_sHoverIdlePulseEvent;
+
 	[Attribute("1", UIWidgets.Auto, "Normal forward/reverse speed in m/s.", category: "Body")]
 	float m_fSpeed;
 
@@ -243,6 +272,12 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	// they do not own, which was enough to defeat the old watchdog without actually
 	// producing usable visual updates.
 	protected bool m_bRemoteVisualTickRunning;
+
+	// Per-client audio pacing, derived from locally observed root transforms.
+	protected bool m_bDriveSoundSampleReady;
+	protected vector m_vLastDriveSoundPos;
+	protected float m_fLastDriveSoundYaw;
+	protected float m_fNextDriveSoundAt;
 
 	//------------------------------------------------------------------------------------------------
 	void SetPilot(IEntity pilot)
@@ -483,7 +518,12 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	bool LegDamageSlows()
 	{
-		return m_bLegDamageSlows;
+		return m_iLocomotionMode == 0 && m_bLegDamageSlows;
+	}
+
+	int GetLocomotionMode()
+	{
+		return m_iLocomotionMode;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -815,6 +855,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	protected void QueueLegRetry()
 	{
+		if (m_iLocomotionMode != 0)
+			return;
 		if (m_bLegRetryQueued || m_bLegPairsReady)
 			return;
 
@@ -830,6 +872,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	protected void TryInitializeLegPairs()
 	{
 		m_bLegRetryQueued = false;
+		if (m_iLocomotionMode != 0)
+			return;
 
 		IEntity owner = GetOwner();
 		if (!owner || !m_SlotManager || !m_aLegPairs || m_aLegPairs.IsEmpty())
@@ -935,6 +979,13 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		float forwardInput = GetEffectiveForwardInput();
 		float strafeInput = GetEffectiveStrafeInput();
 		float turnInput = GetEffectiveTurnInput();
+		if (m_iLocomotionMode == 1)
+		{
+			// Tank: A/D and Q/E turn the chassis. No sideways sliding.
+			if (m_bTrackedADSteering)
+				turnInput = Math.Clamp(turnInput + strafeInput, -1.0, 1.0);
+			strafeInput = 0;
+		}
 		BFA_MechExtension extension = BFA_MechExtension.Get();
 		bool sprinting = m_bCanSprint && GetEffectiveSprintInput() && extension.CanMechSprint(owner);
 		float speedScale = Math.Clamp(extension.GetMechSpeedScale(owner), 0.0, 2.0);
@@ -992,6 +1043,15 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		// Exact horizontal drive. Forward and lateral movement are authored independently;
 		// vertical motion stays owned by the terrain/jump controller.
 		vector velocity = localFwd * forwardSpeed + localRight * strafeSpeed;
+		if (m_iLocomotionMode == 2)
+		{
+			// Existing server/driver prediction remains intact. Smooth the
+			// horizontal motion only, never terrain-follow vertical velocity.
+			vector horizontal = currentVelocity;
+			horizontal[1] = 0;
+			float alpha = Math.Clamp(timeSlice / Math.Max(m_fHoverGlideTime, 0.02), 0.0, 1.0);
+			velocity = horizontal + (velocity - horizontal) * alpha;
+		}
 
 		// Driver client only: blend the prediction back toward the server root (#4).
 		if (!Replication.IsServer() && HasLocalPilot())
@@ -1062,6 +1122,15 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		}
 
 		float targetY = m_fFilteredSupportY + m_fBodyHeight;
+		if (m_iLocomotionMode == 2)
+		{
+			targetY = targetY + Math.Max(m_fHoverClearance, 0.0);
+			if (m_fHoverBob > 0 && GetGame() && GetGame().GetWorld())
+			{
+				float phase = GetGame().GetWorld().GetWorldTime() * 0.001 * Math.Max(m_fHoverBobHz, 0) * 2.0 * Math.PI;
+				targetY = targetY + Math.Sin(phase) * m_fHoverBob;
+			}
+		}
 		float currentY = owner.GetOrigin()[1];
 		float error = targetY - currentY;
 
@@ -1095,6 +1164,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//! Drive the visual leg rig from the mech root frame on every machine.
 	protected void UpdateProceduralLegs(float timeSlice)
 	{
+		if (m_iLocomotionMode != 0)
+			return;
 		if (!m_bLegPairsReady || !m_aAllLegs || m_aAllLegs.IsEmpty())
 			return;
 
@@ -1609,6 +1680,70 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Reconstruct sound locally from the root motion each client actually sees.
+	//! No sound RPCs; dedicated headless servers never instantiate audio.
+	protected void UpdateLocomotionSounds(IEntity owner)
+	{
+		if (m_iLocomotionMode == 0 || System.IsConsoleApp() || !owner)
+			return;
+
+		// Do not spawn audio events for remote mechs beyond hearing range.
+		PlayerController pc = GetGame().GetPlayerController();
+		if (pc && pc.GetControlledEntity())
+		{
+			if (vector.Distance(pc.GetControlledEntity().GetOrigin(), owner.GetOrigin()) > 250.0)
+				return;
+		}
+
+		float now = System.GetTickCount() * 0.001;
+		vector pos = owner.GetOrigin();
+		float yaw = owner.GetYawPitchRoll()[0];
+
+		if (!m_bDriveSoundSampleReady)
+		{
+			m_bDriveSoundSampleReady = true;
+			m_vLastDriveSoundPos = pos;
+			m_fLastDriveSoundYaw = yaw;
+			m_fNextDriveSoundAt = now + 0.3;
+			return;
+		}
+
+		vector delta = pos - m_vLastDriveSoundPos;
+		delta[1] = 0;
+		float yawDelta = yaw - m_fLastDriveSoundYaw;
+		while (yawDelta > 180)
+			yawDelta -= 360;
+		while (yawDelta < -180)
+			yawDelta += 360;
+
+		m_vLastDriveSoundPos = pos;
+		m_fLastDriveSoundYaw = yaw;
+
+		if (now < m_fNextDriveSoundAt)
+			return;
+
+		bool moving = delta.LengthSq() > 0.000036 || Math.AbsFloat(yawDelta) > 0.18;
+		if (m_iLocomotionMode == 1 && moving && !m_sTrackClankEvent.IsEmpty())
+		{
+			SCR_SoundManagerModule.CreateAndPlayAudioSource(owner, m_sTrackClankEvent);
+			m_fNextDriveSoundAt = now + 0.75;
+		}
+		else if (m_iLocomotionMode == 2)
+		{
+			if (moving && !m_sHoverThrustEvent.IsEmpty())
+			{
+				SCR_SoundManagerModule.CreateAndPlayAudioSource(owner, m_sHoverThrustEvent);
+				m_fNextDriveSoundAt = now + 1.15;
+			}
+			else if (!moving && !m_sHoverIdlePulseEvent.IsEmpty())
+			{
+				SCR_SoundManagerModule.CreateAndPlayAudioSource(owner, m_sHoverIdlePulseEvent);
+				m_fNextDriveSoundAt = now + 3.5;
+			}
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
 	void OnUpdate(float timeSlice)
 	{
 		IEntity owner = GetOwner();
@@ -1672,6 +1807,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			// the previous frame's local-space target upward with the body.
 			ApplyServerTransform(owner, timeSlice);
 			UpdateProceduralLegs(timeSlice);
+			UpdateLocomotionSounds(owner);
 			return;
 		}
 
@@ -1693,6 +1829,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		}
 
 		Move(timeSlice);
+		UpdateLocomotionSounds(owner);
 
 		if (localPrediction)
 			ApplyReconcileYaw(owner, timeSlice);
@@ -1800,9 +1937,13 @@ class BFA_MechMovementComponent : ScriptGameComponent
 
 		SetPilot(null);
 
+		// Tracked hulls and hover mechs have no procedural leg rigs by design.
+		if (m_iLocomotionMode != 0)
+			return;
+
 		if (!m_aLegPairs || m_aLegPairs.IsEmpty())
 		{
-			BFA_MechLog.Log("[BFA MechCore] No leg pairs configured on mech.", LogLevel.ERROR);
+			BFA_MechLog.Log("[BFA MechCore] Walker has no leg pairs configured.", LogLevel.ERROR);
 			return;
 		}
 
