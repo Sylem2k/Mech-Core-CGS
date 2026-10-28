@@ -1,7 +1,7 @@
-// CGS MechCore - repair target registry, PHASE 1 (read-only).
+// CGS MechCore - repair target registry with server-side track damage and repair tests.
 // Use this to bind an arbitrary number of service access points to either
 // a swappable weapon hardpoint or a named structural entity.
-// Never duplicates hit-zone health, changes movement, or repairs automatically.
+// Uses the real BFA_MechPartHitZone health. Does not alter movement or install modules.
 [BaseContainerProps()]
 class CGS_MechRepairSite
 {
@@ -18,7 +18,7 @@ class CGS_MechRepairSite
 	ref PointInfo m_Position;
 }
 
-[ComponentEditorProps(category: "CGS MechCore/Repair", description: "Configurable read-only repair target registry. Does not heal until the repair actions are implemented.")]
+[ComponentEditorProps(category: "CGS MechCore/Repair", description: "Configurable repair targets, track damage test and server-side hit-zone restoration.")]
 class CGS_MechRepairComponentClass : ScriptComponentClass
 {
 }
@@ -27,6 +27,96 @@ class CGS_MechRepairComponent : ScriptComponent
 {
 	[Attribute("", UIWidgets.Object, "Repair access points: bind hardpoint name OR named structural child entity. Any number of sites.", category: "Repair")]
 	protected ref array<ref CGS_MechRepairSite> m_aRepairSites;
+
+	[Attribute("false", UIWidgets.CheckBox, "TEMPORARY TEST ONLY: allows test-damage actions on the two track slots.", category: "Track Test")]
+	protected bool m_bEnableTrackDamageTest;
+
+	[Attribute("5", UIWidgets.Auto, "Maximum distance in metres from the chosen repair point for on-foot service actions.", category: "Repair")]
+	protected float m_fRepairReach;
+
+	bool TrackDamageTestEnabled()
+	{
+		return m_bEnableTrackDamageTest;
+	}
+
+	// No alternate HP pool: repair and test damage change the same actual hit zone.
+	// Never assume service points create their own actions: the prefab's
+	// ActionsManager must define a UserActionContext for each physical track.
+	bool CanService(IEntity user, int index)
+	{
+		if (!user || !ChimeraCharacter.Cast(user))
+			return false;
+		if (index < 0 || index >= GetRepairSiteCount())
+			return false;
+		IEntity owner = GetOwner();
+		if (!owner || user.GetRootParent() == owner)
+			return false; // mechanic must be standing outside
+		if (vector.Distance(user.GetOrigin(), GetRepairSiteWorldPosition(index)) > Math.Max(1.0, m_fRepairReach))
+			return false;
+		Physics physics = owner.GetPhysics();
+		if (physics && physics.GetVelocity().Length() > 0.5)
+			return false;
+		return true;
+	}
+
+	// Restrict temporary damage test to the existing two-track test frame.
+	bool IsTrackSite(int index)
+	{
+		if (index < 0 || index >= GetRepairSiteCount() || !m_aRepairSites[index])
+			return false;
+		string slot = m_aRepairSites[index].m_sPartEntityName;
+		return slot == "Track_L1" || slot == "Track_R1";
+	}
+
+	// SERVER ONLY: applies an ordinary true-damage event through the part's
+	// real damage manager (including its normal hull-share behavior).
+	bool ServerTestDamageTrack(int index, IEntity operator, float amount)
+	{
+		if (!Replication.IsServer() || !m_bEnableTrackDamageTest || !IsTrackSite(index) || !CanService(operator, index))
+			return false;
+
+		IEntity target = ResolveRepairTarget(index);
+		BFA_MechPartHitZone zone = BFA_MechPartHitZone.FindOn(target);
+		if (!target || !zone || zone.GetHealth() <= 0 || amount <= 0)
+			return false;
+
+		SCR_DamageManagerComponent manager = SCR_DamageManagerComponent.Cast(target.FindComponent(SCR_DamageManagerComponent));
+		if (!manager)
+			return false;
+
+		vector empty[3];
+		empty[0] = vector.Zero;
+		empty[1] = vector.Zero;
+		empty[2] = vector.Zero;
+
+		float previous = zone.GetHealth();
+		SCR_DamageContext damage = new SCR_DamageContext(EDamageType.TRUE, amount, empty, target, zone, operator, null, -1, -1);
+		manager.HandleDamage(damage);
+		Print(string.Format("[CGS TRACK TEST] DAMAGE %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
+		return zone.GetHealth() < previous;
+	}
+
+	// SERVER ONLY: restore an installed part's existing hit zone, never create a
+	// new weapon/part and never heal another part or the chassis hull.
+	bool ServerRepairPart(int index, IEntity operator, float amount)
+	{
+		if (!Replication.IsServer() || !CanService(operator, index) || amount <= 0)
+			return false;
+
+		IEntity target = ResolveRepairTarget(index);
+		BFA_MechPartHitZone zone = BFA_MechPartHitZone.FindOn(target);
+		if (!target || !zone || zone.GetMaxHealth() <= 0)
+			return false;
+
+		float previous = zone.GetHealth();
+		if (previous >= zone.GetMaxHealth())
+			return false;
+
+		zone.SetHealth(Math.Min(zone.GetMaxHealth(), previous + amount));
+		Print(string.Format("[CGS TRACK TEST] REPAIR %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
+		return zone.GetHealth() > previous;
+	}
+
 
 	int GetRepairSiteCount()
 	{
