@@ -610,7 +610,11 @@ class BFA_MechHardpointComponent : ScriptComponent
 		else if (pointName == "RIGHT_ARM")
 			structuralSlot = "Arm_R";
 		else
-			return true;
+			structuralSlot = "MountHP_" + hardpointIndex.ToString();
+
+		// Every weapon mount on opted-in frames has independent, persistent
+		// hit-zone health. The swapped weapon module is NEVER used as the
+		// health source; rocket/missile/back/torso hardpoints must also work.
 
 		IEntity mech = GetOwner();
 		if (!mech)
