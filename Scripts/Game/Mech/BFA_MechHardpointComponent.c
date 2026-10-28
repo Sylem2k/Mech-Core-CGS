@@ -610,7 +610,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 		else if (pointName == "RIGHT_ARM")
 			structuralSlot = "Arm_R";
 		else
-			structuralSlot = "MountHP_" + hardpointIndex.ToString();
+			structuralSlot = string.Format("MountHP_%1", hardpointIndex);
 
 		// Every weapon mount on opted-in frames has independent, persistent
 		// hit-zone health. The swapped weapon module is NEVER used as the
