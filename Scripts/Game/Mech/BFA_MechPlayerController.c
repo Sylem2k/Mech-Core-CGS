@@ -94,7 +94,7 @@ modded class SCR_PlayerController
 
 	//------------------------------------------------------------------------------------------------
 	//! Continuous mech input must travel through the player's owned PlayerController.
-	void BFA_Mech_SendDriverInput(IEntity mech, float forward, float strafe, float turn, bool sprint)
+	void BFA_Mech_SendDriverInput(IEntity mech, float forward, float strafe, float turn, bool sprint, float hoverCollective = 0)
 	{
 		if (!mech)
 			return;
@@ -106,10 +106,11 @@ modded class SCR_PlayerController
 		forward = Math.Clamp(forward, -1.0, 1.0);
 		strafe = Math.Clamp(strafe, -1.0, 1.0);
 		turn = Math.Clamp(turn, -1.0, 1.0);
+		hoverCollective = Math.Clamp(hoverCollective, -1.0, 1.0);
 
 		if (Replication.IsServer())
 		{
-			BFA_Mech_ServerDriverInput(rpl.Id(), forward, strafe, turn, sprint, -1);
+			BFA_Mech_ServerDriverInput(rpl.Id(), forward, strafe, turn, sprint, -1, hoverCollective);
 			return;
 		}
 
@@ -121,14 +122,14 @@ modded class SCR_PlayerController
 		if (movement)
 			inputSeq = movement.ClientRecordInputSent();
 
-		Rpc(BFA_Mech_RpcAsk_DriverInput, rpl.Id(), forward, strafe, turn, sprint, inputSeq);
+		Rpc(BFA_Mech_RpcAsk_DriverInput, rpl.Id(), forward, strafe, turn, sprint, inputSeq, hoverCollective);
 	}
 
 	//------------------------------------------------------------------------------------------------
 	[RplRpc(RplChannel.Unreliable, RplRcver.Server)]
-	protected void BFA_Mech_RpcAsk_DriverInput(RplId mechId, float forward, float strafe, float turn, bool sprint, int inputSeq)
+	protected void BFA_Mech_RpcAsk_DriverInput(RplId mechId, float forward, float strafe, float turn, bool sprint, int inputSeq, float hoverCollective)
 	{
-		BFA_Mech_ServerDriverInput(mechId, forward, strafe, turn, sprint, inputSeq);
+		BFA_Mech_ServerDriverInput(mechId, forward, strafe, turn, sprint, inputSeq, hoverCollective);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -207,7 +208,7 @@ modded class SCR_PlayerController
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected void BFA_Mech_ServerDriverInput(RplId mechId, float forward, float strafe, float turn, bool sprint, int inputSeq)
+	protected void BFA_Mech_ServerDriverInput(RplId mechId, float forward, float strafe, float turn, bool sprint, int inputSeq, float hoverCollective)
 	{
 		IEntity mech = BFA_Mech_ResolveEntity(mechId);
 		if (!mech)
@@ -220,7 +221,7 @@ modded class SCR_PlayerController
 		if (!BFA_Mech_IsDriver(movement, mech))
 			return;
 
-		movement.ServerSetDriverInput(forward, strafe, turn, sprint, inputSeq);
+		movement.ServerSetDriverInput(forward, strafe, turn, sprint, inputSeq, hoverCollective);
 	}
 
 	//------------------------------------------------------------------------------------------------
