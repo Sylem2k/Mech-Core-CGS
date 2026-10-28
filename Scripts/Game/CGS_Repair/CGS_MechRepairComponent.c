@@ -137,7 +137,7 @@ class CGS_MechRepairComponent : ScriptComponent
 		float previous = zone.GetHealth();
 		SCR_DamageContext damage = new SCR_DamageContext(EDamageType.TRUE, amount, empty, target, zone, Instigator.CreateInstigator(operator), null, -1, -1);
 		manager.HandleDamage(damage);
-		if (IsTrackSite(index))
+		if (IsLocomotionSite(index))
 			Print(string.Format("[CGS TRACK TEST] DAMAGE %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
 		else
 			Print(string.Format("[CGS ARM TEST] DAMAGE %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
@@ -213,7 +213,7 @@ class CGS_MechRepairComponent : ScriptComponent
 		if (cap01 >= 1.0)
 			step01 = 0.15;
 		zone.SetHealth(Math.Min(limit, previous + maxHealth * step01));
-		if (IsTrackSite(index))
+		if (IsLocomotionSite(index))
 			Print(string.Format("[CGS TRACK TEST] REPAIR %1: %2 -> %3 / %4 HP (cap=%5%%)", GetRepairSiteLabel(index), previous, zone.GetHealth(), maxHealth, cap01 * 100));
 		else
 			Print(string.Format("[CGS ARM TEST] REPAIR %1: %2 -> %3 / %4 HP (cap=%5%%)", GetRepairSiteLabel(index), previous, zone.GetHealth(), maxHealth, cap01 * 100));
