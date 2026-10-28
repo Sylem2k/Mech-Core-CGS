@@ -20,12 +20,6 @@ class CGS_MechEngineComponent : ScriptComponent
 	[Attribute("false", UIWidgets.CheckBox, "Compatibility option for existing mechs: engine already running at spawn. OFF is recommended for new interactive cockpit prefabs.", category: "Startup")]
 	protected bool m_bStartRunning;
 
-	[Attribute("false", UIWidgets.CheckBox, "Allow nearby players on foot to use physical exterior START/STOP switches. Leave disabled for cockpit-only mechs.", category: "Startup")]
-	protected bool m_bAllowExteriorSwitches;
-
-	[Attribute("5", UIWidgets.Auto, "Maximum 3D distance in metres from a physical exterior switch for server-authorized use.", category: "Startup")]
-	protected float m_fExteriorSwitchDistance;
-
 	[Attribute("false", UIWidgets.CheckBox, "Log startup and shutdown transitions (test only).", category: "Diagnostics")]
 	protected bool m_bDebugEngine;
 
@@ -134,7 +128,7 @@ class CGS_MechEngineComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	// Existing seat-only validation, retained for cockpit controls and old prefabs.
+	// Only the seated PILOT can start or stop the core. Not passengers / people outside.
 	bool CanOperate(IEntity user)
 	{
 		if (!user)
@@ -152,39 +146,11 @@ class CGS_MechEngineComponent : ScriptComponent
 		return pilot && pilot == user;
 	}
 
-	// Physical exterior switch. Client may test this to offer the interaction,
-	// but ServerStart / ServerStop recheck it on the server.
-	bool CanOperateSwitch(IEntity user, bool starting)
-	{
-		if (CanOperate(user))
-			return true;
-
-		if (!m_bAllowExteriorSwitches || !user || !ChimeraCharacter.Cast(user))
-			return false;
-
-		IEntity root = GetOwner();
-		if (!root)
-			return false;
-
-		// Occupants of this mech must use their assigned control station;
-		// crew seated in another compartment cannot operate exterior switches.
-		if (user.GetRootParent() == root)
-			return false;
-
-		vector switchWorld;
-		if (starting)
-			switchWorld = GetStartButtonWorldPoint();
-		else
-			switchWorld = GetStopButtonWorldPoint();
-
-		return vector.Distance(user.GetOrigin(), switchWorld) <= Math.Max(m_fExteriorSwitchDistance, 0.1);
-	}
-
 	//------------------------------------------------------------------------------------------------
 	// This is intentionally a SERVER action, even when a client interacts with a switch.
 	bool ServerStart(IEntity user)
 	{
-		if (!Replication.IsServer() || !CanOperateSwitch(user, true))
+		if (!Replication.IsServer() || !CanOperate(user))
 			return false;
 		if (m_iEngineState != ENGINE_OFF)
 			return false;
@@ -220,7 +186,7 @@ class CGS_MechEngineComponent : ScriptComponent
 	//------------------------------------------------------------------------------------------------
 	bool ServerStop(IEntity user)
 	{
-		if (!Replication.IsServer() || !CanOperateSwitch(user, false))
+		if (!Replication.IsServer() || !CanOperate(user))
 			return false;
 		if (m_iEngineState == ENGINE_OFF)
 			return false;
