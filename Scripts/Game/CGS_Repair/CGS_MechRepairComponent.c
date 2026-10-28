@@ -90,7 +90,7 @@ class CGS_MechRepairComponent : ScriptComponent
 		empty[2] = vector.Zero;
 
 		float previous = zone.GetHealth();
-		SCR_DamageContext damage = new SCR_DamageContext(EDamageType.TRUE, amount, empty, target, zone, operator, null, -1, -1);
+		SCR_DamageContext damage = new SCR_DamageContext(EDamageType.TRUE, amount, empty, target, zone, Instigator.CreateInstigator(operator), null, -1, -1);
 		manager.HandleDamage(damage);
 		Print(string.Format("[CGS TRACK TEST] DAMAGE %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
 		return zone.GetHealth() < previous;
