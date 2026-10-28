@@ -209,6 +209,10 @@ class BFA_MechPartHitZone : SCR_HitZone
 	[Attribute("", UIWidgets.EditBox, "Name of this part (e.g. LEFT LEG, RIGHT ARM). Also helps AUTO pick its place on the HUD damage picture. Empty = the part's prefab name.")]
 	protected string m_sDisplayName;
 
+	// Temporary per-part projectile diagnostic. Disabled by default on every other mech.
+	[Attribute("false", UIWidgets.CheckBox, "TEST ONLY: log damage events reaching this part's own hit zone.")]
+	protected bool m_bLogHits;
+
 	[Attribute("true", UIWidgets.CheckBox, "Show this part on the HUD's damage picture.")]
 	protected bool m_bShowOnHUD;
 
@@ -269,6 +273,8 @@ class BFA_MechPartHitZone : SCR_HitZone
 	override float ComputeEffectiveDamage(notnull BaseDamageContext damageContext, bool isDOT)
 	{
 		float damage = super.ComputeEffectiveDamage(damageContext, isDOT);
+		if (m_bLogHits && Replication.IsServer() && !isDOT)
+			Print(string.Format("[CGS TRACK HIT] %1: type=%2 effective=%3 healthBefore=%4/%5", m_sDisplayName, typename.EnumToString(EDamageType, damageContext.damageType), damage, GetHealth(), GetMaxHealth()));
 		if (damage <= 0 || !Replication.IsServer())
 			return damage;
 
