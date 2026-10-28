@@ -469,23 +469,40 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		if (serverImpact)
 			flags = flags | BFA_EMechShotFlags.SERVER_IMPACT;
 
+		// Send a compact laser descriptor IN the existing root-mech shot
+		// RPC. Remote clients may receive it before their local weapon
+		// entity is ready. For lasers only, the debug tracer length and
+		// thickness fields carry beam duration and diameter.
+		float visualLength = length;
+		float visualThickness = thickness;
+		BFA_MechWeaponFX configuredFX;
+		if (module)
+			configuredFX = module.GetFX();
+		if (configuredFX && !configuredFX.m_sBeamPrefab.IsEmpty())
+		{
+			flags = flags | BFA_EMechShotFlags.BEAM;
+			if (configuredFX.m_bBeamContinuous)
+				flags = flags | BFA_EMechShotFlags.BEAM_CONTINUOUS;
+			visualLength = Math.Max(configuredFX.m_fBeamDuration, 0.04);
+			visualThickness = Math.Max(configuredFX.m_fBeamWidth, 0.025);
+		}
+
 		if (!System.IsConsoleApp())
-			PlayShotLocal(hardpointIndex, shotId, start, end, flags, speed, length, thickness);
+			PlayShotLocal(hardpointIndex, shotId, start, end, flags, speed, visualLength, visualThickness);
 
 		// Guided rockets keep their reliable visual launch. Hitscan pulse lasers may
 		// opt into reliable FX to stop their entire short beam disappearing when the
 		// unreliable packet is lost. Continuous beam ticks stay unreliable.
 		bool reliableShot = serverImpact;
-		if (!reliableShot && module)
+		if (!reliableShot && configuredFX && (flags & BFA_EMechShotFlags.BEAM) != 0)
 		{
-			BFA_MechWeaponFX shotFx = module.GetFX();
-			if (shotFx && shotFx.m_bReliableBeamShot && !shotFx.m_bBeamContinuous && !shotFx.m_sBeamPrefab.IsEmpty())
+			if (configuredFX.m_bReliableBeamShot && !configuredFX.m_bBeamContinuous)
 				reliableShot = true;
 		}
 		if (reliableShot)
-			Rpc(RpcDo_ModuleShotReliable, hardpointIndex, shotId, start, end, flags, speed, length, thickness);
+			Rpc(RpcDo_ModuleShotReliable, hardpointIndex, shotId, start, end, flags, speed, visualLength, visualThickness);
 		else
-			Rpc(RpcDo_ModuleShot, hardpointIndex, shotId, start, end, flags, speed, length, thickness);
+			Rpc(RpcDo_ModuleShot, hardpointIndex, shotId, start, end, flags, speed, visualLength, visualThickness);
 
 		return shotId;
 	}
@@ -639,6 +656,19 @@ class BFA_MechWeaponComponent : ScriptGameComponent
 		{
 			module.ClientOnShot(start, end);
 			fx = module.GetFX();
+		}
+
+		// The authoritative shot includes a laser bit and visual dimensions.
+		// Even if this client's installed module has not spawned or registered,
+		// the actual beam is created locally from the Core beam resource.
+		if ((flags & BFA_EMechShotFlags.BEAM) != 0 && (!fx || fx.m_sBeamPrefab.IsEmpty()))
+		{
+			fx = new BFA_MechWeaponFX();
+			fx.m_sBeamPrefab = "{F9F15A6E70B2C046}Prefabs/Vehicles/Mech/Weapons/CGS_LaserBeam.et";
+			fx.m_fBeamDuration = Math.Max(length, 0.04);
+			fx.m_fBeamWidth = Math.Max(thickness, 0.025);
+			fx.m_bBeamContinuous = (flags & BFA_EMechShotFlags.BEAM_CONTINUOUS) != 0;
+			fx.m_fBeamIdleTimeout = 1.25;
 		}
 
 		BFA_MechEvents.RaiseShotFired(GetOwner(), module);

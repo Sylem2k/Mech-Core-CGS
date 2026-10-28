@@ -127,6 +127,8 @@ enum BFA_EMechShotFlags
 {
 	HIT = 1,            // the shot hit something (impact effect at the end point)
 	SERVER_IMPACT = 2,  // the server will send the real impact (rockets); don't play one on arrival
+	BEAM = 4,           // server says this shot is a laser beam; FX can render without a client weapon entity
+	BEAM_CONTINUOUS = 8 // reuse one beam per hardpoint while the trigger is held
 }
 
 //------------------------------------------------------------------------------------------------
