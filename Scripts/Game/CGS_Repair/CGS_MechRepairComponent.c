@@ -107,6 +107,23 @@ class CGS_MechRepairComponent : ScriptComponent
 		return slot == "Arm_L" || slot == "Arm_R";
 	}
 
+	// Arms and every independently damageable rocket/missile/shoulder/back/
+	// torso mounting fixture. Do not repair the swappable weapon entity itself.
+	bool IsWeaponMountSite(int index)
+	{
+		if (IsArmSite(index))
+			return true;
+		if (index < 0 || index >= GetRepairSiteCount() || !m_aRepairSites[index])
+			return false;
+		string name = m_aRepairSites[index].m_sPartEntityName;
+		for (int i = 0; i < 18; i++)
+		{
+			if (name == string.Format("MountHP_%1", i))
+				return true;
+		}
+		return false;
+	}
+
 	bool ServerTestDamageArm(int index, IEntity operator, float amount)
 	{
 		if (!m_bEnableArmDamageTest || !IsArmSite(index))

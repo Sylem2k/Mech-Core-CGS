@@ -132,7 +132,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 
 	// Opt-in per-frame arm-mount damage. Mounted weapon module entities are
 	// replaced during refit; these persistent arm fixtures keep the damage.
-	[Attribute("false", UIWidgets.CheckBox, "On this frame, disabled arm mount hit zones prevent their fitted weapon modules from firing.", category: "Hardpoint Damage")]
+	[Attribute("false", UIWidgets.CheckBox, "On this frame, independent arm, missile, rocket, shoulder, back, torso and utility mount hit zones disable their fitted weapons at 0%.", category: "Hardpoint Damage")]
 	protected bool m_bUseArmMountDamage;
 
 	[Attribute("", UIWidgets.Object, "Modules this mech is allowed to mount.", category: "Modules")]
@@ -610,7 +610,11 @@ class BFA_MechHardpointComponent : ScriptComponent
 		else if (pointName == "RIGHT_ARM")
 			structuralSlot = "Arm_R";
 		else
-			return true;
+			structuralSlot = string.Format("MountHP_%1", hardpointIndex);
+
+		// Every weapon mount on opted-in frames has independent, persistent
+		// hit-zone health. The swapped weapon module is NEVER used as the
+		// health source; rocket/missile/back/torso hardpoints must also work.
 
 		IEntity mech = GetOwner();
 		if (!mech)
