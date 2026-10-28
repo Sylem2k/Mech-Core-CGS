@@ -337,6 +337,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			m_fHoverCollective = 0;
 		}
 		m_fLocalHoverCollective = 0;
+		if (Replication.IsServer())
+			m_fHoverCollective = 0;
 		// Keep an established hover altitude when the pilot exits. The mech
 		// must not fall from a roof or descend unexpectedly on seat changes.
 
@@ -1158,12 +1160,24 @@ class BFA_MechMovementComponent : ScriptGameComponent
 
 		m_fDiagTiltDeg = GetHullTiltDeg(owner);
 
-		// Do not let the height follower turn a tall rock into "terrain". If the
-		// look-ahead probes see an abrupt step, stop only the direction driving into it.
-		if (forwardInput > 0 && m_bFrontObstacle)
-			forwardInput = 0;
-		else if (forwardInput < 0 && m_bRearObstacle)
-			forwardInput = 0;
+		// Do not let the height follower turn a tall rock into "terrain".
+		// A skimmer lifted well ABOVE its normal support height can clear a
+		// roof/low obstacle and must not be stopped by the ground-only walker
+		// forward-block probe. When flying low, the original block still works.
+		bool blockGroundObstacles = true;
+		if (m_iLocomotionMode == 2 && m_bHoverAltitudeHoldActive)
+		{
+			float floorHoverY = m_fFilteredSupportY + m_fBodyHeight + Math.Max(m_fHoverClearance, 0.0);
+			if (owner.GetOrigin()[1] > floorHoverY + 1.5)
+				blockGroundObstacles = false;
+		}
+		if (blockGroundObstacles)
+		{
+			if (forwardInput > 0 && m_bFrontObstacle)
+				forwardInput = 0;
+			else if (forwardInput < 0 && m_bRearObstacle)
+				forwardInput = 0;
+		}
 
 		// If a collision has already tipped the hull, remove translation until the
 		// stabilizer has brought the cockpit back under control. Turning remains available.
