@@ -334,8 +334,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			m_fStrafe = 0;
 			m_fTurn = 0;
 			m_bSprint = false;
-			m_fHoverCollective = 0;
 		}
+		// Clear all former driver's vertical wish, even if the pilot changes
+		// without an intervening empty-seat update.
 		m_fLocalHoverCollective = 0;
 		if (Replication.IsServer())
 			m_fHoverCollective = 0;
