@@ -137,19 +137,50 @@ class CGS_MechRepairComponent : ScriptComponent
 	// amounts must not circumvent the server's repair policy.
 	bool ServerRepairPart(int index, IEntity operator, float amount)
 	{
-		return ServerApplyManualRepair(index, operator, 0.25);
+		return ServerApplyManualRepair(index, operator, 0.25, false);
 	}
 
 	// Bay maintenance: 15% max HP per wrench use, up to 100% total.
-	// Caller MUST verify Mech Bay proximity on the server before invoking this.
+	// The MW bay server RPC MUST validate bay presence, tool, requester and
+	// selected parked mech before calling this. A mechanic works from the
+	// bay service console, NOT from the arm or track's physical access point.
 	bool ServerRepairPartAtBay(int index, IEntity operator)
 	{
-		return ServerApplyManualRepair(index, operator, 1.0);
+		return ServerApplyManualRepair(index, operator, 1.0, true);
 	}
 
-	protected bool ServerApplyManualRepair(int index, IEntity operator, float cap01)
+	// Standing outside, on foot, within reach of the parked mech; the bay
+	// station itself does not have to be close to the part high on the frame.
+	protected bool CanServiceFromBay(IEntity operator, int index)
 	{
-		if (!Replication.IsServer() || !CanService(operator, index))
+		if (!operator || !ChimeraCharacter.Cast(operator))
+			return false;
+		if (index < 0 || index >= GetRepairSiteCount())
+			return false;
+
+		IEntity owner = GetOwner();
+		if (!owner || operator.GetRootParent() == owner)
+			return false;
+		if (vector.Distance(operator.GetOrigin(), owner.GetOrigin()) > 50.0)
+			return false;
+
+		Physics physics = owner.GetPhysics();
+		if (physics && physics.GetVelocity().Length() > 0.5)
+			return false;
+
+		return true;
+	}
+
+	protected bool ServerApplyManualRepair(int index, IEntity operator, float cap01, bool atBay)
+	{
+		if (!Replication.IsServer())
+			return false;
+		if (atBay)
+		{
+			if (!CanServiceFromBay(operator, index))
+				return false;
+		}
+		else if (!CanService(operator, index))
 			return false;
 
 		IEntity target = ResolveRepairTarget(index);
