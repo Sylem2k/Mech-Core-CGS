@@ -140,7 +140,7 @@ class CGS_MechRepairComponent : ScriptComponent
 		return ServerApplyManualRepair(index, operator, 0.25);
 	}
 
-	// Bay maintenance: same 2% wrench operation, but can reach 100%.
+	// Bay maintenance: 15% max HP per wrench use, up to 100% total.
 	// Caller MUST verify Mech Bay proximity on the server before invoking this.
 	bool ServerRepairPartAtBay(int index, IEntity operator)
 	{
@@ -163,7 +163,12 @@ class CGS_MechRepairComponent : ScriptComponent
 		if (previous >= limit - 0.001)
 			return false;
 
-		zone.SetHealth(Math.Min(limit, previous + maxHealth * 0.02));
+		// Field = 2% of full part HP per use, capped at 25%.
+		// Mech Bay = 15% per use, capped at 100%.
+		float step01 = 0.02;
+		if (cap01 >= 1.0)
+			step01 = 0.15;
+		zone.SetHealth(Math.Min(limit, previous + maxHealth * step01));
 		if (IsTrackSite(index))
 			Print(string.Format("[CGS TRACK TEST] REPAIR %1: %2 -> %3 / %4 HP (cap=%5%%)", GetRepairSiteLabel(index), previous, zone.GetHealth(), maxHealth, cap01 * 100));
 		else
