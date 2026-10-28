@@ -213,6 +213,13 @@ class BFA_MechPartHitZone : SCR_HitZone
 	[Attribute("false", UIWidgets.CheckBox, "TEST ONLY: log damage events reaching this part's own hit zone.")]
 	protected bool m_bLogHits;
 
+	// Opt-in ONLY for repairable track parts. Enfusion will not revive a hit zone
+	// once its damage manager has reached DESTROYED (0 HP). Reserve 1 internal
+	// HP, treat that as disabled for locomotion, and let the wrench heal it.
+	// The service UI rounds 1/700 HP to 0%, so this still reads as a disabled track.
+	[Attribute("false", UIWidgets.CheckBox, "TRACK TEST: stop at 1 internal HP so disabled tracks can be repaired with the wrench.")]
+	protected bool m_bKeepRepairableAtCriticalHP;
+
 	[Attribute("true", UIWidgets.CheckBox, "Show this part on the HUD's damage picture.")]
 	protected bool m_bShowOnHUD;
 
@@ -309,6 +316,14 @@ class BFA_MechPartHitZone : SCR_HitZone
 		// The part loses its own health too (MaxHealth on this hit zone). At 0 it is destroyed:
 		// LEG = slower mech, WEAPON = that weapon stops. Repairs restore it.
 		// Add-ons may protect it (shield up = the part is not hurt).
-		return BFA_MechExtension.Get().FilterPartDamage(mech, part, damage, damageContext);
+		float finalDamage = BFA_MechExtension.Get().FilterPartDamage(mech, part, damage, damageContext);
+
+		// Track-specific recoverability: never enter the irreversible destroyed
+		// damage-manager state. 1 HP of 700 shows as 0% on the repair action.
+		// Continue forwarding hull share above, even if track itself is disabled.
+		if (m_bKeepRepairableAtCriticalHP)
+			finalDamage = Math.Min(finalDamage, Math.Max(0.0, GetHealth() - 1.0));
+
+		return finalDamage;
 	}
 }
