@@ -72,6 +72,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 	protected float m_fLocalForward;
 	protected float m_fLocalStrafe;
 	protected float m_fLocalTurn;
+	protected float m_fLocalHoverCollective;
 	protected float m_fTurnLeft;
 	protected float m_fTurnRight;
 
@@ -495,6 +496,12 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 	//------------------------------------------------------------------------------------------------
 	void OnJumpInput(float value)
 	{
+		// Space/A is collective UP on hover mechs, not a jump-jet impulse.
+		if (m_MovementComp && m_MovementComp.IsHoverCollectiveEnabled())
+		{
+			m_bJumpHeld = false;
+			return;
+		}
 		bool pressed =
 			value > 0.5;
 
@@ -865,6 +872,17 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 			input
 		);
 
+		// Poll the same rebindable actions in both Mech and legacy modes.
+		// Non-hover movement modes ignore this control completely.
+		m_fLocalHoverCollective = 0;
+		if (m_MovementComp && m_MovementComp.IsHoverCollectiveEnabled())
+		{
+			m_fLocalHoverCollective = Math.Clamp(input.GetActionValue("MechHoverAscend")
+				- input.GetActionValue("MechHoverDescend"), -1.0, 1.0);
+		}
+		if (m_MovementComp)
+			m_MovementComp.SetHoverCollectiveInput(m_fLocalHoverCollective);
+
 		if (m_bUseMechControls)
 		{
 			MechControlsTick(input);
@@ -926,7 +944,8 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 			m_fLocalForward,
 			m_fLocalStrafe,
 			m_fLocalTurn,
-			m_bSprintHeld
+			m_bSprintHeld,
+			m_fLocalHoverCollective
 		);
 
 		if (m_AimComp)
@@ -965,6 +984,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 		m_fLocalForward = 0;
 		m_fLocalStrafe = 0;
 		m_fLocalTurn = 0;
+		m_fLocalHoverCollective = 0;
 		m_fTurnLeft = 0;
 		m_fTurnRight = 0;
 
@@ -973,6 +993,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 			m_MovementComp.SetForwardInput(0);
 			m_MovementComp.SetRightInput(0);
 			m_MovementComp.SetTurnInput(0);
+			m_MovementComp.SetHoverCollectiveInput(0);
 			m_MovementComp.SetSprintInput(false);
 		}
 
@@ -1213,6 +1234,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 			m_MovementComp.SetForwardInput(0);
 			m_MovementComp.SetRightInput(0);
 			m_MovementComp.SetTurnInput(0);
+			m_MovementComp.SetHoverCollectiveInput(0);
 			m_MovementComp.SetSprintInput(false);
 		}
 
@@ -1279,6 +1301,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 		m_fLocalForward = 0;
 		m_fLocalStrafe = 0;
 		m_fLocalTurn = 0;
+		m_fLocalHoverCollective = 0;
 		m_fTurnLeft = 0;
 		m_fTurnRight = 0;
 
