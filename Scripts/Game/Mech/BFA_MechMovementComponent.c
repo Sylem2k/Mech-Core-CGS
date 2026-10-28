@@ -446,12 +446,54 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	// Opt-in power interlock: legacy mechs without an engine component retain normal movement.
+	// Tracked chassis only: a destroyed left OR right track disables all commanded
+	// horizontal travel and steering until that exact track receives repair HP.
+	// Read the installed SlotManager parts rather than inventing a second health
+	// counter. Walkers and hover craft never enter this check.
+	protected bool CGS_IsTrackedDriveLocked()
+	{
+		if (m_iLocomotionMode != 1)
+			return false;
+
+		IEntity owner = GetOwner();
+		if (!owner)
+			return false;
+
+		SlotManagerComponent slots = m_SlotManager;
+		if (!slots)
+			slots = SlotManagerComponent.Cast(owner.FindComponent(SlotManagerComponent));
+
+		if (!slots)
+			return false;
+
+		EntitySlotInfo left = slots.GetSlotByName("Track_L1");
+		EntitySlotInfo right = slots.GetSlotByName("Track_R1");
+		return CGS_IsTrackDestroyed(left) || CGS_IsTrackDestroyed(right);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected bool CGS_IsTrackDestroyed(EntitySlotInfo slot)
+	{
+		if (!slot)
+			return false;
+
+		IEntity part = slot.GetAttachedEntity();
+		BFA_MechPartHitZone zone = BFA_MechPartHitZone.FindOn(part);
+		return zone && zone.GetHealth() <= 0;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	// Common movement interlock: preserves the existing engine gate and also
+	// disables tracked steering/drive with either track at zero health.
+	// All effective input paths and ServerSetDriverInput already use this gate.
 	protected bool CGS_IsEngineDriveLocked()
 	{
 		IEntity owner = GetOwner();
 		if (!owner)
 			return false;
+
+		if (CGS_IsTrackedDriveLocked())
+			return true;
 
 		CGS_MechEngineComponent engine = CGS_MechEngineComponent.Cast(owner.FindComponent(CGS_MechEngineComponent));
 		return engine && !engine.IsRunning();
