@@ -479,7 +479,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 
 		IEntity part = slot.GetAttachedEntity();
 		BFA_MechPartHitZone zone = BFA_MechPartHitZone.FindOn(part);
-		return zone && zone.GetHealth() <= 0;
+		// The track hit zone stays at 1 internal HP to remain repairable.
+		// That is a 0% operational track: no driving or yaw until wrench-healed.
+		return zone && zone.GetHealth() <= 1.0;
 	}
 
 	//------------------------------------------------------------------------------------------------
