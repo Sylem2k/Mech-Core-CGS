@@ -31,6 +31,14 @@ class CGS_MechRepairComponent : ScriptComponent
 	[Attribute("false", UIWidgets.CheckBox, "TEMPORARY TEST ONLY: allows test-damage actions on the two track slots.", category: "Track Test")]
 	protected bool m_bEnableTrackDamageTest;
 
+	[Attribute("false", UIWidgets.CheckBox, "TEMPORARY TEST ONLY: allows test-damage actions on two independently installed arm mounts.", category: "Arm Test")]
+	protected bool m_bEnableArmDamageTest;
+
+	bool ArmDamageTestEnabled()
+	{
+		return m_bEnableArmDamageTest;
+	}
+
 	[Attribute("5", UIWidgets.Auto, "Maximum distance in metres from the chosen repair point for on-foot service actions.", category: "Repair")]
 	protected float m_fRepairReach;
 
@@ -68,11 +76,35 @@ class CGS_MechRepairComponent : ScriptComponent
 		return slot == "Track_L1" || slot == "Track_R1";
 	}
 
-	// SERVER ONLY: applies an ordinary true-damage event through the part's
-	// real damage manager (including its normal hull-share behavior).
+	// SERVER ONLY: applies ordinary true-damage through the installed hit zone.
+	// Keep the existing track entry point and add a SEPARATE arm test permission.
 	bool ServerTestDamageTrack(int index, IEntity operator, float amount)
 	{
-		if (!Replication.IsServer() || !m_bEnableTrackDamageTest || !IsTrackSite(index) || !CanService(operator, index))
+		if (!m_bEnableTrackDamageTest || !IsTrackSite(index))
+			return false;
+
+		return ServerTestDamagePart(index, operator, amount);
+	}
+
+	bool IsArmSite(int index)
+	{
+		if (index < 0 || index >= GetRepairSiteCount() || !m_aRepairSites[index])
+			return false;
+		string slot = m_aRepairSites[index].m_sPartEntityName;
+		return slot == "Arm_L" || slot == "Arm_R";
+	}
+
+	bool ServerTestDamageArm(int index, IEntity operator, float amount)
+	{
+		if (!m_bEnableArmDamageTest || !IsArmSite(index))
+			return false;
+
+		return ServerTestDamagePart(index, operator, amount);
+	}
+
+	protected bool ServerTestDamagePart(int index, IEntity operator, float amount)
+	{
+		if (!Replication.IsServer() || !CanService(operator, index))
 			return false;
 
 		IEntity target = ResolveRepairTarget(index);
@@ -92,7 +124,10 @@ class CGS_MechRepairComponent : ScriptComponent
 		float previous = zone.GetHealth();
 		SCR_DamageContext damage = new SCR_DamageContext(EDamageType.TRUE, amount, empty, target, zone, Instigator.CreateInstigator(operator), null, -1, -1);
 		manager.HandleDamage(damage);
-		Print(string.Format("[CGS TRACK TEST] DAMAGE %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
+		if (IsTrackSite(index))
+			Print(string.Format("[CGS TRACK TEST] DAMAGE %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
+		else
+			Print(string.Format("[CGS ARM TEST] DAMAGE %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
 		return zone.GetHealth() < previous;
 	}
 
@@ -113,7 +148,10 @@ class CGS_MechRepairComponent : ScriptComponent
 			return false;
 
 		zone.SetHealth(Math.Min(zone.GetMaxHealth(), previous + amount));
-		Print(string.Format("[CGS TRACK TEST] REPAIR %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
+		if (IsTrackSite(index))
+			Print(string.Format("[CGS TRACK TEST] REPAIR %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
+		else
+			Print(string.Format("[CGS ARM TEST] REPAIR %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
 		return zone.GetHealth() > previous;
 	}
 
