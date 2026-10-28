@@ -161,7 +161,7 @@ class CGS_MechRepairComponent : ScriptComponent
 		IEntity owner = GetOwner();
 		if (!owner || operator.GetRootParent() == owner)
 			return false;
-		if (vector.Distance(operator.GetOrigin(), owner.GetOrigin()) > 30.0)
+		if (vector.Distance(operator.GetOrigin(), owner.GetOrigin()) > 50.0)
 			return false;
 
 		Physics physics = owner.GetPhysics();
