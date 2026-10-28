@@ -446,29 +446,41 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	// Tracked chassis only: a destroyed left OR right track disables all commanded
-	// horizontal travel and steering until that exact track receives repair HP.
-	// Read the installed SlotManager parts rather than inventing a second health
-	// counter. Walkers and hover craft never enter this check.
+	// Fleet repair locomotion interlock: operate on authored physical parts,
+	// not a second health pool. Only frames explicitly carrying the new repair
+	// registry opt in; the Titan boss (without it) remains untouched.
 	protected bool CGS_IsTrackedDriveLocked()
 	{
-		if (m_iLocomotionMode != 1)
-			return false;
-
 		IEntity owner = GetOwner();
 		if (!owner)
+			return false;
+
+		// IMPORTANT: Titan bosses do not have this opt-in component.
+		CGS_MechRepairComponent repair = CGS_MechRepairComponent.Cast(owner.FindComponent(CGS_MechRepairComponent));
+		if (!repair)
 			return false;
 
 		SlotManagerComponent slots = m_SlotManager;
 		if (!slots)
 			slots = SlotManagerComponent.Cast(owner.FindComponent(SlotManagerComponent));
-
 		if (!slots)
 			return false;
 
-		EntitySlotInfo left = slots.GetSlotByName("Track_L1");
-		EntitySlotInfo right = slots.GetSlotByName("Track_R1");
-		return CGS_IsTrackDestroyed(left) || CGS_IsTrackDestroyed(right);
+		string leftSlot = "Leg_L1";
+		string rightSlot = "Leg_R1";
+		if (m_iLocomotionMode == 1)
+		{
+			leftSlot = "Track_L1";
+			rightSlot = "Track_R1";
+		}
+		else if (m_iLocomotionMode == 2)
+		{
+			leftSlot = "HoverPad_L1";
+			rightSlot = "HoverPad_R1";
+		}
+
+		return CGS_IsTrackDestroyed(slots.GetSlotByName(leftSlot))
+			|| CGS_IsTrackDestroyed(slots.GetSlotByName(rightSlot));
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -476,17 +488,16 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	{
 		if (!slot)
 			return false;
-
-		IEntity part = slot.GetAttachedEntity();
-		BFA_MechPartHitZone zone = BFA_MechPartHitZone.FindOn(part);
-		// The track hit zone stays at 1 internal HP to remain repairable.
-		// That is a 0% operational track: no driving or yaw until wrench-healed.
+		BFA_MechPartHitZone zone = BFA_MechPartHitZone.FindOn(slot.GetAttachedEntity());
+		// 1 internal HP is a 0% disabled part but can still be healed
+		// by the field wrench or Mech Bay instead of being deleted.
 		return zone && zone.GetHealth() <= 1.0;
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//------------------------------------------------------------------------------------------------
 	// Common movement interlock: preserves the existing engine gate and also
-	// disables tracked steering/drive with either track at zero health.
+	// disables locomotion/steering if either installed locomotion part is at 0%.
 	// All effective input paths and ServerSetDriverInput already use this gate.
 	protected bool CGS_IsEngineDriveLocked()
 	{

@@ -76,11 +76,24 @@ class CGS_MechRepairComponent : ScriptComponent
 		return slot == "Track_L1" || slot == "Track_R1";
 	}
 
+	// Every non-Titan chassis has two physical locomotion targets. Keep the
+	// authored frame's true slot names: legs, tracks or hover pads. Titan
+	// bosses never opt in via a repair-site registry.
+	bool IsLocomotionSite(int index)
+	{
+		if (index < 0 || index >= GetRepairSiteCount() || !m_aRepairSites[index])
+			return false;
+		string slot = m_aRepairSites[index].m_sPartEntityName;
+		return slot == "Leg_L1" || slot == "Leg_R1"
+			|| slot == "Track_L1" || slot == "Track_R1"
+			|| slot == "HoverPad_L1" || slot == "HoverPad_R1";
+	}
+
 	// SERVER ONLY: applies ordinary true-damage through the installed hit zone.
 	// Keep the existing track entry point and add a SEPARATE arm test permission.
 	bool ServerTestDamageTrack(int index, IEntity operator, float amount)
 	{
-		if (!m_bEnableTrackDamageTest || !IsTrackSite(index))
+		if (!m_bEnableTrackDamageTest || !IsLocomotionSite(index))
 			return false;
 
 		return ServerTestDamagePart(index, operator, amount);
@@ -124,7 +137,7 @@ class CGS_MechRepairComponent : ScriptComponent
 		float previous = zone.GetHealth();
 		SCR_DamageContext damage = new SCR_DamageContext(EDamageType.TRUE, amount, empty, target, zone, Instigator.CreateInstigator(operator), null, -1, -1);
 		manager.HandleDamage(damage);
-		if (IsTrackSite(index))
+		if (IsLocomotionSite(index))
 			Print(string.Format("[CGS TRACK TEST] DAMAGE %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
 		else
 			Print(string.Format("[CGS ARM TEST] DAMAGE %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
@@ -200,7 +213,7 @@ class CGS_MechRepairComponent : ScriptComponent
 		if (cap01 >= 1.0)
 			step01 = 0.15;
 		zone.SetHealth(Math.Min(limit, previous + maxHealth * step01));
-		if (IsTrackSite(index))
+		if (IsLocomotionSite(index))
 			Print(string.Format("[CGS TRACK TEST] REPAIR %1: %2 -> %3 / %4 HP (cap=%5%%)", GetRepairSiteLabel(index), previous, zone.GetHealth(), maxHealth, cap01 * 100));
 		else
 			Print(string.Format("[CGS ARM TEST] REPAIR %1: %2 -> %3 / %4 HP (cap=%5%%)", GetRepairSiteLabel(index), previous, zone.GetHealth(), maxHealth, cap01 * 100));
