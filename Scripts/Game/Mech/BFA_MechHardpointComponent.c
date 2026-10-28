@@ -132,7 +132,7 @@ class BFA_MechHardpointComponent : ScriptComponent
 
 	// Opt-in per-frame arm-mount damage. Mounted weapon module entities are
 	// replaced during refit; these persistent arm fixtures keep the damage.
-	[Attribute("false", UIWidgets.CheckBox, "On this frame, disabled arm mount hit zones prevent their fitted weapon modules from firing.", category: "Hardpoint Damage")]
+	[Attribute("false", UIWidgets.CheckBox, "On this frame, independent arm, missile, rocket, shoulder, back, torso and utility mount hit zones disable their fitted weapons at 0%.", category: "Hardpoint Damage")]
 	protected bool m_bUseArmMountDamage;
 
 	[Attribute("", UIWidgets.Object, "Modules this mech is allowed to mount.", category: "Modules")]
