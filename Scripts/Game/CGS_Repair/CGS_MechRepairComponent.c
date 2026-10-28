@@ -31,6 +31,14 @@ class CGS_MechRepairComponent : ScriptComponent
 	[Attribute("false", UIWidgets.CheckBox, "TEMPORARY TEST ONLY: allows test-damage actions on the two track slots.", category: "Track Test")]
 	protected bool m_bEnableTrackDamageTest;
 
+	[Attribute("false", UIWidgets.CheckBox, "TEMPORARY TEST ONLY: allows test-damage actions on two independently installed arm mounts.", category: "Arm Test")]
+	protected bool m_bEnableArmDamageTest;
+
+	bool ArmDamageTestEnabled()
+	{
+		return m_bEnableArmDamageTest;
+	}
+
 	[Attribute("5", UIWidgets.Auto, "Maximum distance in metres from the chosen repair point for on-foot service actions.", category: "Repair")]
 	protected float m_fRepairReach;
 
@@ -68,11 +76,35 @@ class CGS_MechRepairComponent : ScriptComponent
 		return slot == "Track_L1" || slot == "Track_R1";
 	}
 
-	// SERVER ONLY: applies an ordinary true-damage event through the part's
-	// real damage manager (including its normal hull-share behavior).
+	// SERVER ONLY: applies ordinary true-damage through the installed hit zone.
+	// Keep the existing track entry point and add a SEPARATE arm test permission.
 	bool ServerTestDamageTrack(int index, IEntity operator, float amount)
 	{
-		if (!Replication.IsServer() || !m_bEnableTrackDamageTest || !IsTrackSite(index) || !CanService(operator, index))
+		if (!m_bEnableTrackDamageTest || !IsTrackSite(index))
+			return false;
+
+		return ServerTestDamagePart(index, operator, amount);
+	}
+
+	bool IsArmSite(int index)
+	{
+		if (index < 0 || index >= GetRepairSiteCount() || !m_aRepairSites[index])
+			return false;
+		string slot = m_aRepairSites[index].m_sPartEntityName;
+		return slot == "Arm_L" || slot == "Arm_R";
+	}
+
+	bool ServerTestDamageArm(int index, IEntity operator, float amount)
+	{
+		if (!m_bEnableArmDamageTest || !IsArmSite(index))
+			return false;
+
+		return ServerTestDamagePart(index, operator, amount);
+	}
+
+	protected bool ServerTestDamagePart(int index, IEntity operator, float amount)
+	{
+		if (!Replication.IsServer() || !CanService(operator, index))
 			return false;
 
 		IEntity target = ResolveRepairTarget(index);
@@ -92,31 +124,80 @@ class CGS_MechRepairComponent : ScriptComponent
 		float previous = zone.GetHealth();
 		SCR_DamageContext damage = new SCR_DamageContext(EDamageType.TRUE, amount, empty, target, zone, Instigator.CreateInstigator(operator), null, -1, -1);
 		manager.HandleDamage(damage);
-		Print(string.Format("[CGS TRACK TEST] DAMAGE %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
+		if (IsTrackSite(index))
+			Print(string.Format("[CGS TRACK TEST] DAMAGE %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
+		else
+			Print(string.Format("[CGS ARM TEST] DAMAGE %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
 		return zone.GetHealth() < previous;
 	}
 
-	// SERVER ONLY: restore an installed part's existing hit zone, never create a
-	// new weapon/part and never heal another part or the chassis hull.
+	// Field maintenance: wrench restores exactly 2% of the part's maximum HP
+	// per completed action, but field health NEVER exceeds 25%.
+	// The passed legacy amount is deliberately ignored: client-authored prefab
+	// amounts must not circumvent the server's repair policy.
 	bool ServerRepairPart(int index, IEntity operator, float amount)
 	{
-		if (!Replication.IsServer() || !CanService(operator, index) || amount <= 0)
+		return ServerApplyManualRepair(index, operator, 0.25);
+	}
+
+	// Bay maintenance: 15% max HP per wrench use, up to 100% total.
+	// Caller MUST verify Mech Bay proximity on the server before invoking this.
+	bool ServerRepairPartAtBay(int index, IEntity operator)
+	{
+		return ServerApplyManualRepair(index, operator, 1.0);
+	}
+
+	protected bool ServerApplyManualRepair(int index, IEntity operator, float cap01)
+	{
+		if (!Replication.IsServer() || !CanService(operator, index))
 			return false;
 
 		IEntity target = ResolveRepairTarget(index);
 		BFA_MechPartHitZone zone = BFA_MechPartHitZone.FindOn(target);
-		if (!target || !zone || zone.GetMaxHealth() <= 0)
+		if (!zone || zone.GetMaxHealth() <= 0)
+			return false;
+
+		float maxHealth = zone.GetMaxHealth();
+		float limit = maxHealth * cap01;
+		float previous = zone.GetHealth();
+		if (previous >= limit - 0.001)
+			return false;
+
+		// Field = 2% of full part HP per use, capped at 25%.
+		// Mech Bay = 15% per use, capped at 100%.
+		float step01 = 0.02;
+		if (cap01 >= 1.0)
+			step01 = 0.15;
+		zone.SetHealth(Math.Min(limit, previous + maxHealth * step01));
+		if (IsTrackSite(index))
+			Print(string.Format("[CGS TRACK TEST] REPAIR %1: %2 -> %3 / %4 HP (cap=%5%%)", GetRepairSiteLabel(index), previous, zone.GetHealth(), maxHealth, cap01 * 100));
+		else
+			Print(string.Format("[CGS ARM TEST] REPAIR %1: %2 -> %3 / %4 HP (cap=%5%%)", GetRepairSiteLabel(index), previous, zone.GetHealth(), maxHealth, cap01 * 100));
+		return zone.GetHealth() > previous;
+	}
+
+	// Server-authorized Mech Bay crew finishes an asynchronous repair order.
+	// Caller verifies parked bay, target mech, operator/job and completion time.
+	// No proximity requirement: the requesting player can leave the garage while
+	// the crew works, but the mech must remain inside its original bay.
+	bool ServerCrewRepairPart(int index)
+	{
+		if (!Replication.IsServer())
+			return false;
+
+		IEntity target = ResolveRepairTarget(index);
+		BFA_MechPartHitZone zone = BFA_MechPartHitZone.FindOn(target);
+		if (!zone || zone.GetMaxHealth() <= 0)
 			return false;
 
 		float previous = zone.GetHealth();
 		if (previous >= zone.GetMaxHealth())
 			return false;
 
-		zone.SetHealth(Math.Min(zone.GetMaxHealth(), previous + amount));
-		Print(string.Format("[CGS TRACK TEST] REPAIR %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
+		zone.SetHealth(zone.GetMaxHealth());
+		Print(string.Format("[CGS BAY CREW] FINISHED %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
 		return zone.GetHealth() > previous;
 	}
-
 
 	int GetRepairSiteCount()
 	{

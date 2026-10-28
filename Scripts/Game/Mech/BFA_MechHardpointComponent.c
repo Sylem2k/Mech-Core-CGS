@@ -130,6 +130,11 @@ class BFA_MechHardpointComponent : ScriptComponent
 	[Attribute("", UIWidgets.Object, "Hardpoints available on this mech. Up to 18 are supported by the six replicated loadout words.", category: "Hardpoints")]
 	ref array<ref BFA_MechHardpointDefinition> m_aHardpoints;
 
+	// Opt-in per-frame arm-mount damage. Mounted weapon module entities are
+	// replaced during refit; these persistent arm fixtures keep the damage.
+	[Attribute("false", UIWidgets.CheckBox, "On this frame, disabled arm mount hit zones prevent their fitted weapon modules from firing.", category: "Hardpoint Damage")]
+	protected bool m_bUseArmMountDamage;
+
 	[Attribute("", UIWidgets.Object, "Modules this mech is allowed to mount.", category: "Modules")]
 	ref array<ref BFA_MechModuleDefinition> m_aModules;
 
@@ -585,6 +590,40 @@ class BFA_MechHardpointComponent : ScriptComponent
 
 		if (changed)
 			Replication.BumpMe();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	// Called by the server module-fire path. The structural arm damage target
+	// lives on a stable SlotManager child, not the swapped weapon prefab.
+	// This check does nothing for other mechs unless explicitly enabled.
+	bool CGS_IsHardpointOperational(int hardpointIndex)
+	{
+		if (!m_bUseArmMountDamage)
+			return true;
+		if (hardpointIndex < 0 || hardpointIndex >= GetHardpointCount())
+			return true;
+
+		string pointName = GetHardpointName(hardpointIndex);
+		string structuralSlot = string.Empty;
+		if (pointName == "ARM")
+			structuralSlot = "Arm_L";
+		else if (pointName == "RIGHT_ARM")
+			structuralSlot = "Arm_R";
+		else
+			return true;
+
+		IEntity mech = GetOwner();
+		if (!mech)
+			return false;
+		SlotManagerComponent slots = SlotManagerComponent.Cast(mech.FindComponent(SlotManagerComponent));
+		if (!slots)
+			return false;
+		EntitySlotInfo slot = slots.GetSlotByName(structuralSlot);
+		if (!slot)
+			return false;
+
+		BFA_MechPartHitZone zone = BFA_MechPartHitZone.FindOn(slot.GetAttachedEntity());
+		return zone && zone.GetHealth() > 1.0;
 	}
 
 	//------------------------------------------------------------------------------------------------

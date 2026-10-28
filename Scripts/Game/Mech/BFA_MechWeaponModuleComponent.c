@@ -239,6 +239,14 @@ class BFA_MechWeaponModuleComponent : ScriptComponent
 	//! Call once per shot from your fire code (server). Returns false = do not fire.
 	protected bool ConsumeRound()
 	{
+		// Only opt-in frames read their persistent arm-mount health.
+		// A refitted module must NEVER reset a destroyed arm's damage.
+		if (m_pMechOwner && m_iHardpointIndex >= 0)
+		{
+			BFA_MechHardpointComponent mounts = BFA_MechHardpointComponent.Cast(m_pMechOwner.FindComponent(BFA_MechHardpointComponent));
+			if (mounts && !mounts.CGS_IsHardpointOperational(m_iHardpointIndex))
+				return false;
+		}
 		// Heat, destroyed weapon part ... (BFA_MechExtension hooks).
 		if (m_pMechOwner && !BFA_MechExtension.Get().CanModuleFire(m_pMechOwner, this))
 			return false;
