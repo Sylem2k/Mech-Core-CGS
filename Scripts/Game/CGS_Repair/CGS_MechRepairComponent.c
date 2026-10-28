@@ -131,30 +131,68 @@ class CGS_MechRepairComponent : ScriptComponent
 		return zone.GetHealth() < previous;
 	}
 
-	// SERVER ONLY: restore an installed part's existing hit zone, never create a
-	// new weapon/part and never heal another part or the chassis hull.
+	// Field maintenance: wrench restores exactly 2% of the part's maximum HP
+	// per completed action, but field health NEVER exceeds 25%.
+	// The passed legacy amount is deliberately ignored: client-authored prefab
+	// amounts must not circumvent the server's repair policy.
 	bool ServerRepairPart(int index, IEntity operator, float amount)
 	{
-		if (!Replication.IsServer() || !CanService(operator, index) || amount <= 0)
+		return ServerApplyManualRepair(index, operator, 0.25);
+	}
+
+	// Bay maintenance: same 2% wrench operation, but can reach 100%.
+	// Caller MUST verify Mech Bay proximity on the server before invoking this.
+	bool ServerRepairPartAtBay(int index, IEntity operator)
+	{
+		return ServerApplyManualRepair(index, operator, 1.0);
+	}
+
+	protected bool ServerApplyManualRepair(int index, IEntity operator, float cap01)
+	{
+		if (!Replication.IsServer() || !CanService(operator, index))
 			return false;
 
 		IEntity target = ResolveRepairTarget(index);
 		BFA_MechPartHitZone zone = BFA_MechPartHitZone.FindOn(target);
-		if (!target || !zone || zone.GetMaxHealth() <= 0)
+		if (!zone || zone.GetMaxHealth() <= 0)
+			return false;
+
+		float maxHealth = zone.GetMaxHealth();
+		float limit = maxHealth * cap01;
+		float previous = zone.GetHealth();
+		if (previous >= limit - 0.001)
+			return false;
+
+		zone.SetHealth(Math.Min(limit, previous + maxHealth * 0.02));
+		if (IsTrackSite(index))
+			Print(string.Format("[CGS TRACK TEST] REPAIR %1: %2 -> %3 / %4 HP (cap=%5%%)", GetRepairSiteLabel(index), previous, zone.GetHealth(), maxHealth, cap01 * 100));
+		else
+			Print(string.Format("[CGS ARM TEST] REPAIR %1: %2 -> %3 / %4 HP (cap=%5%%)", GetRepairSiteLabel(index), previous, zone.GetHealth(), maxHealth, cap01 * 100));
+		return zone.GetHealth() > previous;
+	}
+
+	// Server-authorized Mech Bay crew finishes an asynchronous repair order.
+	// Caller verifies parked bay, target mech, operator/job and completion time.
+	// No proximity requirement: the requesting player can leave the garage while
+	// the crew works, but the mech must remain inside its original bay.
+	bool ServerCrewRepairPart(int index)
+	{
+		if (!Replication.IsServer())
+			return false;
+
+		IEntity target = ResolveRepairTarget(index);
+		BFA_MechPartHitZone zone = BFA_MechPartHitZone.FindOn(target);
+		if (!zone || zone.GetMaxHealth() <= 0)
 			return false;
 
 		float previous = zone.GetHealth();
 		if (previous >= zone.GetMaxHealth())
 			return false;
 
-		zone.SetHealth(Math.Min(zone.GetMaxHealth(), previous + amount));
-		if (IsTrackSite(index))
-			Print(string.Format("[CGS TRACK TEST] REPAIR %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
-		else
-			Print(string.Format("[CGS ARM TEST] REPAIR %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
+		zone.SetHealth(zone.GetMaxHealth());
+		Print(string.Format("[CGS BAY CREW] FINISHED %1: %2 -> %3 / %4 HP", GetRepairSiteLabel(index), previous, zone.GetHealth(), zone.GetMaxHealth()));
 		return zone.GetHealth() > previous;
 	}
-
 
 	int GetRepairSiteCount()
 	{
