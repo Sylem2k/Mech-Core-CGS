@@ -27,6 +27,18 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	[Attribute("0.35", UIWidgets.Auto, "Hover: acceleration/braking easing time in seconds. Bigger = more floating glide.", category: "Locomotion")]
 	float m_fHoverGlideTime;
 
+	[Attribute("true", UIWidgets.CheckBox, "Hover only: pilot can raise or lower the chassis like helicopter collective. Releasing the key holds the selected world altitude.", category: "Hover Collective")]
+	protected bool m_bHoverCollectiveEnabled;
+
+	[Attribute("6.0", UIWidgets.Auto, "Hover collective: climb speed in metres per second while ASCEND is held.", category: "Hover Collective")]
+	protected float m_fHoverCollectiveRiseSpeed;
+
+	[Attribute("4.5", UIWidgets.Auto, "Hover collective: descent speed in metres per second while DESCEND is held.", category: "Hover Collective")]
+	protected float m_fHoverCollectiveFallSpeed;
+
+	[Attribute("45", UIWidgets.Auto, "Hover collective: maximum extra height above the normal terrain/roof hover height, in metres.", category: "Hover Collective")]
+	protected float m_fHoverCollectiveMaxHeight;
+
 	[Attribute("", UIWidgets.EditBox, "Track clank one-shot audio event. Set to SOUND_MECH_TRACK_CLANK on tracked chassis.", category: "Locomotion Audio")]
 	string m_sTrackClankEvent;
 
@@ -238,6 +250,13 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	protected float m_fLocalTurn;
 	protected bool m_bLocalSprint;
 
+	// Pilot wish is local predicted input or server-authoritative RPC input.
+	// The altitude target is local simulation state, not a second health/Rpl pool.
+	protected float m_fLocalHoverCollective;
+	protected float m_fHoverCollective;
+	protected bool m_bHoverAltitudeHoldActive;
+	protected float m_fHoverAltitudeTargetY;
+
 	IEntity m_Pilot;
 	SlotManagerComponent m_SlotManager;
 
@@ -315,7 +334,11 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			m_fStrafe = 0;
 			m_fTurn = 0;
 			m_bSprint = false;
+			m_fHoverCollective = 0;
 		}
+		m_fLocalHoverCollective = 0;
+		// Keep an established hover altitude when the pilot exits. The mech
+		// must not fall from a roof or descend unexpectedly on seat changes.
 
 		ResetReconciliation();
 
@@ -385,6 +408,27 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	void SetSprintInput(bool active)
 	{
 		m_bLocalSprint = active;
+	}
+
+	// Pilot client prediction only. A matching collective value is sent by the
+	// existing owner-validated DriverInput RPC alongside W/S, A/D and turning.
+	void SetHoverCollectiveInput(float value)
+	{
+		m_fLocalHoverCollective = Math.Clamp(value, -1.0, 1.0);
+	}
+
+	bool IsHoverCollectiveEnabled()
+	{
+		return m_iLocomotionMode == 2 && m_bHoverCollectiveEnabled;
+	}
+
+	protected float GetEffectiveHoverCollectiveInput()
+	{
+		if (!IsHoverCollectiveEnabled() || CGS_IsEngineDriveLocked())
+			return 0;
+		if (HasLocalPilot())
+			return m_fLocalHoverCollective;
+		return m_fHoverCollective;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -562,7 +606,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	//! Only the server may author replicated driver input.
 	//! inputSeq: client input sequence (-1 for local/server callers that are never reordered).
-	void ServerSetDriverInput(float forward, float strafe, float turn, bool sprint, int inputSeq = -1)
+	void ServerSetDriverInput(float forward, float strafe, float turn, bool sprint, int inputSeq = -1, float hoverCollective = 0)
 	{
 		if (!Replication.IsServer())
 			return;
@@ -582,20 +626,25 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			strafe = 0;
 			turn = 0;
 			sprint = false;
+			hoverCollective = 0;
 		}
 
 		float newFwd = Math.Clamp(forward, -1.0, 1.0);
 		float newStrafe = Math.Clamp(strafe, -1.0, 1.0);
 		float newTurn = Math.Clamp(turn, -1.0, 1.0);
 		bool newSprint = sprint && m_bCanSprint;
+		float newCollective = 0;
+		if (IsHoverCollectiveEnabled())
+			newCollective = Math.Clamp(hoverCollective, -1.0, 1.0);
 
-		if (m_fFwd == newFwd && m_fStrafe == newStrafe && m_fTurn == newTurn && m_bSprint == newSprint)
+		if (m_fFwd == newFwd && m_fStrafe == newStrafe && m_fTurn == newTurn && m_bSprint == newSprint && m_fHoverCollective == newCollective)
 			return;
 
 		m_fFwd = newFwd;
 		m_fStrafe = newStrafe;
 		m_fTurn = newTurn;
 		m_bSprint = newSprint;
+		m_fHoverCollective = newCollective;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -1225,7 +1274,38 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		float targetY = m_fFilteredSupportY + m_fBodyHeight;
 		if (m_iLocomotionMode == 2)
 		{
+			// Terrain and roof support give the lowest safe hover altitude.
+			// Collective raises a WORLD-SPACE target above this support. Once
+			// released, that target does not slide back down to ground level.
 			targetY = targetY + Math.Max(m_fHoverClearance, 0.0);
+			float collective = GetEffectiveHoverCollectiveInput();
+			if (Math.AbsFloat(collective) > 0.05)
+			{
+				if (!m_bHoverAltitudeHoldActive)
+				{
+					m_bHoverAltitudeHoldActive = true;
+					m_fHoverAltitudeTargetY = Math.Max(owner.GetOrigin()[1], targetY);
+				}
+
+				float liftSpeed = Math.Max(m_fHoverCollectiveRiseSpeed, 0.1);
+				if (collective < 0)
+					liftSpeed = Math.Max(m_fHoverCollectiveFallSpeed, 0.1);
+				m_fHoverAltitudeTargetY += collective * liftSpeed * Math.Clamp(timeSlice, 0.0, 0.1);
+			}
+
+			if (m_bHoverAltitudeHoldActive)
+			{
+				// Do not descend through rooftop collision/support surfaces or
+				// fly indefinitely above terrain: raise/lower only within the
+				// configured envelope for this hover-mode chassis.
+				float ceilingY = targetY + Math.Max(m_fHoverCollectiveMaxHeight, 0.0);
+				m_fHoverAltitudeTargetY = Math.Clamp(m_fHoverAltitudeTargetY, targetY, ceilingY);
+				if (collective < -0.05 && m_fHoverAltitudeTargetY <= targetY + 0.03)
+					m_bHoverAltitudeHoldActive = false;
+				else
+					targetY = m_fHoverAltitudeTargetY;
+			}
+
 			if (m_fHoverBob > 0 && GetGame() && GetGame().GetWorld())
 			{
 				float phase = GetGame().GetWorld().GetWorldTime() * 0.001 * Math.Max(m_fHoverBobHz, 0) * 2.0 * Math.PI;
@@ -1247,6 +1327,11 @@ class BFA_MechMovementComponent : ScriptGameComponent
 
 			float riseLimit = Math.Max(m_fGroundRiseSpeed, Math.Max(m_fAvgHeightSpeed, 0.01));
 			float fallLimit = Math.Max(m_fGroundFallSpeed, Math.Max(m_fAvgHeightSpeed, 0.01));
+			if (m_iLocomotionMode == 2 && m_bHoverAltitudeHoldActive)
+			{
+				riseLimit = Math.Max(riseLimit, Math.Max(m_fHoverCollectiveRiseSpeed, 0.1));
+				fallLimit = Math.Max(fallLimit, Math.Max(m_fHoverCollectiveFallSpeed, 0.1));
+			}
 			desiredVertical = Math.Clamp(wanted, -fallLimit, riseLimit);
 		}
 
