@@ -15,6 +15,26 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	[Attribute("true", UIWidgets.CheckBox, "Tracked: A/D inputs steer the chassis in addition to Q/E; lateral strafing is disabled.", category: "Locomotion")]
 	bool m_bTrackedADSteering;
 
+	// WALKER ONLY. Opt-in so existing MechCore projects retain their original controls.
+	// The mech still uses IK legs, NOT tracked locomotion.
+	[Attribute("false", UIWidgets.CheckBox, "Walker: A/D rotates the chassis with stepping legs (like tracked steering). No sideways strafe.", category: "Walker Steering")]
+	bool m_bWalkerADSteering;
+
+	[Attribute("false", UIWidgets.CheckBox, "Walker: gradually turn the leg/chassis heading toward a twisted torso's aim when outside the follow deadzone.", category: "Walker Steering")]
+	bool m_bWalkerFollowTorso;
+
+	[Attribute("false", UIWidgets.CheckBox, "Walker torso follow: let the legs pivot in place even with W/S released. OFF = torso-follow turns only while walking.", category: "Walker Steering")]
+	bool m_bWalkerPivotToTorso;
+
+	[Attribute("38", UIWidgets.Auto, "Walker torso-follow starts outside this many degrees of torso twist. Below it, the upper body aims independently.", category: "Walker Steering")]
+	float m_fWalkerFollowStartDeg;
+
+	[Attribute("78", UIWidgets.Auto, "Walker torso-follow reaches its configured maximum turn at this many degrees of torso twist.", category: "Walker Steering")]
+	float m_fWalkerFollowFullDeg;
+
+	[Attribute("0.55", UIWidgets.Auto, "Maximum automatic torso-follow turn input (0..1). Multiplied by the regular angular speed.", category: "Walker Steering")]
+	float m_fWalkerFollowMaxInput;
+
 	[Attribute("1.25", UIWidgets.Auto, "Hover: extra ground clearance in metres, in addition to the normal Ground Point height.", category: "Locomotion")]
 	float m_fHoverClearance;
 
@@ -1138,6 +1158,43 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			if (m_bTrackedADSteering)
 				turnInput = Math.Clamp(turnInput + strafeInput, -1.0, 1.0);
 			strafeInput = 0;
+		}
+		else if (m_iLocomotionMode == 0)
+		{
+			// WALKER ONLY: re-purpose A/D as rotation, never lateral velocity.
+			// This is done on both the predicting driver and the server so
+			// multiplayer movement reconciliation keeps using the same turn.
+			if (m_bWalkerADSteering)
+			{
+				turnInput = Math.Clamp(turnInput + strafeInput, -1.0, 1.0);
+				strafeInput = 0;
+			}
+
+			// MechWarrior-style torso-follow: keep the torso free to aim within
+			// a cone, then let the hips/IK legs turn underneath it. Manual
+			// A/D or Q/E steering always wins over the automatic follow.
+			if (m_bWalkerFollowTorso && Math.AbsFloat(turnInput) < 0.04)
+			{
+				if (m_bWalkerPivotToTorso || Math.AbsFloat(forwardInput) > 0.08)
+				{
+					CGS_TorsoTwistComponent twist = CGS_TorsoTwistComponent.Find(owner);
+					if (twist)
+					{
+						float torsoYaw = twist.GetTwist();
+						float yawAbs = Math.AbsFloat(torsoYaw);
+						float start = Math.Clamp(m_fWalkerFollowStartDeg, 0.0, 175.0);
+						float full = Math.Max(m_fWalkerFollowFullDeg, start + 1.0);
+						if (yawAbs > start)
+						{
+							float follow = Math.Clamp((yawAbs - start) / (full - start), 0.0, 1.0);
+							float maxFollow = Math.Clamp(m_fWalkerFollowMaxInput, 0.0, 1.0);
+							turnInput = follow * maxFollow;
+							if (torsoYaw < 0)
+								turnInput = -turnInput;
+						}
+					}
+				}
+			}
 		}
 		BFA_MechExtension extension = BFA_MechExtension.Get();
 		bool sprinting = m_bCanSprint && GetEffectiveSprintInput() && extension.CanMechSprint(owner);
