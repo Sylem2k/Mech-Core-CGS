@@ -53,8 +53,11 @@ class BFA_MechLegComponent : ScriptComponent
 	[Attribute("12.0", UIWidgets.EditBox, "Clamp measured root speed used by the visual rig")]
 	float m_fMaxMeasuredSpeed;
 
-	[Attribute(desc: "Optional: foot bone, only used by the IK debug view (DiagMenu). Not required.")]
+	[Attribute(desc: "Optional: foot or ankle joint marker (usually J3), used by the IK debug view and optionally as the foot rest position.")]
 	ref PointInfo m_LastBone;
+
+	[Attribute("false", UIWidgets.CheckBox, "Use the J3 Last Bone marker's INITIAL model-space location as the idle foot position, rather than this leg entity's origin. Safe for rigs whose foot is offset from the leg origin.", category: "Leg Rig")]
+	bool m_bFootRestAtLastBone;
 
 	// ---- Your own leg model / rig ---------------------------------------------------------------
 	[Attribute("1", UIWidgets.Auto, "SIZE SCALE of this leg. 1 = Sentinel leg. Scales step height, stride, foot lead and ground search so giant legs walk with giant steps. Use the same value as the mech's Movement > Size Scale.", category: "Leg Rig")]
@@ -93,6 +96,11 @@ class BFA_MechLegComponent : ScriptComponent
 	protected IEntity m_BodyEntity;
 	protected bool m_bIsLeftLeg;
 	protected bool m_bLegInitialized;
+
+	// Freeze the J3 model-local REST position before animation is driven, so the
+	// target never follows its own moving IK bone (feedback-loop avoidance).
+	protected bool m_bFootRestCaptured;
+	protected vector m_vFootRestModel;
 
 	// World-space foot state. During stance m_vPlantedFoot never moves with the mech root.
 	protected vector m_vPlantedFoot;
@@ -302,11 +310,14 @@ class BFA_MechLegComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! Where this foot stands when idle: below the leg's attach point plus Foot Rest Offset
-	//! (body directions, X mirrored for left legs).
+	//! Where this foot stands when idle: use the initial J3 rest marker if enabled;
+	//! otherwise retain the legacy leg-entity origin for existing mechs.
+	//! Foot Rest Offset still operates in mech-root directions.
 	protected vector GetFootHome()
 	{
 		vector home = GetOwner().GetOrigin();
+		if (m_bFootRestAtLastBone && m_bFootRestCaptured)
+			home = GetOwner().CoordToParent(m_vFootRestModel);
 		if (m_vFootRestOffset.LengthSq() < 0.000001)
 			return home;
 
@@ -501,7 +512,22 @@ class BFA_MechLegComponent : ScriptComponent
 		m_bIsLeftLeg = isLeftLeg;
 		ApplySizeScale();
 		if (m_LastBone)
+		{
 			m_LastBone.Init(GetOwner());
+			if (m_bFootRestAtLastBone)
+			{
+				vector restMat[4];
+				m_LastBone.GetModelTransform(restMat);
+				m_vFootRestModel = restMat[3];
+				m_bFootRestCaptured = true;
+				BFA_MechLog.Log(string.Format("[BFA IK REST] %1 sideLeft=%2 J3 model=%3 legOrigin=%4",
+					GetOwner(), m_bIsLeftLeg, m_vFootRestModel, GetOwner().GetOrigin()));
+			}
+		}
+		else if (m_bFootRestAtLastBone)
+		{
+			BFA_MechLog.Log(string.Format("[BFA IK REST] %1: J3 foot rest requested but Last Bone point is missing; using legacy origin", GetOwner()), LogLevel.WARNING);
+		}
 
 		m_AnimController = AnimationControllerComponent.Cast(GetOwner().FindComponent(AnimationControllerComponent));
 		if (!m_AnimController)
