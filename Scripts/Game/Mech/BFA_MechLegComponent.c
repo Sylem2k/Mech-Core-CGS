@@ -273,6 +273,10 @@ class BFA_MechLegComponent : ScriptComponent
 			return;
 
 		vector localIKTargetPos = GetOwner().CoordToLocal(m_vCurrentIK);
+		// J3-rest-enabled boss legs use an explicit world-to-leg transform; the
+		// original legacy path is preserved for other mechs and Sentinels.
+		if (m_bFootRestAtLastBone && m_bFootRestCaptured)
+			localIKTargetPos = IKWorldPointToLocal(m_vCurrentIK);
 
 		// Optional per-leg visual sole trim. V30 calibrates the Sentinel stance at the body-height
 		// controller instead; this remains available only for models whose IK marker is
@@ -317,7 +321,7 @@ class BFA_MechLegComponent : ScriptComponent
 	{
 		vector home = GetOwner().GetOrigin();
 		if (m_bFootRestAtLastBone && m_bFootRestCaptured)
-			home = GetOwner().CoordToParent(m_vFootRestModel);
+			home = IKRestPointToWorld(m_vFootRestModel);
 		if (m_vFootRestOffset.LengthSq() < 0.000001)
 			return home;
 
@@ -334,6 +338,36 @@ class BFA_MechLegComponent : ScriptComponent
 			side = -1.0;
 
 		return home + right * (m_vFootRestOffset[0] * side) + up * m_vFootRestOffset[1] + forward * m_vFootRestOffset[2];
+	}
+
+	//------------------------------------------------------------------------------------------------
+	// The Warlord's legs are child entities under a SlotManager. CoordToParent()
+	// produces coordinates in the parent space, NOT necessarily the world space.
+	// Every planted foot and terrain trace is in WORLD space.
+	protected vector IKRestPointToWorld(vector restModel)
+	{
+		vector mat[4];
+		GetOwner().GetWorldTransform(mat);
+		return mat[3] + mat[0] * restModel[0] + mat[1] * restModel[1] + mat[2] * restModel[2];
+	}
+
+	//------------------------------------------------------------------------------------------------
+	// All world-space IK goals must be transformed by the same FULL world matrix.
+	// Project onto its basis vectors and divide by squared axis length to retain
+	// scale in the leg's hierarchy (unlike the unscaled dot-product shortcut).
+	protected vector IKWorldPointToLocal(vector worldPoint)
+	{
+		vector mat[4];
+		GetOwner().GetWorldTransform(mat);
+		vector delta = worldPoint - mat[3];
+		vector local = vector.Zero;
+		for (int axis = 0; axis < 3; axis++)
+		{
+			float axisLenSq = mat[axis].LengthSq();
+			if (axisLenSq > 0.000001)
+				local[axis] = vector.Dot(delta, mat[axis]) / axisLenSq;
+		}
+		return local;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -520,8 +554,9 @@ class BFA_MechLegComponent : ScriptComponent
 				m_LastBone.GetModelTransform(restMat);
 				m_vFootRestModel = restMat[3];
 				m_bFootRestCaptured = true;
-				BFA_MechLog.Log(string.Format("[BFA IK REST] %1 sideLeft=%2 J3 model=%3 legOrigin=%4",
-					GetOwner(), m_bIsLeftLeg, m_vFootRestModel, GetOwner().GetOrigin()));
+				BFA_MechLog.Log(string.Format("[BFA IK REST] %1 sideLeft=%2 J3 model=%3 J3 world=%4 legWorldOrigin=%5 rootWorldOrigin=%6",
+					GetOwner(), m_bIsLeftLeg, m_vFootRestModel, IKRestPointToWorld(m_vFootRestModel),
+					GetOwner().GetOrigin(), bodyEntity.GetOrigin()));
 			}
 		}
 		else if (m_bFootRestAtLastBone)
