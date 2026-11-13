@@ -1,0 +1,4 @@
+Vehicle Walker_1 : "{5D81046FA6ED2F30}Prefabs/Vehicles/Mech/Core/Walker_01.et" {
+ coords 126.381 6.019 123.628
+ angles 0 9.6 0
+}
