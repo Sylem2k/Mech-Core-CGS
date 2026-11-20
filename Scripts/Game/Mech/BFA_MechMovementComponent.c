@@ -21,7 +21,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	bool m_bWalkerADSteering;
 	[Attribute("false", UIWidgets.CheckBox, "Independent walker hip steering: A/D turns only Hip and leg slots; W/S follows their forward heading. Diagnostic opt-in.", category: "Walker Steering")]
 	bool m_bWalkerHipDrive;
-	[Attribute("90", UIWidgets.Auto, "Max independent hip turn left or right (degrees).", category: "Walker Steering")]
+	[Attribute("180", UIWidgets.Auto, "Independent hip yaw limit (degrees). Set 180 for unrestricted full-circle lower-body turning.", category: "Walker Steering")]
 	float m_fWalkerHipMaxYaw;
 
 	[Attribute("false", UIWidgets.CheckBox, "Walker: gradually turn the leg/chassis heading toward a twisted torso's aim when outside the follow deadzone.", category: "Walker Steering")]
@@ -1232,10 +1232,16 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	protected void TickIndependentHip(float steering, float dt, IEntity owner)
 	{
 		float yawDelta = Math.Clamp(steering, -1.0, 1.0) * m_fAngularSpeed * Math.RAD2DEG * Math.Clamp(dt, 0, 0.1);
-		float yawLimit = Math.Clamp(m_fWalkerHipMaxYaw, 0, 175);
+		float yawLimit = Math.Clamp(m_fWalkerHipMaxYaw, 0, 180);
 		if (Replication.IsServer())
 		{
-			m_fWalkerHipYawNet = Math.Clamp(m_fWalkerHipYawNet + yawDelta, -yawLimit, yawLimit);
+			m_fWalkerHipYawNet = m_fWalkerHipYawNet + yawDelta;
+			if (yawLimit >= 179.99)
+			{
+				if (m_fWalkerHipYawNet > 180) m_fWalkerHipYawNet -= 360;
+				if (m_fWalkerHipYawNet < -180) m_fWalkerHipYawNet += 360;
+			}
+			else m_fWalkerHipYawNet = Math.Clamp(m_fWalkerHipYawNet, -yawLimit, yawLimit);
 			int now = owner.GetWorld().GetWorldTime();
 			if (now >= m_iWalkerHipNextSend && Math.AbsFloat(m_fWalkerHipYawNet - m_fWalkerHipLastSent) > 0.05)
 			{
@@ -1245,7 +1251,15 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			}
 		}
 		else if (HasLocalPilot())
-			m_fWalkerHipYawLocal = Math.Clamp(m_fWalkerHipYawLocal + yawDelta, -yawLimit, yawLimit);
+		{
+			m_fWalkerHipYawLocal = m_fWalkerHipYawLocal + yawDelta;
+			if (yawLimit >= 179.99)
+			{
+				if (m_fWalkerHipYawLocal > 180) m_fWalkerHipYawLocal -= 360;
+				if (m_fWalkerHipYawLocal < -180) m_fWalkerHipYawLocal += 360;
+			}
+			else m_fWalkerHipYawLocal = Math.Clamp(m_fWalkerHipYawLocal, -yawLimit, yawLimit);
+		}
 		ApplyIndependentHipPose(owner);
 	}
 
