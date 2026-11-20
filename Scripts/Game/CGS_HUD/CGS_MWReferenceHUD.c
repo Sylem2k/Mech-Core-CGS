@@ -341,8 +341,16 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
             float x = cx + delta * span / 180.0;
             int norm = (int)bearing;
             bool major = norm % 30 == 0;
-            Place(tick, x, major ? 52 : 57);
-            Size(tick, major ? 2 : 1, major ? 10 : 5);
+            if (major)
+            {
+                Place(tick, x, 52);
+                Size(tick, 2, 10);
+            }
+            else
+            {
+                Place(tick, x, 57);
+                Size(tick, 1, 5);
+            }
             bool withLabel = norm % 45 == 0;
             Show(label, withLabel);
             if (!withLabel)
