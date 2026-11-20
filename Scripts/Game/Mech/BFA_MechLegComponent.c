@@ -313,6 +313,28 @@ class BFA_MechLegComponent : ScriptComponent
 	//! Where this foot stands when idle: use the initial J3 rest marker if enabled;
 	//! otherwise retain the legacy leg-entity origin for existing mechs.
 	//! Foot Rest Offset still operates in mech-root directions.
+	// Independent hip steering: use the already-rotated Hip slot as the
+	// coordinate frame for forward foot leads and no-cross constraints.
+	// The normal mechs continue using their unmodified root basis.
+	protected IEntity GetWalkerGaitBasis()
+	{
+		IEntity root = m_BodyEntity;
+		if (!root)
+			root = GetOwner().GetRootParent();
+		if (!root)
+			return null;
+		BFA_MechMovementComponent move = BFA_MechMovementComponent.Cast(root.FindComponent(BFA_MechMovementComponent));
+		if (!move || !move.UsesIndependentWalkerHip())
+			return root;
+		SlotManagerComponent slots = SlotManagerComponent.Cast(root.FindComponent(SlotManagerComponent));
+		if (!slots)
+			return root;
+		EntitySlotInfo hip = slots.GetSlotByName("Hip");
+		if (hip && hip.GetAttachedEntity())
+			return hip.GetAttachedEntity();
+		return root;
+	}
+
 	protected vector GetFootHome()
 	{
 		vector home = GetOwner().GetOrigin();
@@ -321,9 +343,7 @@ class BFA_MechLegComponent : ScriptComponent
 		if (m_vFootRestOffset.LengthSq() < 0.000001)
 			return home;
 
-		IEntity body = m_BodyEntity;
-		if (!body)
-			body = GetOwner().GetRootParent();
+		IEntity body = GetWalkerGaitBasis();
 
 		vector right = body.GetTransformAxis(0);
 		vector up = body.GetTransformAxis(1);
@@ -357,9 +377,7 @@ class BFA_MechLegComponent : ScriptComponent
 		// Limp: a hurt leg reaches less far.
 		lead = lead * Math.Clamp(1.0 - 0.55 * m_fLimp, 0.2, 1.0);
 
-		IEntity body = m_BodyEntity;
-		if (!body)
-			body = GetOwner().GetRootParent();
+		IEntity body = GetWalkerGaitBasis();
 
 		// Turning: the rest spot swings round the body, so aim where it will be.
 		vector target = neutral;
