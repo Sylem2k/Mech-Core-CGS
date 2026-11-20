@@ -37,6 +37,10 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
     protected ref array<TextWidget> m_aWeaponNames = {};
     protected ref array<TextWidget> m_aWeaponAmmo = {};
     protected ref array<BFA_MechWeaponModuleComponent> m_aMWWeapons = {};
+    // Real selected weapon pointing markers. Separate from camera-centered sight.
+    protected ref array<ImageWidget> m_aGunAimPips = {};
+    protected ref array<TextWidget> m_aGunAimIds = {};
+    protected TextWidget m_wWeaponAimLegend;
 
     protected TextWidget m_wHeading;
     protected TextWidget m_wHipBearing;
@@ -104,7 +108,13 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
         m_wSightBottom = Rect(35, 2, mint);
         m_wSightH = Rect(20, 1, mint);
         m_wSightV = Rect(1, 20, mint);
-        m_wTargetReadout = Text(140, 18, 13, mint);
+        m_wTargetReadout = Text(230, 18, 12, mint);
+        m_wWeaponAimLegend = Text(390, 22, 12, mint);
+        for (int i = 0; i < MW_MAX_WEAPON_ROWS; i++)
+        {
+            m_aGunAimPips.Insert(Rect(9, 9, mint));
+            m_aGunAimIds.Insert(Text(35, 16, 11, mint));
+        }
 
         for (int n = 0; n < MW_RADAR_RINGS * MW_RADAR_STEPS; n++)
             m_aRadarRings.Insert(Rect(2, 2, dim));
@@ -174,6 +184,9 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
         m_aWeaponNames.Clear();
         m_aWeaponAmmo.Clear();
         m_aMWWeapons.Clear();
+        m_aGunAimPips.Clear();
+        m_aGunAimIds.Clear();
+        m_wWeaponAimLegend = null;
         m_pPartData = null;
         m_fLastWidth = -1;
         m_fLastHeight = -1;
@@ -274,8 +287,7 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
 
         DrawArmor(mech, screenW, screenH);
         DrawWeapons(mech, screenW, screenH);
-        if (m_wTargetReadout)
-            m_wTargetReadout.SetText("WEAPON AIM");
+        DrawWeaponAimPips(mech, screenW, screenH);
     }
 
     protected float WrapMWHeading(float value)
@@ -383,6 +395,114 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
         Place(m_wSightH, cx - 10, cy);
         Place(m_wSightV, cx, cy - 10);
         Place(m_wTargetReadout, cx + r * 0.3, cy + r * 0.48);
+    }
+
+    // Exact bore/pointing points from the selected real weapon modules.
+    // Guns converge on camera trace; missile launch-lines are ONLY their
+    // present muzzle direction, not a guaranteed terminal or lock position.
+    protected void DrawWeaponAimPips(IEntity mech, float screenW, float screenH)
+    {
+        BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(mech.FindComponent(BFA_MechCoreComponent));
+        bool canAim = core && core.CanStationAim(m_sHudStation);
+        for (int i = 0; i < m_aGunAimPips.Count(); i++)
+        {
+            Show(m_aGunAimPips[i], false);
+            Show(m_aGunAimIds[i], false);
+        }
+        Show(m_wWeaponAimLegend, canAim);
+        Show(m_wTargetReadout, canAim);
+        if (!canAim)
+            return;
+
+        vector camera[4];
+        GetGame().GetWorld().GetCurrentCamera(camera);
+        vector forward = camera[2].Normalized();
+        float aimX = screenW * 0.5;
+        float aimY = screenH * 0.5;
+        BFA_MechAimComponent aim = BFA_MechAimComponent.Cast(mech.FindComponent(BFA_MechAimComponent));
+        if (aim)
+        {
+            float ax, ay;
+            vector target = aim.GetLocalAimPointWorld();
+            if (target != vector.Zero && ToScreen(target, camera[3], forward, ax, ay))
+            {
+                aimX = ax;
+                aimY = ay;
+            }
+        }
+
+        int guns = 0;
+        int rockets = 0;
+        int guided = 0;
+        int rows = Math.Min(m_aMWWeapons.Count(), MW_MAX_WEAPON_ROWS);
+        for (int j = 0; j < rows; j++)
+        {
+            BFA_MechWeaponModuleComponent weapon = m_aMWWeapons[j];
+            if (!weapon)
+                continue;
+            bool rocket = BFA_MechRocketLauncherModuleComponent.Cast(weapon) != null;
+            bool homing = CGS_Titan_Missile.Cast(weapon) != null;
+            if (rocket)
+                rockets++;
+            else
+                guns++;
+            if (homing)
+                guided++;
+
+            // This is the same real per-muzzle point used by the original
+            // BFA_MechCrosshairHUD (and kept when that HUD is hidden).
+            float x, y;
+            if (!ToScreen(weapon.GetPointedPoint(), camera[3], forward, x, y))
+                continue;
+            if (x < 0 || x > screenW || y < 0 || y > screenH)
+                continue;
+
+            ImageWidget marker = m_aGunAimPips[j];
+            TextWidget id = m_aGunAimIds[j];
+            Show(marker, true);
+            Show(id, true);
+            Place(marker, x - 4.5, y - 4.5);
+            Place(id, x + 6, y - 9);
+            if (rocket)
+            {
+                Tint(marker, new Color(1, 0.68, 0.23, 0.96));
+                if (id)
+                    id.SetText(string.Format("R%1", j + 1));
+            }
+            else
+            {
+                float dx = x - aimX;
+                float dy = y - aimY;
+                if (dx * dx + dy * dy <= 196)
+                    Tint(marker, new Color(0.25, 1, 0.71, 0.96));
+                else
+                    Tint(marker, new Color(0.97, 0.79, 0.26, 0.96));
+                if (id)
+                    id.SetText(string.Format("G%1", j + 1));
+            }
+        }
+
+        Place(m_wWeaponAimLegend, screenW * 0.5 - 190, screenH * 0.5 + 186);
+        if (m_wWeaponAimLegend)
+        {
+            string info = "G = GUN BORE / CAMERA AIM";
+            if (rockets > 0)
+                info = "R = ROCKET / MISSILE LAUNCH LINE";
+            if (guns > 0 && rockets > 0)
+                info = "G = GUN    R = MISSILE LAUNCH";
+            if (guided > 0)
+                info = info + " (GUIDANCE AFTER LAUNCH)";
+            m_wWeaponAimLegend.SetText(info);
+        }
+        if (m_wTargetReadout)
+        {
+            if (guided > 0)
+                m_wTargetReadout.SetText("MISSILE AIM / NO LOCK DATA");
+            else if (rockets > 0)
+                m_wTargetReadout.SetText("ROCKET LAUNCH AIM");
+            else
+                m_wTargetReadout.SetText("WEAPON AIM");
+        }
     }
 
     protected Color MWHealthColor(float health, bool dead)
