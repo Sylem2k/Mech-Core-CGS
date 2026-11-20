@@ -79,6 +79,8 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	protected bool m_bHipWorldHeadingCaptured;
 	protected float m_fHipWorldHeading;
 	protected float m_fHipLastAimLocalYaw;
+	// Ignore camera auto-alignment while the hip root is being steered, plus its tail.
+	protected float m_fHipIgnoreCameraAimUntil;
 	protected float m_fHipNextNetTime;
 	protected float m_fHipNextLog;
 
@@ -268,6 +270,7 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	protected void HipResetHeadingHold()
 	{
 		m_bHipWorldHeadingCaptured = false;
+		m_fHipIgnoreCameraAimUntil = 0;
 		if (Replication.IsServer() && m_bHipRepWorldHeadingValid)
 		{
 			m_bHipRepWorldHeadingValid = false;
@@ -300,15 +303,31 @@ class CGS_TorsoTwistComponent : ScriptComponent
 		}
 		else
 		{
-			// Camera remains parented to the vehicle and therefore turns when
-			// its hips turn. Raw aim yaw in mech LOCAL space does not distinguish
-			// that chassis motion. Only a change in LOCAL aim yaw is treated as
-			// a pilot sight adjustment, keeping world heading locked otherwise.
-			float aimChange = HipShortestYaw(m_fHipLastAimLocalYaw, rawAimYaw);
-			if (Math.AbsFloat(aimChange) > 0.05)
+			// A third-person vehicle camera can auto-align with the rotating
+			// root. That changes local camera yaw WITHOUT any deliberate mouse
+			// movement. Do not accumulate that change into the held torso heading,
+			// otherwise the upper body follows A/D steering as if it were aimed.
+			BFA_MechMovementComponent movement = BFA_MechMovementComponent.Cast(owner.FindComponent(BFA_MechMovementComponent));
+			bool steeringHips = movement && (Math.AbsFloat(movement.GetRightInput()) > 0.04
+				|| Math.AbsFloat(movement.GetTurnInput()) > 0.04);
+			float timeNow = Now();
+			if (steeringHips)
+				m_fHipIgnoreCameraAimUntil = timeNow + 0.3;
+
+			if (steeringHips || timeNow < m_fHipIgnoreCameraAimUntil)
 			{
-				m_fHipWorldHeading = m_fHipWorldHeading + aimChange;
+				// Continuously reset the baseline so post-turn camera easing cannot
+				// apply all the suppressed rotation at once on key release.
 				m_fHipLastAimLocalYaw = rawAimYaw;
+			}
+			else
+			{
+				float aimChange = HipShortestYaw(m_fHipLastAimLocalYaw, rawAimYaw);
+				if (Math.AbsFloat(aimChange) > 0.05)
+				{
+					m_fHipWorldHeading = m_fHipWorldHeading + aimChange;
+					m_fHipLastAimLocalYaw = rawAimYaw;
+				}
 			}
 		}
 
