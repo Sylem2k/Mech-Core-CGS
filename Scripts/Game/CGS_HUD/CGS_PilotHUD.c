@@ -1060,13 +1060,43 @@ class CGS_PilotHUD
 }
 
 //------------------------------------------------------------------------------------------------
-//! Draws the pilot HUD together with the built-in HUD (same lifetime).
+//! Two EXCLUSIVE display modes. The reference layout is a separate full HUD,
+//! not a painted-on top bar over the classic BFA bottom-left/right panels.
 modded class BFA_MechHUDDisplay
 {
 	protected ref CGS_PilotHUD m_CgsPilotHUD;
+	protected ref CGS_MWReferenceHUD m_CgsMWReferenceHUD;
 
 	override void Update(IEntity mech, string station)
 	{
+		CGS_PilotHUDComponent cfg = CGS_PilotHUDComponent.Find(mech);
+		bool useMW = cfg && cfg.m_bEnabled && cfg.m_bReferenceLayout;
+
+		if (useMW)
+		{
+			// The old built-in weapon/mech panels are managed by the base
+			// BFA HUD. Destroy them ONCE on entering this mode instead of
+			// updating them invisibly beneath the new display every frame.
+			if (m_bBuilt)
+				super.Destroy();
+			if (m_CgsPilotHUD)
+			{
+				m_CgsPilotHUD.Destroy();
+				m_CgsPilotHUD = null;
+			}
+			if (!m_CgsMWReferenceHUD)
+				m_CgsMWReferenceHUD = new CGS_MWReferenceHUD();
+			m_CgsMWReferenceHUD.Update(mech, station);
+			return;
+		}
+
+		// When changing into another mech restore the ORIGINAL HUD,
+		// including the unmodified old part panel/weapon layout.
+		if (m_CgsMWReferenceHUD)
+		{
+			m_CgsMWReferenceHUD.Destroy();
+			m_CgsMWReferenceHUD = null;
+		}
 		super.Update(mech, station);
 		if (!m_CgsPilotHUD)
 			m_CgsPilotHUD = new CGS_PilotHUD();
@@ -1075,6 +1105,11 @@ modded class BFA_MechHUDDisplay
 
 	override void Destroy()
 	{
+		if (m_CgsMWReferenceHUD)
+		{
+			m_CgsMWReferenceHUD.Destroy();
+			m_CgsMWReferenceHUD = null;
+		}
 		if (m_CgsPilotHUD)
 		{
 			m_CgsPilotHUD.Destroy();
