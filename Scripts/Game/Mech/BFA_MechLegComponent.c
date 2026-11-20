@@ -104,6 +104,8 @@ class BFA_MechLegComponent : ScriptComponent
 
 	// World-space foot state. During stance m_vPlantedFoot never moves with the mech root.
 	protected vector m_vPlantedFoot;
+	protected bool m_bGaitBasisChecked;
+	protected IEntity m_pGaitBasis;
 	protected vector m_vSwingFrom;
 	protected vector m_vSwingTarget;
 	protected vector m_vCurrentIK;
@@ -323,15 +325,28 @@ class BFA_MechLegComponent : ScriptComponent
 			root = GetOwner().GetRootParent();
 		if (!root)
 			return null;
+		if (m_bGaitBasisChecked)
+		{
+			if (m_pGaitBasis)
+				return m_pGaitBasis;
+			return root;
+		}
 		BFA_MechMovementComponent move = BFA_MechMovementComponent.Cast(root.FindComponent(BFA_MechMovementComponent));
 		if (!move || !move.UsesIndependentWalkerHip())
+		{
+			m_bGaitBasisChecked = true;
 			return root;
+		}
 		SlotManagerComponent slots = SlotManagerComponent.Cast(root.FindComponent(SlotManagerComponent));
 		if (!slots)
 			return root;
 		EntitySlotInfo hip = slots.GetSlotByName("Hip");
 		if (hip && hip.GetAttachedEntity())
-			return hip.GetAttachedEntity();
+		{
+			m_pGaitBasis = hip.GetAttachedEntity();
+			m_bGaitBasisChecked = true;
+			return m_pGaitBasis;
+		}
 		return root;
 	}
 
