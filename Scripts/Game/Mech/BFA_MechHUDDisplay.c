@@ -207,6 +207,22 @@ class BFA_MechHUDDisplay
 		if (!m_bBuilt)
 			Build();
 
+		// HUD style is opt-in on the exact mech prefab. The underlying
+		// weapons/health widgets, data and their update flow are unchanged.
+		CGS_PilotHUDComponent pilotCfg = CGS_PilotHUDComponent.Find(mech);
+		bool referenceStyle = pilotCfg && pilotCfg.m_bReferenceLayout;
+		Color panel = new Color(0.02, 0.02, 0.03, 0.55);
+		Color title = new Color(0.95, 0.75, 0.35, 1);
+		if (referenceStyle)
+		{
+			panel = new Color(0.01, 0.05, 0.055, 0.46);
+			title = new Color(0.38, 0.96, 0.82, 0.95);
+		}
+		if (m_wWeaponsBg) m_wWeaponsBg.SetColor(panel);
+		if (m_wMechBg) m_wMechBg.SetColor(panel);
+		if (m_wWeaponsTitle) m_wWeaponsTitle.SetColor(title);
+		if (m_wMechTitle) m_wMechTitle.SetColor(title);
+
 		float screenW = ws.DPIUnscale(ws.GetWidth());
 		float screenH = ws.DPIUnscale(ws.GetHeight());
 

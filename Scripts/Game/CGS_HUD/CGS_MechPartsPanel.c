@@ -69,6 +69,7 @@ class CGS_MechPartsPanel
 	protected string m_sMechName;
 	protected float m_fNextList;
 	protected float m_fNextHealth;
+	protected bool m_bReferenceStyle;
 
 	// Per section (index = CGS_EMechHudSection): present, worst health, destroyed.
 	protected ref array<bool> m_aHas = {};
@@ -177,6 +178,24 @@ class CGS_MechPartsPanel
 		if (!mech)
 			return;
 
+		CGS_PilotHUDComponent cfg = CGS_PilotHUDComponent.Find(mech);
+		m_bReferenceStyle = cfg && cfg.m_bReferenceLayout;
+		if (m_wBg)
+		{
+			if (m_bReferenceStyle)
+				m_wBg.SetColor(new Color(0.01, 0.05, 0.055, 0.44));
+			else
+				m_wBg.SetColor(new Color(0.02, 0.02, 0.03, 0.6));
+		}
+		Color edgeTint = new Color(1, 1, 1, 0.55);
+		if (m_bReferenceStyle)
+			edgeTint = new Color(0.38, 0.96, 0.82, 0.55);
+		foreach (ImageWidget border : m_aBorder)
+		{
+			if (border)
+				border.SetColor(edgeTint);
+		}
+
 		float now = Now();
 		if (mech != m_pMech || now >= m_fNextList)
 		{
@@ -252,7 +271,11 @@ class CGS_MechPartsPanel
 		if (dead)
 			return new Color(0.15, 0.15, 0.15, 0.9);
 		if (health > 0.75)
-			return new Color(0.95, 0.95, 0.95, 0.95); // fine: white
+		{
+			if (m_bReferenceStyle)
+				return new Color(0.24, 0.88, 0.77, 0.96); // healthy armor in teal
+			return new Color(0.95, 0.95, 0.95, 0.95);
+		}
 		if (health > 0.5)
 			return new Color(0.95, 0.9, 0.1, 0.95);   // damaged: yellow
 		if (health > 0.25)

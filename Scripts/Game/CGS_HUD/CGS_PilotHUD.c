@@ -49,6 +49,9 @@ class CGS_PilotHUDComponent : ScriptComponent
 	[Attribute("true", UIWidgets.CheckBox, "Show the heat / twist / speed strip.", category: "Pilot HUD Parts")]
 	bool m_bShowStatus;
 
+	[Attribute("false", UIWidgets.CheckBox, "Reference-style MechWarrior heading tape, distinct hip/torso bearings and circular radar rings. HUD is still the existing fully functional CGS HUD.", category: "Pilot HUD Parts")]
+	bool m_bReferenceLayout;
+
 	[Attribute("false", UIWidgets.CheckBox, "Print how long the HUD takes each frame (look for [CGS HUD] in the log).", category: "Pilot HUD Parts")]
 	bool m_bDebugTiming;
 
@@ -115,6 +118,16 @@ class CGS_PilotHUD
 	protected ImageWidget m_wTwistMark;
 	protected TextWidget m_wSpeedText;
 	protected TextWidget m_wWarning;
+
+	// Opt-in reference-style UI. Existing radar blips, heat, warnings, contacts
+	// and target brackets remain the same; only layout/leg vs torso presentation.
+	protected bool m_bReferenceBuilt;
+	protected TextWidget m_wReferenceHeading;
+	protected TextWidget m_wReferenceBearings;
+	protected ImageWidget m_wReferenceHeadingLine;
+	protected ref array<ImageWidget> m_aReferenceRadarDots = {};
+	protected float m_fReferenceRadarX = -10000;
+	protected float m_fReferenceRadarY = -10000;
 
 	// Sensor data
 	protected ref array<ref CGS_HudContact> m_aContacts = {};
@@ -256,6 +269,13 @@ class CGS_PilotHUD
 		m_aBrRight.Clear();
 		m_aBrText.Clear();
 		m_aBlips.Clear();
+		m_aReferenceRadarDots.Clear();
+		m_wReferenceHeading = null;
+		m_wReferenceBearings = null;
+		m_wReferenceHeadingLine = null;
+		m_bReferenceBuilt = false;
+		m_fReferenceRadarX = -10000;
+		m_fReferenceRadarY = -10000;
 		m_bBuilt = false;
 	}
 
@@ -628,6 +648,99 @@ class CGS_PilotHUD
 	}
 
 	//------------------------------------------------------------------------------------------------
+	// Lazily build reference UI only for mechs opting into the presentation.
+	// Other mechs keep the original widgets and incur no extra circle geometry.
+	protected void BuildReferenceWidgets()
+	{
+		if (m_bReferenceBuilt)
+			return;
+
+		Color cyan = new Color(0.38, 0.96, 0.82, 0.95);
+		m_wReferenceHeading = Text(420, 26, 18, cyan);
+		m_wReferenceBearings = Text(420, 19, 12, cyan);
+		m_wReferenceHeadingLine = Rect(420, 2, new Color(0.38, 0.96, 0.82, 0.45));
+
+		// Concentric tactical radar rings. The engine's existing radar dots and
+		// local target tracking stay in place; ring ticks are decoration only.
+		for (int i = 0; i < 72; i++)
+			m_aReferenceRadarDots.Insert(Rect(3, 3, new Color(0.35, 0.9, 0.75, 0.35), 0));
+
+		m_bReferenceBuilt = true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected float WrapHeading(float heading)
+	{
+		while (heading < 0)
+			heading = heading + 360;
+		while (heading >= 360)
+			heading = heading - 360;
+		return heading;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void DrawReferencePresentation(IEntity mech, bool enabled, bool radarVisible, float screenW, float screenH)
+	{
+		if (enabled && !m_bReferenceBuilt)
+			BuildReferenceWidgets();
+
+		Show(m_wReferenceHeading, enabled);
+		Show(m_wReferenceBearings, enabled);
+		Show(m_wReferenceHeadingLine, enabled);
+
+		foreach (ImageWidget dot : m_aReferenceRadarDots)
+			Show(dot, enabled && radarVisible);
+
+		if (!enabled)
+			return;
+
+		float lowerYaw = WrapHeading(mech.GetYawPitchRoll()[0]);
+		float upperYaw = lowerYaw;
+		float twist = 0;
+		CGS_TorsoTwistComponent torso = CGS_TorsoTwistComponent.Find(mech);
+		if (torso)
+		{
+			twist = torso.GetTwist();
+			upperYaw = WrapHeading(lowerYaw + twist);
+		}
+
+		float headingX = (screenW - 420) * 0.5;
+		Place(m_wReferenceHeading, headingX + 154, 24);
+		Place(m_wReferenceBearings, headingX + 67, 51);
+		Place(m_wReferenceHeadingLine, headingX, 72);
+		if (m_wReferenceHeading)
+			m_wReferenceHeading.SetText(string.Format("HDG %1", Math.Round(upperYaw)));
+		if (m_wReferenceBearings)
+			m_wReferenceBearings.SetText(string.Format("LEGS %1  |  TORSO %2  |  TWIST %3 deg",
+				Math.Round(lowerYaw), Math.Round(upperYaw), Math.Round(twist)));
+
+		// Only reposition rings on resolution/UI-scale changes. Avoid doing
+		// 72 extra FrameSlot calls every frame for 128-player servers.
+		if (!radarVisible)
+			return;
+
+		float rx = (screenW - RADAR) * 0.5;
+		float ry = screenH - RADAR - MARGIN;
+		if (rx == m_fReferenceRadarX && ry == m_fReferenceRadarY)
+			return;
+
+		m_fReferenceRadarX = rx;
+		m_fReferenceRadarY = ry;
+		float cx = rx + RADAR * 0.5;
+		float cy = ry + RADAR * 0.5;
+		for (int i = 0; i < m_aReferenceRadarDots.Count(); i++)
+		{
+			int tick = i % 36;
+			float radius = RADAR * 0.5 - 4;
+			if (i >= 36)
+				radius = radius * 0.54;
+			float a = tick * 6.2831853 / 36.0;
+			Place(m_aReferenceRadarDots[i],
+				cx + Math.Cos(a) * radius - 1.5, cy + Math.Sin(a) * radius - 1.5);
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
 	void Update(IEntity mech, string station)
 	{
 		WorkspaceWidget ws = GetGame().GetWorkspace();
@@ -690,6 +803,7 @@ class CGS_PilotHUD
 		DrawBrackets(mech, camPos, camForward, camRight, brackets);
 		DrawRadar(mech, cfg, screenW, screenH, radar);
 		DrawStatus(mech, screenW, screenH, now, status);
+		DrawReferencePresentation(mech, cfg && cfg.m_bReferenceLayout, radar, screenW, screenH);
 
 		if (cfg && cfg.m_bDebugTiming)
 		{
@@ -792,9 +906,10 @@ class CGS_PilotHUD
 	//------------------------------------------------------------------------------------------------
 	protected void DrawRadar(IEntity mech, CGS_PilotHUDComponent cfg, float screenW, float screenH, bool visible)
 	{
-		Show(m_wRadarBg, visible);
-		Show(m_wRadarH, visible);
-		Show(m_wRadarV, visible);
+		bool referenceLayout = cfg && cfg.m_bReferenceLayout;
+		Show(m_wRadarBg, visible && !referenceLayout);
+		Show(m_wRadarH, visible && !referenceLayout);
+		Show(m_wRadarV, visible && !referenceLayout);
 		Show(m_wRadarSelf, visible);
 		Show(m_wRadarTorso, visible);
 		Show(m_wRadarRange, visible);
