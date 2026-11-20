@@ -1411,7 +1411,10 @@ class BFA_MechMovementComponent : ScriptGameComponent
 
 		vector angularVelocity = rb.GetAngularVelocity();
 		ApplyHullStabilizer(owner, angularVelocity, timeSlice);
-		angularVelocity[1] = UsesIndependentWalkerHip() ? 0 : m_fAngularSpeed * turnInput;
+		if (UsesIndependentWalkerHip())
+			angularVelocity[1] = 0;
+		else
+			angularVelocity[1] = m_fAngularSpeed * turnInput;
 		rb.SetAngularVelocity(angularVelocity);
 	}
 
