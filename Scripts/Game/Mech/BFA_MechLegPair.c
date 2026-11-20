@@ -19,6 +19,7 @@ class BFA_MechLegPair
 	protected BFA_MechLegComponent m_LeftLegComp;
 	protected BFA_MechLegComponent m_RightLegComp;
 	protected IEntity m_BodyEntity;
+	protected BFA_MechMovementComponent m_pGaitMovement;
 	protected bool m_bInitialized;
 
 	// Shared gait state. Both legs read the same measured root motion and phase.
@@ -121,10 +122,9 @@ class BFA_MechLegPair
 		m_fMeasuredSpeed = m_vMeasuredVelocity.Length();
 
 		vector forward = m_BodyEntity.GetTransformAxis(2);
-		BFA_MechMovementComponent move = BFA_MechMovementComponent.Cast(m_BodyEntity.FindComponent(BFA_MechMovementComponent));
-		if (move && move.UsesIndependentWalkerHip())
+		if (m_pGaitMovement && m_pGaitMovement.UsesIndependentWalkerHip())
 		{
-			float hipYaw = move.GetIndependentHipYaw() * Math.DEG2RAD;
+			float hipYaw = m_pGaitMovement.GetIndependentHipYaw() * Math.DEG2RAD;
 			forward = forward * Math.Cos(hipYaw) + m_BodyEntity.GetTransformAxis(0) * Math.Sin(hipYaw);
 		}
 		forward[1] = 0;
@@ -360,6 +360,7 @@ class BFA_MechLegPair
 		}
 
 		m_BodyEntity = bodyEntity;
+		m_pGaitMovement = BFA_MechMovementComponent.Cast(bodyEntity.FindComponent(BFA_MechMovementComponent));
 		m_vLastRootPos = bodyEntity.GetOrigin();
 		m_bHasLastRootPos = true;
 		m_iLastMotionUpdateMs = -1;
