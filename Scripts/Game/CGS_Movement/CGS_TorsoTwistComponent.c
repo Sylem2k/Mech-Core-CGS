@@ -53,6 +53,9 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	[Attribute("false", UIWidgets.CheckBox, "Remove the mech root's own model (its slots stay visible). Use it when the root mesh is the whole body: put the same body model in a twisting 'Torso' slot instead.", category: "Parts")]
 	protected bool m_bHideRootMesh;
 
+	[Attribute("false", UIWidgets.CheckBox, "Walker hip-steering mode: let the root/hips turn the legs while the upper torso holds its world heading until the pilot deliberately changes aim. Requires Walker A/D Steering on the movement component.", category: "Hip Steering")]
+	protected bool m_bHoldUpperHeadingWhileHipsTurn;
+
 	[Attribute("false", UIWidgets.CheckBox, "Print the twist once a second.", category: "Diagnostics")]
 	protected bool m_bDebug;
 
@@ -69,6 +72,24 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	protected float m_fNextRefresh;
 	protected float m_fNextMountScan;
 	protected float m_fNextRootWeaponAim;
+
+	// HIP STEERING: the mech root is the lower chassis / hips, and the torso
+	// slot turns only as the COUNTER-ROTATION needed to hold a world-facing
+	// heading while the physical hips steer. Never rotate legs or root twice.
+	protected bool m_bHipWorldHeadingCaptured;
+	protected float m_fHipWorldHeading;
+	protected float m_fHipLastAimLocalYaw;
+	protected float m_fHipNextNetTime;
+	protected float m_fHipNextLog;
+
+	// The server carries the intended world heading to late-joining observers.
+	// The local pilot predicts it immediately from local camera aim; nobody
+	// other than the server authors these replicated properties.
+	[RplProp()]
+	protected bool m_bHipRepWorldHeadingValid;
+	[RplProp()]
+	protected float m_fHipRepWorldHeading;
+
 	// Fixed mech-local waist joint shared across all torso/mount/weapon updates.
 	protected vector m_vEffectivePivot;
 
@@ -233,30 +254,131 @@ class CGS_TorsoTwistComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	protected float HipShortestYaw(float fromYaw, float toYaw)
+	{
+		float delta = toYaw - fromYaw;
+		while (delta > 180.0)
+			delta = delta - 360.0;
+		while (delta < -180.0)
+			delta = delta + 360.0;
+		return delta;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void HipResetHeadingHold()
+	{
+		m_bHipWorldHeadingCaptured = false;
+		if (Replication.IsServer() && m_bHipRepWorldHeadingValid)
+		{
+			m_bHipRepWorldHeadingValid = false;
+			Replication.BumpMe();
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	// Hip/leg root yaw is authoritative from the existing movement controller.
+	// Preserve the UPPER body's world direction as that root turns, while still
+	// accepting manual changes in the driver's replicated/local camera aim.
+	protected float HipSteeringTorsoTarget(IEntity owner, BFA_MechAimComponent aim, float rawAimYaw)
+	{
+		float hipWorldYaw = owner.GetYawPitchRoll()[0];
+		bool localPilot = !Replication.IsServer() && aim.GetLocalAimStation() == m_sAimStation;
+
+		// MP observers may join after the hips have already rotated. Prefer
+		// the server's held world heading; never infer it from their late pose.
+		if (!Replication.IsServer() && !localPilot && m_bHipRepWorldHeadingValid)
+		{
+			return Math.Clamp(HipShortestYaw(hipWorldYaw, m_fHipRepWorldHeading),
+				-Math.Max(m_fMaxTwist, 0), Math.Max(m_fMaxTwist, 0));
+		}
+
+		if (!m_bHipWorldHeadingCaptured)
+		{
+			m_fHipWorldHeading = hipWorldYaw + rawAimYaw;
+			m_fHipLastAimLocalYaw = rawAimYaw;
+			m_bHipWorldHeadingCaptured = true;
+		}
+		else
+		{
+			// Camera remains parented to the vehicle and therefore turns when
+			// its hips turn. Raw aim yaw in mech LOCAL space does not distinguish
+			// that chassis motion. Only a change in LOCAL aim yaw is treated as
+			// a pilot sight adjustment, keeping world heading locked otherwise.
+			float aimChange = HipShortestYaw(m_fHipLastAimLocalYaw, rawAimYaw);
+			if (Math.AbsFloat(aimChange) > 0.05)
+			{
+				m_fHipWorldHeading = m_fHipWorldHeading + aimChange;
+				m_fHipLastAimLocalYaw = rawAimYaw;
+			}
+		}
+
+		// Changes in world heading (not ordinary hip rotation) are the only
+		// times a replication update is needed. Cap it at 10Hz for observers.
+		if (Replication.IsServer() && GetGame() && GetGame().GetWorld())
+		{
+			float now = Now();
+			if (!m_bHipRepWorldHeadingValid || (now >= m_fHipNextNetTime
+				&& Math.AbsFloat(HipShortestYaw(m_fHipRepWorldHeading, m_fHipWorldHeading)) > 0.25))
+			{
+				m_fHipRepWorldHeading = m_fHipWorldHeading;
+				m_bHipRepWorldHeadingValid = true;
+				m_fHipNextNetTime = now + 0.1;
+				Replication.BumpMe();
+			}
+		}
+
+		float torsoOffset = HipShortestYaw(hipWorldYaw, m_fHipWorldHeading);
+		if (m_bDebug && Now() >= m_fHipNextLog)
+		{
+			m_fHipNextLog = Now() + 1.0;
+			Print(string.Format("[CGS HIP STEER] rootYaw=%1 heldUpperYaw=%2 counterTwist=%3 aimLocal=%4 localPilot=%5",
+				hipWorldYaw, m_fHipWorldHeading, torsoOffset, rawAimYaw, localPilot));
+		}
+
+		// Actual torso visual / cockpit / aim mounts still use the existing
+		// joint rotation and existing safe physical twist limit.
+		return Math.Clamp(torsoOffset, -Math.Max(m_fMaxTwist, 0), Math.Max(m_fMaxTwist, 0));
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! Where the aim station looks, as a yaw from the legs' forward, clamped.
 	protected float WantedTwist(IEntity owner)
 	{
 		if (BFA_MechExtension.IsMechDestroyed(owner))
 			return m_fTwist; // freeze where it died
 
-		if (m_bCentreWhenEmpty)
+		BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(owner.FindComponent(BFA_MechCoreComponent));
+		if (core && !core.GetStationOccupant(m_sAimStation))
 		{
-			BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(owner.FindComponent(BFA_MechCoreComponent));
-			if (core && !core.GetStationOccupant(m_sAimStation))
+			HipResetHeadingHold();
+			if (m_bCentreWhenEmpty)
 				return 0;
 		}
 
 		BFA_MechAimComponent aim = BFA_MechAimComponent.Cast(owner.FindComponent(BFA_MechAimComponent));
 		if (!aim)
+		{
+			HipResetHeadingHold();
 			return 0;
+		}
 
 		vector local = aim.GetAimLocalPointForStation(m_sAimStation) - m_vEffectivePivot;
 		if (local[0] * local[0] + local[2] * local[2] < 1.0)
 			return m_fTwist;
 
 		float yaw = Math.Atan2(local[0], local[2]) * Math.RAD2DEG;
-		yaw = Math.Clamp(yaw, -Math.Max(m_fMaxTwist, 0), Math.Max(m_fMaxTwist, 0));
+		if (m_bHoldUpperHeadingWhileHipsTurn && core && core.GetStationOccupant(m_sAimStation))
+		{
+			BFA_MechMovementComponent move = BFA_MechMovementComponent.Cast(owner.FindComponent(BFA_MechMovementComponent));
+			if (move && move.GetLocomotionMode() == 0)
+				yaw = HipSteeringTorsoTarget(owner, aim, yaw);
+			else
+				HipResetHeadingHold();
+		}
+		else
+			HipResetHeadingHold();
 
+		yaw = Math.Clamp(yaw, -Math.Max(m_fMaxTwist, 0), Math.Max(m_fMaxTwist, 0));
 		if (Math.AbsFloat(yaw - m_fTwist) < Math.Max(m_fDeadzone, 0))
 			return m_fTwist;
 		return yaw;
