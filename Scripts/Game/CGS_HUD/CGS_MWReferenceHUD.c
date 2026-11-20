@@ -41,6 +41,13 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
     protected ref array<ImageWidget> m_aGunAimPips = {};
     protected ref array<TextWidget> m_aGunAimIds = {};
     protected TextWidget m_wWeaponAimLegend;
+    // Phase 1: client-side sensor tracking only; NOT a verified missile weapon lock.
+    protected TextWidget m_wSensorTrackLabel;
+    protected ImageWidget m_wSensorTrackBarBg;
+    protected ImageWidget m_wSensorTrackBarFill;
+    protected IEntity m_pSensorTrackTarget;
+    protected float m_fSensorTrackSince;
+    protected float m_fSensorTrackLastSeen;
 
     protected TextWidget m_wHeading;
     protected TextWidget m_wHipBearing;
@@ -110,6 +117,9 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
         m_wSightV = Rect(1, 20, mint);
         m_wTargetReadout = Text(230, 18, 12, mint);
         m_wWeaponAimLegend = Text(390, 22, 12, mint);
+        m_wSensorTrackLabel = Text(300, 19, 12, mint);
+        m_wSensorTrackBarBg = Rect(170, 5, dim);
+        m_wSensorTrackBarFill = Rect(1, 5, mint);
         for (int i = 0; i < MW_MAX_WEAPON_ROWS; i++)
         {
             m_aGunAimPips.Insert(Rect(9, 9, mint));
@@ -187,6 +197,12 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
         m_aGunAimPips.Clear();
         m_aGunAimIds.Clear();
         m_wWeaponAimLegend = null;
+        m_wSensorTrackLabel = null;
+        m_wSensorTrackBarBg = null;
+        m_wSensorTrackBarFill = null;
+        m_pSensorTrackTarget = null;
+        m_fSensorTrackSince = 0;
+        m_fSensorTrackLastSeen = 0;
         m_pPartData = null;
         m_fLastWidth = -1;
         m_fLastHeight = -1;
@@ -288,6 +304,7 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
         DrawArmor(mech, screenW, screenH);
         DrawWeapons(mech, screenW, screenH);
         DrawWeaponAimPips(mech, screenW, screenH);
+        DrawSensorAcquisition(mech, screenW, screenH, now);
     }
 
     protected float WrapMWHeading(float value)
@@ -503,6 +520,82 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
             else
                 m_wTargetReadout.SetText("WEAPON AIM");
         }
+    }
+
+    // Sensor tracking is NOT a missile lock. Never present a LOCKED cue until
+    // the server weapon has confirmed a target and supplied authoritative state.
+    // Reuse the base HUD's already-scanned hostile contacts; no additional
+    // QueryEntitiesBySphere, projectile simulation, or net traffic.
+    protected void DrawSensorAcquisition(IEntity mech, float screenW, float screenH, float now)
+    {
+        CGS_PilotHUDComponent cfg = CGS_PilotHUDComponent.Find(mech);
+        bool enabled = !cfg || cfg.m_bEnabled;
+        BFA_MechCoreComponent core = BFA_MechCoreComponent.Cast(mech.FindComponent(BFA_MechCoreComponent));
+        enabled = enabled && core && core.CanStationAim(m_sHudStation);
+        Show(m_wSensorTrackLabel, enabled);
+        Show(m_wSensorTrackBarBg, enabled);
+        Show(m_wSensorTrackBarFill, enabled);
+        if (!enabled)
+        {
+            m_pSensorTrackTarget = null;
+            return;
+        }
+
+        vector camera[4];
+        GetGame().GetWorld().GetCurrentCamera(camera);
+        vector forward = camera[2].Normalized();
+        float cx = screenW * 0.5;
+        float cy = screenH * 0.5;
+        CGS_HudContact best;
+        float bestDistanceSq = 90 * 90;
+        foreach (CGS_HudContact contact : m_aContacts)
+        {
+            if (!contact || !contact.m_pEntity || !contact.m_bSeen || contact.m_iSide != 2 || contact.m_bInfantry)
+                continue;
+            float x, y;
+            if (!ToScreen(CentreOf(contact), camera[3], forward, x, y))
+                continue;
+            float dx = x - cx;
+            float dy = y - cy;
+            float d2 = dx * dx + dy * dy;
+            if (d2 < bestDistanceSq)
+            {
+                bestDistanceSq = d2;
+                best = contact;
+            }
+        }
+
+        IEntity candidate;
+        if (best)
+            candidate = best.m_pEntity;
+        // Contact validation is refreshed by the parent HUD's half-second
+        // sweep, and a change of contact resets accumulation immediately.
+        if (candidate != m_pSensorTrackTarget)
+        {
+            m_pSensorTrackTarget = candidate;
+            m_fSensorTrackSince = now;
+        }
+
+        float progress = 0;
+        string label = "NO SENSOR TARGET";
+        if (candidate)
+        {
+            float seconds = 2.5;
+            progress = Math.Clamp((now - m_fSensorTrackSince) / seconds, 0, 1);
+            float range = vector.Distance(mech.GetOrigin(), candidate.GetOrigin());
+            if (progress >= 1)
+                label = string.Format("SENSOR TRACK STABLE  %1m", Math.Round(range));
+            else
+                label = string.Format("ACQUIRING CONTACT  %1%%", Math.Round(progress * 100));
+        }
+        float sx = Math.Max(5, cx - 85);
+        float sy = Math.Min(screenH - 45, cy + 145);
+        Place(m_wSensorTrackLabel, sx - 50, sy - 21);
+        Place(m_wSensorTrackBarBg, sx, sy);
+        Place(m_wSensorTrackBarFill, sx, sy);
+        Size(m_wSensorTrackBarFill, Math.Max(1, progress * 170), 5);
+        if (m_wSensorTrackLabel)
+            m_wSensorTrackLabel.SetText(label);
     }
 
     protected Color MWHealthColor(float health, bool dead)
