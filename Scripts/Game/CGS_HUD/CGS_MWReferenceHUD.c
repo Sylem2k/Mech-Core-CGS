@@ -415,7 +415,12 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
         Place(m_wFrontLabel, px + 23 * scale, py + 25 * scale);
         Place(m_wRearLabel, px + 142 * scale, py + 25 * scale);
         if (m_wArmorTitle)
-            m_wArmorTitle.SetText("MECH STATUS / COMPONENTS");
+        {
+            if (screenW < 1100)
+                m_wArmorTitle.SetText("MECH / COMPONENTS");
+            else
+                m_wArmorTitle.SetText("MECH STATUS / COMPONENTS");
+        }
         if (m_wFrontLabel)
             m_wFrontLabel.SetText("FRONT");
         if (m_wRearLabel)
@@ -455,17 +460,25 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
 
         float heat = 0;
         CGS_MechHeatComponent heatComponent = CGS_MechHeatComponent.Find(mech);
-        if (heatComponent)
+        bool hasHeat = heatComponent != null;
+        if (hasHeat)
             heat = Math.Clamp(heatComponent.GetHeat01(), 0, 1);
 
+        Show(m_wHeatTrack, hasHeat);
+        Show(m_wHeatFill, hasHeat);
         Place(m_wHeatTrack, px + 8 * scale, py + 157 * scale);
         Place(m_wHeatFill, px + 8 * scale, py + 157 * scale);
         Size(m_wHeatTrack, 266 * scale, 4 * scale);
         Size(m_wHeatFill, Math.Max(heat * 266 * scale, 0.5), 4 * scale);
         Place(m_wHeatSpeed, px + 8 * scale, py + 163 * scale);
         if (m_wHeatSpeed)
-            m_wHeatSpeed.SetText(string.Format("HEAT %1", Math.Round(heat * 100)) +
-                string.Format("%%    SPEED %1 km/h", Math.Round(BFA_MechHUD.GetSpeed(mech) * 3.6)));
+        {
+            string heatText = "HEAT N/A";
+            if (hasHeat)
+                heatText = string.Format("HEAT %1", Math.Round(heat * 100)) + "%";
+            m_wHeatSpeed.SetText(heatText +
+                string.Format("    SPEED %1 km/h", Math.Round(BFA_MechHUD.GetSpeed(mech) * 3.6)));
+        }
     }
 
     protected void DrawWeapons(IEntity mech, float screenW, float screenH)
@@ -481,7 +494,7 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
         }
 
         float scale = Math.Clamp(screenH / 920.0, 0.67, 1.0);
-        float panelW = 345 * scale;
+        float panelW = Math.Max(255, 345 * scale);
         int rows = Math.Min(m_aMWWeapons.Count(), MW_MAX_WEAPON_ROWS);
         float panelH = (75 + 25 * Math.Max(rows, 1)) * scale;
         float px = screenW - panelW - 20;
@@ -506,9 +519,16 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
 
             BFA_MechWeaponModuleComponent weapon = m_aMWWeapons[i];
             Place(m_aWeaponNames[i], px + 10 * scale, py + (58 + i * 25) * scale);
-            Place(m_aWeaponAmmo[i], px + 223 * scale, py + (58 + i * 25) * scale);
+            Place(m_aWeaponAmmo[i], px + panelW - 102, py + (58 + i * 25) * scale);
+            Size(m_aWeaponNames[i], panelW - 120, 20);
+            Size(m_aWeaponAmmo[i], 97, 20);
             if (m_aWeaponNames[i])
-                m_aWeaponNames[i].SetText(string.Format("%1. %2", i + 1, weapon.GetDisplayName()));
+            {
+                string label = string.Format("%1. %2", i + 1, weapon.GetDisplayName());
+                if (label.Length() > 21)
+                    label = label.Substring(0, 20) + ".";
+                m_aWeaponNames[i].SetText(label);
+            }
             string ammo = "--";
             if (weapon.IsReloading())
                 ammo = "RELOAD";
