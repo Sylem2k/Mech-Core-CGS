@@ -340,13 +340,24 @@ class BFA_MechLegComponent : ScriptComponent
 		SlotManagerComponent slots = SlotManagerComponent.Cast(root.FindComponent(SlotManagerComponent));
 		if (!slots)
 			return root;
-		EntitySlotInfo hip = slots.GetSlotByName("Hip");
+		// Cinder/CGS-Walkers author the lower-body slot as lowercase "hip".
+		// The older SampleMech prefab uses "Hip". Slot lookups are
+		// case-sensitive: the old uppercase-only lookup silently returned
+		// the root even while independent hip yaw was working correctly.
+		EntitySlotInfo hip = slots.GetSlotByName("hip");
+		if (!hip)
+			hip = slots.GetSlotByName("Hip");
+
 		if (hip && hip.GetAttachedEntity())
 		{
 			m_pGaitBasis = hip.GetAttachedEntity();
 			m_bGaitBasisChecked = true;
+			BFA_MechLog.Log(string.Format("[BFA GAIT HIP BASIS] %1: rotating lower-body hip entity selected", GetOwner()));
 			return m_pGaitBasis;
 		}
+
+		// Wait for slot attachment/replication instead of latching the
+		// upper root as a permanent basis. The following tick can retry.
 		return root;
 	}
 
