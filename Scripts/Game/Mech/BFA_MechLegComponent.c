@@ -340,13 +340,24 @@ class BFA_MechLegComponent : ScriptComponent
 		SlotManagerComponent slots = SlotManagerComponent.Cast(root.FindComponent(SlotManagerComponent));
 		if (!slots)
 			return root;
-		EntitySlotInfo hip = slots.GetSlotByName("Hip");
+		// Cinder/CGS-Walkers author the lower-body slot as lowercase "hip".
+		// The older SampleMech prefab uses "Hip". Slot lookups are
+		// case-sensitive: the old uppercase-only lookup silently returned
+		// the root even while independent hip yaw was working correctly.
+		EntitySlotInfo hip = slots.GetSlotByName("hip");
+		if (!hip)
+			hip = slots.GetSlotByName("Hip");
+
 		if (hip && hip.GetAttachedEntity())
 		{
 			m_pGaitBasis = hip.GetAttachedEntity();
 			m_bGaitBasisChecked = true;
+			BFA_MechLog.Log(string.Format("[BFA GAIT HIP BASIS] %1: rotating lower-body hip entity selected", GetOwner()));
 			return m_pGaitBasis;
 		}
+
+		// Wait for slot attachment/replication instead of latching the
+		// upper root as a permanent basis. The following tick can retry.
 		return root;
 	}
 
@@ -358,11 +369,28 @@ class BFA_MechLegComponent : ScriptComponent
 		if (m_vFootRestOffset.LengthSq() < 0.000001)
 			return home;
 
-		IEntity body = GetWalkerGaitBasis();
-
+		// The hip slot is used as the turning pivot, NOT as an orientation
+		// frame. Authored hip child entities may have a -180 degree rest
+		// rotation (Cinder II), while the sibling legs face root +Z.
+		// Construct the same lower-body forward/right axes used for W/S
+		// translation, from ROOT basis plus independent hip yaw.
+		IEntity body = m_BodyEntity;
+		if (!body)
+			body = GetWalkerGaitBasis();
+		if (!body)
+			return home;
 		vector right = body.GetTransformAxis(0);
 		vector up = body.GetTransformAxis(1);
 		vector forward = body.GetTransformAxis(2);
+		BFA_MechMovementComponent drive = BFA_MechMovementComponent.Cast(body.FindComponent(BFA_MechMovementComponent));
+		if (drive && drive.UsesIndependentWalkerHip())
+		{
+			float yaw = (drive.GetIndependentHipYaw() + drive.GetWalkerDriveForwardOffsetDeg()) * Math.DEG2RAD;
+			vector originalRight = right;
+			vector originalForward = forward;
+			right = originalRight * Math.Cos(yaw) - originalForward * Math.Sin(yaw);
+			forward = originalForward * Math.Cos(yaw) + originalRight * Math.Sin(yaw);
+		}
 
 		float side = 1.0;
 		if (m_bIsLeftLeg)
@@ -417,21 +445,59 @@ class BFA_MechLegComponent : ScriptComponent
 			return TraceGroundFromPos(target + lead);
 		}
 
-		// Lead in the body's own directions: forward/back up to Max Foot Lead, sideways much less.
+		// Independent lower-body steering: use movement's corrected leg
+		// heading, not the hip CHILD's transform axes. On Cinder II the
+		// visual hip prefab is authored with a -180-degree rest rotation,
+		// so treating its raw forward as the stride direction reverses
+		// foot lead and the left/right anti-cross constraint.
+		BFA_MechMovementComponent drive = null;
+		if (m_BodyEntity)
+			drive = BFA_MechMovementComponent.Cast(m_BodyEntity.FindComponent(BFA_MechMovementComponent));
+		if (drive && drive.UsesIndependentWalkerHip())
+		{
+			vector rootRight = m_BodyEntity.GetTransformAxis(0);
+			vector rootForward = m_BodyEntity.GetTransformAxis(2);
+			float yaw = (drive.GetIndependentHipYaw() + drive.GetWalkerDriveForwardOffsetDeg()) * Math.DEG2RAD;
+			vector gaitRight = rootRight * Math.Cos(yaw) - rootForward * Math.Sin(yaw);
+			vector gaitForward = rootForward * Math.Cos(yaw) + rootRight * Math.Sin(yaw);
+
+			float leadRight = Math.Clamp(vector.Dot(lead, gaitRight),
+				-Math.Max(m_fMaxSideLead, 0.0), Math.Max(m_fMaxSideLead, 0.0));
+			float leadForward = Math.Clamp(vector.Dot(lead, gaitForward),
+				-Math.Max(m_fMaxFootLead, 0.1), Math.Max(m_fMaxFootLead, 0.1));
+			vector desired = target + gaitRight * leadRight + gaitForward * leadForward;
+
+			// Keep each foot on its own measured side of the hip pivot,
+			// regardless of the prefab's rest rotation. Ground/IK safety
+			// and world-space foot planting stay exactly as before.
+			vector pivot = body.GetOrigin();
+			float restSide = vector.Dot(neutral - pivot, gaitRight);
+			float desiredSide = vector.Dot(desired - pivot, gaitRight);
+			float minSide = Math.AbsFloat(restSide) * Math.Clamp(m_fNoCrossMargin, 0, 1);
+			if (restSide >= 0)
+				desiredSide = Math.Max(desiredSide, minSide);
+			else
+				desiredSide = Math.Min(desiredSide, -minSide);
+			float actualSide = vector.Dot(desired - pivot, gaitRight);
+			desired = desired + gaitRight * (desiredSide - actualSide);
+			return TraceGroundFromPos(desired);
+		}
+
+		// Legacy mechs and non-hip-drive walkers retain the original
+		// body-relative lead and no-cross calculation unchanged.
 		vector leadLocal = body.VectorToLocal(lead);
 		leadLocal[0] = Math.Clamp(leadLocal[0], -Math.Max(m_fMaxSideLead, 0.0), Math.Max(m_fMaxSideLead, 0.0));
 		leadLocal[2] = Math.Clamp(leadLocal[2], -Math.Max(m_fMaxFootLead, 0.1), Math.Max(m_fMaxFootLead, 0.1));
 		leadLocal[1] = 0;
 
-		// Never cross over to the other leg's side.
 		vector targetLocal = body.CoordToLocal(target) + leadLocal;
 		vector restLocal = body.CoordToLocal(neutral);
-		float restSide = restLocal[0];
-		float minSide = Math.AbsFloat(restSide) * Math.Clamp(m_fNoCrossMargin, 0, 1);
-		if (restSide >= 0)
-			targetLocal[0] = Math.Max(targetLocal[0], minSide);
+		float restSideLegacy = restLocal[0];
+		float minSideLegacy = Math.AbsFloat(restSideLegacy) * Math.Clamp(m_fNoCrossMargin, 0, 1);
+		if (restSideLegacy >= 0)
+			targetLocal[0] = Math.Max(targetLocal[0], minSideLegacy);
 		else
-			targetLocal[0] = Math.Min(targetLocal[0], -minSide);
+			targetLocal[0] = Math.Min(targetLocal[0], -minSideLegacy);
 
 		return TraceGroundFromPos(body.CoordToParent(targetLocal));
 	}
