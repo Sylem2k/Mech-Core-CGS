@@ -27,6 +27,12 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	[Attribute("180", UIWidgets.Auto, "Independent hip yaw limit (degrees). Set 180 for unrestricted full-circle lower-body turning.", category: "Walker Steering")]
 	float m_fWalkerHipMaxYaw;
 
+	// Authored visual-forward directions do not always match the root's +Z
+	// forward axis. Keep this opt-in and zero by default for all existing mechs.
+	// Only a WALKER using independent hip-drive applies the correction.
+	[Attribute("0", UIWidgets.Auto, "Independent hip-drive WALKER only: angle in degrees between root +Z and the visually forward-facing lower chassis. -90 = left, +90 = right. Default 0 preserves all existing mechs.", category: "Walker Steering")]
+	float m_fWalkerDriveForwardOffsetDeg;
+
 	// With separate hip drive, the torso/root otherwise stays at its initial
 	// world heading while the legs can orbit through 360 degrees. Keep the
 	// physical waist between the aim-driven torso and the hip within the
@@ -730,6 +736,15 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		return m_fWalkerHipYawNet;
 	}
 
+	// Real movement vector yaw = root yaw + independent hip yaw + this
+	// model-specific calibration. Exposed for honest HUD heading telemetry.
+	float GetWalkerDriveForwardOffsetDeg()
+	{
+		if (!UsesIndependentWalkerHip())
+			return 0;
+		return Math.Clamp(m_fWalkerDriveForwardOffsetDeg, -180, 180);
+	}
+
 	bool LegDamageSlows()
 	{
 		return m_iLocomotionMode == 0 && m_bLegDamageSlows;
@@ -1410,7 +1425,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		// A sideways walk with hip mode OFF means the running prefab/config
 		// does not match the opted-in SampleMech in GitHub.
 		if (m_bDebugWalkerHipInput && HasLocalPilot() &&
-			(Math.AbsFloat(rawStrafeInput) > 0.05 || Math.AbsFloat(rawTurnInput) > 0.05))
+			(Math.AbsFloat(rawStrafeInput) > 0.05 || Math.AbsFloat(rawTurnInput) > 0.05 || Math.AbsFloat(forwardInput) > 0.05))
 		{
 			int nowMs = owner.GetWorld().GetWorldTime();
 			if (nowMs >= m_iWalkerHipDebugNextMs)
@@ -1419,8 +1434,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 				BFA_MechLog.Log(string.Format("[CGS HIP INPUT] entity=%1 mode=%2 hipEnabled=%3 ADrootSteer=%4 rawStrafe=%5 rawTurn=%6 appliedStrafe=%7 appliedTurn=%8 forward=%9",
 					owner, m_iLocomotionMode, m_bWalkerHipDrive, m_bWalkerADSteering,
 					rawStrafeInput, rawTurnInput, strafeInput, turnInput, forwardInput));
-				BFA_MechLog.Log(string.Format("[CGS HIP YAW] hipLocal=%1 hipServer=%2 rootYaw=%3",
-					m_fWalkerHipYawLocal, m_fWalkerHipYawNet, owner.GetYawPitchRoll()[0]));
+				BFA_MechLog.Log(string.Format("[CGS HIP YAW] hipLocal=%1 hipServer=%2 rootYaw=%3 driveForwardOffset=%4",
+					m_fWalkerHipYawLocal, m_fWalkerHipYawNet, owner.GetYawPitchRoll()[0], GetWalkerDriveForwardOffsetDeg()));
 			}
 		}
 		BFA_MechExtension extension = BFA_MechExtension.Get();
@@ -1430,7 +1445,12 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		vector localFwd = owner.GetTransformAxis(2);
 		if (UsesIndependentWalkerHip())
 		{
-			float yaw = GetIndependentHipYaw() * Math.DEG2RAD;
+			// The physics root +Z can differ from an authored walker's
+			// body/leg model forward. Correct the WORLD drive vector on
+			// server and predicting driver identically, without changing
+			// A/D rate, torso aiming, procedural feet or original root yaw.
+			float driveYaw = GetIndependentHipYaw() + GetWalkerDriveForwardOffsetDeg();
+			float yaw = driveYaw * Math.DEG2RAD;
 			localFwd = localFwd * Math.Cos(yaw) + owner.GetTransformAxis(0) * Math.Sin(yaw);
 		}
 		localFwd[1] = 0;
