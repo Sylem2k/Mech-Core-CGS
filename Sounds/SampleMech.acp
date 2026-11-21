@@ -223,8 +223,10 @@ AudioClass {
      }
     }
    }
+   // VEH_Animations (bit 6): footsteps, leg servos, and chassis motion
+   // should follow vehicle animation mixing instead of generic SFX.
    pi {
-    8192 0
+    64 0
    }
    inputs {
     "WPN_Handling" "WPN_Shots" "WPN_Explosions" "WNP_BulletHits" "CHAR" "ENV_AMB_2D" "VEH_Animations" "Impacts" "Dialog" "ENV_Doors" "VEH_Engine" "VEH_Tires" "VON" "SFX" "SFX_Reverb_OBSOLETE" "VON_Reverb_Small" "Dialog_Reverb" "Impacts_EXT" "ENV_AMB_3D" "WPN_SonicCracks" "CHAR_Gear" "PA" "SFX_Reverb_Exterior" "ENV_AMB_3D_Reverb_Exterior" "SFX_Direct" "SFX_Reverb_Small" "SFX_Reverb_Medium" "SFX_Reverb_Large" "WPN_Shots_Player" "Dialog_Reverb_Small" "Dialog_Reverb_Medium" "Dialog_Reverb_Large" "WPN_TravelingProjectile" "Dialog_Delay_Exterior" "SFX_Reverb_InCabin" "VON_Reverb_Medium" "VON_Reverb_Large"
@@ -569,14 +571,58 @@ AudioClass {
    name "Amplitude Step"
    version 5
    tl 250 -223
-   curve Linear
+   curve Custom
+   AttenuationCurve {
+    CurvePoint "1" {
+     X 8
+     Y 1
+    }
+    CurvePoint "2" {
+     X 32
+     Y 0.65
+    }
+    CurvePoint "3" {
+     X 90
+     Y 0.28
+    }
+    CurvePoint "4" {
+     X 170
+     Y 0.07
+    }
+    CurvePoint "5" {
+     X 260
+     Y 0
+    }
+   }
   }
   AmplitudeClass "4116" {
    id 4116
    name "Amplitude Servo"
    version 5
    tl 250 377
-   curve Linear
+   curve Custom
+   AttenuationCurve {
+    CurvePoint "1" {
+     X 5
+     Y 1
+    }
+    CurvePoint "2" {
+     X 22
+     Y 0.55
+    }
+    CurvePoint "3" {
+     X 60
+     Y 0.14
+    }
+    CurvePoint "4" {
+     X 100
+     Y 0.025
+    }
+    CurvePoint "5" {
+     X 145
+     Y 0
+    }
+   }
   }
  
   AmplitudeClass "47001" {
@@ -673,7 +719,7 @@ AudioClass {
    name "Step"
    version 7
    tl 0 -32
-   Volume -8
+   Volume -20
    Pitch -15
    "Pitch variance" 3
    Samples {
@@ -687,7 +733,7 @@ AudioClass {
    name "Servo"
    version 7
    tl 0 168
-   Volume -16
+   Volume -26
    "Pitch variance" 4
    Samples {
     AudioBankSampleClass Sample {
