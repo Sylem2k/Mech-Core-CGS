@@ -1213,7 +1213,21 @@ class BFA_MechMovementComponent : ScriptGameComponent
 
 	protected void ApplyIndependentHipPose(IEntity owner)
 	{
-		if (!UsesIndependentWalkerHip() || !CaptureIndependentHipRest(owner))
+		if (!UsesIndependentWalkerHip())
+			return;
+
+		// Dedicated hip twist owns all lower-body slot transforms when present.
+		// Never let the legacy inlined poser and CGS_HipTwistComponent both
+		// write the same Hip/Leg entities. Keep the legacy fallback unchanged
+		// for prefabs not yet migrated to the dedicated component.
+		CGS_HipTwistComponent hipTwist = CGS_HipTwistComponent.Find(owner);
+		if (hipTwist)
+		{
+			hipTwist.ApplyHipYaw(GetIndependentHipYaw());
+			return;
+		}
+
+		if (!CaptureIndependentHipRest(owner))
 			return;
 		float yaw = GetIndependentHipYaw();
 		if (Math.AbsFloat(yaw - m_fWalkerHipApplied) < 0.02)
