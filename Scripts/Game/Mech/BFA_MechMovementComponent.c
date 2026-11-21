@@ -19,6 +19,10 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	// The mech still uses IK legs, NOT tracked locomotion.
 	[Attribute("false", UIWidgets.CheckBox, "Walker: A/D rotates the chassis with stepping legs (like tracked steering). No sideways strafe.", category: "Walker Steering")]
 	bool m_bWalkerADSteering;
+	[Attribute("false", UIWidgets.CheckBox, "Independent walker hip steering: A/D turns only Hip and leg slots; W/S follows their forward heading. Diagnostic opt-in.", category: "Walker Steering")]
+	bool m_bWalkerHipDrive;
+	[Attribute("180", UIWidgets.Auto, "Independent hip yaw limit (degrees). Set 180 for unrestricted full-circle lower-body turning.", category: "Walker Steering")]
+	float m_fWalkerHipMaxYaw;
 
 	[Attribute("false", UIWidgets.CheckBox, "Walker: gradually turn the leg/chassis heading toward a twisted torso's aim when outside the follow deadzone.", category: "Walker Steering")]
 	bool m_bWalkerFollowTorso;
@@ -204,6 +208,15 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	protected int m_iRemoteVisualTickMs;
 
 	float m_fBodyHeight;
+	[RplProp()]
+	protected float m_fWalkerHipYawNet;
+	protected float m_fWalkerHipYawLocal;
+	protected float m_fWalkerHipLastSent;
+	protected int m_iWalkerHipNextSend;
+	protected vector m_vWalkerHipPivot;
+	protected bool m_bWalkerHipRestReady;
+	protected ref array<ref BFA_WalkerHipRestPose> m_aWalkerHipRest = {};
+	protected float m_fWalkerHipApplied = 9999;
 	float m_fVerticalVelocity;
 	protected bool m_bSupportFilterInitialized;
 	protected float m_fFilteredSupportY;
@@ -689,6 +702,18 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	bool UsesIndependentWalkerHip()
+	{
+		return m_iLocomotionMode == 0 && m_bWalkerHipDrive;
+	}
+
+	float GetIndependentHipYaw()
+	{
+		if (!Replication.IsServer() && HasLocalPilot())
+			return m_fWalkerHipYawLocal;
+		return m_fWalkerHipYawNet;
+	}
+
 	bool LegDamageSlows()
 	{
 		return m_iLocomotionMode == 0 && m_bLegDamageSlows;
@@ -1139,6 +1164,105 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//------------------------------------------------------------------------------------------------
+	// Save authored hip and leg rest poses once. Never apply a new yaw to a
+	// previously turned pose: that would drift the leg attachment positions.
+	protected bool CaptureIndependentHipRest(IEntity owner)
+	{
+		if (m_bWalkerHipRestReady)
+			return true;
+		if (!m_SlotManager || !m_aLegPairs || m_aLegPairs.IsEmpty())
+			return false;
+		EntitySlotInfo hipSlot = m_SlotManager.GetSlotByName("Hip");
+		if (!hipSlot || !hipSlot.GetAttachedEntity())
+			return false;
+		IEntity hip = hipSlot.GetAttachedEntity();
+		vector mat[4];
+		hip.GetLocalTransform(mat);
+		m_vWalkerHipPivot = mat[3];
+		ref array<ref BFA_WalkerHipRestPose> list = {};
+		BFA_WalkerHipRestPose hipPose = new BFA_WalkerHipRestPose();
+		hipPose.m_pPart = hip;
+		hip.GetLocalTransform(hipPose.m_Rest);
+		list.Insert(hipPose);
+		foreach (BFA_MechLegPair legPair : m_aLegPairs)
+		{
+			if (!legPair)
+				return false;
+			array<string> names = {legPair.m_sLeftLegSlotName, legPair.m_sRightLegSlotName};
+			foreach (string slotName : names)
+			{
+				EntitySlotInfo slot = m_SlotManager.GetSlotByName(slotName);
+				if (!slot || !slot.GetAttachedEntity())
+					return false;
+				IEntity part = slot.GetAttachedEntity();
+				BFA_WalkerHipRestPose pose = new BFA_WalkerHipRestPose();
+				pose.m_pPart = part;
+				part.GetLocalTransform(pose.m_Rest);
+				list.Insert(pose);
+			}
+		}
+		m_aWalkerHipRest = list;
+		m_bWalkerHipRestReady = true;
+		return true;
+	}
+
+	protected void ApplyIndependentHipPose(IEntity owner)
+	{
+		if (!UsesIndependentWalkerHip() || !CaptureIndependentHipRest(owner))
+			return;
+		float yaw = GetIndependentHipYaw();
+		if (Math.AbsFloat(yaw - m_fWalkerHipApplied) < 0.02)
+			return;
+		m_fWalkerHipApplied = yaw;
+		vector rotation[4];
+		Math3D.AnglesToMatrix(Vector(yaw, 0, 0), rotation);
+		rotation[3] = m_vWalkerHipPivot - (rotation[0] * m_vWalkerHipPivot[0] + rotation[1] * m_vWalkerHipPivot[1] + rotation[2] * m_vWalkerHipPivot[2]);
+		foreach (BFA_WalkerHipRestPose pose : m_aWalkerHipRest)
+		{
+			if (!pose || !pose.m_pPart)
+				continue;
+			vector finalPose[4];
+			Math3D.MatrixMultiply4(rotation, pose.m_Rest, finalPose);
+			pose.m_pPart.SetLocalTransform(finalPose);
+			pose.m_pPart.Update();
+		}
+	}
+
+	protected void TickIndependentHip(float steering, float dt, IEntity owner)
+	{
+		float yawDelta = Math.Clamp(steering, -1.0, 1.0) * m_fAngularSpeed * Math.RAD2DEG * Math.Clamp(dt, 0, 0.1);
+		float yawLimit = Math.Clamp(m_fWalkerHipMaxYaw, 0, 180);
+		if (Replication.IsServer())
+		{
+			m_fWalkerHipYawNet = m_fWalkerHipYawNet + yawDelta;
+			if (yawLimit >= 179.99)
+			{
+				if (m_fWalkerHipYawNet > 180) m_fWalkerHipYawNet -= 360;
+				if (m_fWalkerHipYawNet < -180) m_fWalkerHipYawNet += 360;
+			}
+			else m_fWalkerHipYawNet = Math.Clamp(m_fWalkerHipYawNet, -yawLimit, yawLimit);
+			int now = owner.GetWorld().GetWorldTime();
+			if (now >= m_iWalkerHipNextSend && Math.AbsFloat(m_fWalkerHipYawNet - m_fWalkerHipLastSent) > 0.05)
+			{
+				m_iWalkerHipNextSend = now + 100;
+				m_fWalkerHipLastSent = m_fWalkerHipYawNet;
+				Replication.BumpMe();
+			}
+		}
+		else if (HasLocalPilot())
+		{
+			m_fWalkerHipYawLocal = m_fWalkerHipYawLocal + yawDelta;
+			if (yawLimit >= 179.99)
+			{
+				if (m_fWalkerHipYawLocal > 180) m_fWalkerHipYawLocal -= 360;
+				if (m_fWalkerHipYawLocal < -180) m_fWalkerHipYawLocal += 360;
+			}
+			else m_fWalkerHipYawLocal = Math.Clamp(m_fWalkerHipYawLocal, -yawLimit, yawLimit);
+		}
+		ApplyIndependentHipPose(owner);
+	}
+
 	void Move(float timeSlice)
 	{
 		IEntity owner = GetOwner();
@@ -1161,6 +1285,14 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		}
 		else if (m_iLocomotionMode == 0)
 		{
+			if (UsesIndependentWalkerHip())
+			{
+				TickIndependentHip(Math.Clamp(turnInput + strafeInput, -1.0, 1.0), timeSlice, owner);
+				strafeInput = 0;
+				turnInput = 0;
+			}
+			else
+			{
 			// WALKER ONLY: re-purpose A/D as rotation, never lateral velocity.
 			// This is done on both the predicting driver and the server so
 			// multiplayer movement reconciliation keeps using the same turn.
@@ -1195,12 +1327,18 @@ class BFA_MechMovementComponent : ScriptGameComponent
 					}
 				}
 			}
+			}
 		}
 		BFA_MechExtension extension = BFA_MechExtension.Get();
 		bool sprinting = m_bCanSprint && GetEffectiveSprintInput() && extension.CanMechSprint(owner);
 		float speedScale = Math.Clamp(extension.GetMechSpeedScale(owner), 0.0, 2.0);
 
 		vector localFwd = owner.GetTransformAxis(2);
+		if (UsesIndependentWalkerHip())
+		{
+			float yaw = GetIndependentHipYaw() * Math.DEG2RAD;
+			localFwd = localFwd * Math.Cos(yaw) + owner.GetTransformAxis(0) * Math.Sin(yaw);
+		}
 		localFwd[1] = 0;
 		if (localFwd.LengthSq() <= 0.0001)
 			return;
@@ -1287,7 +1425,10 @@ class BFA_MechMovementComponent : ScriptGameComponent
 
 		vector angularVelocity = rb.GetAngularVelocity();
 		ApplyHullStabilizer(owner, angularVelocity, timeSlice);
-		angularVelocity[1] = m_fAngularSpeed * turnInput;
+		if (UsesIndependentWalkerHip())
+			angularVelocity[1] = 0;
+		else
+			angularVelocity[1] = m_fAngularSpeed * turnInput;
 		rb.SetAngularVelocity(angularVelocity);
 	}
 
@@ -2206,6 +2347,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			// This keeps the remote feet visually attached to the terrain instead of carrying
 			// the previous frame's local-space target upward with the body.
 			ApplyServerTransform(owner, timeSlice);
+			ApplyIndependentHipPose(owner);
 			UpdateProceduralLegs(timeSlice);
 			UpdateLocomotionSounds(owner);
 			return;
@@ -2214,6 +2356,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		// Server and local driver prediction keep the established V20 gait ordering.
 		// Their leg rig observes the root produced by the previous physics frame, which is
 		// already the tested smooth singleplayer behavior.
+		ApplyIndependentHipPose(owner);
 		UpdateProceduralLegs(timeSlice);
 
 		// Count authoritative/predicted simulation frames separately from Rpl ownership.
@@ -2520,4 +2663,11 @@ class BFA_MechMovementComponent : ScriptGameComponent
 
 		BFA_MechLog.Log(string.Format("[BFA BODY] standing height from Ground Point: %1 m (parked %2 m)", m_fBodyHeightPilot, m_fBodyHeightEmpty));
 	}
+}
+
+// Stable local-space rest transform for the opt-in independent walker hip test.
+class BFA_WalkerHipRestPose
+{
+	IEntity m_pPart;
+	vector m_Rest[4];
 }
