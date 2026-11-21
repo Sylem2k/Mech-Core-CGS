@@ -533,7 +533,18 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
 
         float scale = Math.Clamp(screenH / 920.0, 0.67, 1.0);
         float panelW = 305 * scale;
-        float panelH = 182 * scale;
+
+        // The two component dolls occupy y=45..129 in panel coordinates.
+        // The old HULL text started at y=125, on top of the legs, and the
+        // bottom heat/speed row could extend outside the small-screen panel.
+        // Keep the footer below BOTH dolls with enough unscaled text height
+        // (Text widgets remain 22/24px tall even when the dolls shrink).
+        float dollBottom = (45 + 84) * scale;
+        float hullValueY = dollBottom + 12;
+        float hullBarY = hullValueY + 24;
+        float heatBarY = hullBarY + 13;
+        float heatSpeedY = heatBarY + 11;
+        float panelH = heatSpeedY + 24 + 10;
         float px = 20;
         float py = screenH - panelH - 22;
 
@@ -544,7 +555,7 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
         Place(m_wRearLabel, px + 142 * scale, py + 25 * scale);
         if (m_wArmorTitle)
         {
-            if (screenW < 1100)
+            if (screenW < 1100 || panelW < 280)
                 m_wArmorTitle.SetText("MECH / COMPONENTS");
             else
                 m_wArmorTitle.SetText("MECH STATUS / COMPONENTS");
@@ -576,13 +587,13 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
         float hull = BFA_MechHUD.GetHealth01(mech);
         if (hull < 0)
             hull = 1;
-        Place(m_wHullTrack, px + 8 * scale, py + 145 * scale);
-        Place(m_wHullFill, px + 8 * scale, py + 145 * scale);
+        Place(m_wHullTrack, px + 8 * scale, py + hullBarY);
+        Place(m_wHullFill, px + 8 * scale, py + hullBarY);
         Size(m_wHullTrack, 266 * scale, 5 * scale);
         Size(m_wHullFill, Math.Max(hull * 266 * scale, 1), 5 * scale);
         Tint(m_wHullFill, MWHealthColor(hull, hull <= 0));
 
-        Place(m_wArmorValue, px + 8 * scale, py + 125 * scale);
+        Place(m_wArmorValue, px + 8 * scale, py + hullValueY);
         if (m_wArmorValue)
             m_wArmorValue.SetText(string.Format("HULL %1", Math.Round(hull * 100)) + "%");
 
@@ -594,18 +605,22 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
 
         Show(m_wHeatTrack, hasHeat);
         Show(m_wHeatFill, hasHeat);
-        Place(m_wHeatTrack, px + 8 * scale, py + 157 * scale);
-        Place(m_wHeatFill, px + 8 * scale, py + 157 * scale);
+        Place(m_wHeatTrack, px + 8 * scale, py + heatBarY);
+        Place(m_wHeatFill, px + 8 * scale, py + heatBarY);
         Size(m_wHeatTrack, 266 * scale, 4 * scale);
         Size(m_wHeatFill, Math.Max(heat * 266 * scale, 0.5), 4 * scale);
-        Place(m_wHeatSpeed, px + 8 * scale, py + 163 * scale);
+        Place(m_wHeatSpeed, px + 8 * scale, py + heatSpeedY);
         if (m_wHeatSpeed)
         {
             string heatText = "HEAT N/A";
             if (hasHeat)
                 heatText = string.Format("HEAT %1", Math.Round(heat * 100)) + "%";
-            m_wHeatSpeed.SetText(heatText +
-                string.Format("    SPEED %1 km/h", Math.Round(BFA_MechHUD.GetSpeed(mech) * 3.6)));
+            if (panelW < 260)
+                m_wHeatSpeed.SetText(heatText +
+                    string.Format("   SPD %1", Math.Round(BFA_MechHUD.GetSpeed(mech) * 3.6)));
+            else
+                m_wHeatSpeed.SetText(heatText +
+                    string.Format("    SPEED %1 km/h", Math.Round(BFA_MechHUD.GetSpeed(mech) * 3.6)));
         }
     }
 
