@@ -27,6 +27,16 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	[Attribute("180", UIWidgets.Auto, "Independent hip yaw limit (degrees). Set 180 for unrestricted full-circle lower-body turning.", category: "Walker Steering")]
 	float m_fWalkerHipMaxYaw;
 
+	// With separate hip drive, the torso/root otherwise stays at its initial
+	// world heading while the legs can orbit through 360 degrees. Keep the
+	// physical waist between the aim-driven torso and the hip within the
+	// configured joint arc; give excess A/D turning to the root/camera.
+	[Attribute("false", UIWidgets.CheckBox, "Independent hip drive: once torso-to-hip yaw reaches the waist limit, rotate the root/camera with the legs instead of overtwisting.", category: "Walker Steering")]
+	bool m_bWalkerHipWaistFollow;
+
+	[Attribute("90", UIWidgets.Auto, "Maximum torso-to-hip separation left or right, degrees (5-90). Root follows at limit; the torso component retains its own aim limit.", category: "Walker Steering")]
+	float m_fWalkerHipWaistLimit;
+
 	[Attribute("false", UIWidgets.CheckBox, "Walker: gradually turn the leg/chassis heading toward a twisted torso's aim when outside the follow deadzone.", category: "Walker Steering")]
 	bool m_bWalkerFollowTorso;
 
@@ -221,6 +231,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	protected ref array<ref BFA_WalkerHipRestPose> m_aWalkerHipRest = {};
 	protected float m_fWalkerHipApplied = 9999;
 	protected int m_iWalkerHipDebugNextMs;
+	// Opt-in root/cockpit follow. Separate from the pilot input and from hip yaw.
+	protected float m_fWalkerHipRootTurnInput;
 	float m_fVerticalVelocity;
 	protected bool m_bSupportFilterInitialized;
 	protected float m_fFilteredSupportY;
@@ -1247,19 +1259,69 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		}
 	}
 
+	// A/D first turns the hip slot. At the physical waist limit the leftover
+	// angle is converted into ROOT yaw. This preserves the combined leg/world
+	// facing without spinning the hips through the torso and keeps the camera
+	// attached to the turning chassis instead of its original heading.
 	protected void TickIndependentHip(float steering, float dt, IEntity owner)
 	{
-		float yawDelta = Math.Clamp(steering, -1.0, 1.0) * m_fAngularSpeed * Math.RAD2DEG * Math.Clamp(dt, 0, 0.1);
-		float yawLimit = Math.Clamp(m_fWalkerHipMaxYaw, 0, 180);
+		float rateRad = Math.Max(m_fAngularSpeed, 0);
+		float maxStep = rateRad * Math.RAD2DEG * Math.Clamp(dt, 0, 0.1);
+		float yawDelta = Math.Clamp(steering, -1.0, 1.0) * maxStep;
+		float absoluteLimit = Math.Clamp(m_fWalkerHipMaxYaw, 0, 180);
+		m_fWalkerHipRootTurnInput = 0;
+
+		float torsoYaw = 0;
+		float minHip = -absoluteLimit;
+		float maxHip = absoluteLimit;
+		if (m_bWalkerHipWaistFollow)
+		{
+			// The two components share the root but drive DIFFERENT slots.
+			// The torso's GetTwist() is local to root and is capped by its
+			// own m_fMaxTwist. Hip yaw must remain within +/-90 of that value,
+			// not just +/-90 of an unrelated world/root heading.
+			CGS_TorsoTwistComponent torso = CGS_TorsoTwistComponent.Find(owner);
+			if (torso)
+				torsoYaw = torso.GetTwist();
+			float waistLimit = Math.Clamp(m_fWalkerHipWaistLimit, 5, 90);
+			minHip = Math.Max(minHip, torsoYaw - waistLimit);
+			maxHip = Math.Min(maxHip, torsoYaw + waistLimit);
+		}
+
+		float currentHip = m_fWalkerHipYawNet;
+		if (!Replication.IsServer() && HasLocalPilot())
+			currentHip = m_fWalkerHipYawLocal;
+
+		float nextHip = currentHip;
+		if (m_bWalkerHipWaistFollow)
+		{
+			// If a pilot moves the aim while the hip is already near the
+			// limit, correct the waist at the same bounded rate (never snap
+			// the legs to a different pose). Root counter-turn preserves the
+			// physical foot heading during this automatic unwinding.
+			float targetHip = Math.Clamp(currentHip + yawDelta, minHip, maxHip);
+			float hipStep = Math.Clamp(targetHip - currentHip, -maxStep, maxStep);
+			nextHip = currentHip + hipStep;
+			if (maxStep > 0.0001)
+				m_fWalkerHipRootTurnInput = Math.Clamp((yawDelta - hipStep) / maxStep, -1, 1);
+		}
+		else
+		{
+			// Preserve the existing unlimited-horizon hip drive for every
+			// mech that has not opted into the new waist-follow behavior.
+			nextHip = currentHip + yawDelta;
+			if (absoluteLimit >= 179.99)
+			{
+				if (nextHip > 180) nextHip -= 360;
+				if (nextHip < -180) nextHip += 360;
+			}
+			else
+				nextHip = Math.Clamp(nextHip, -absoluteLimit, absoluteLimit);
+		}
+
 		if (Replication.IsServer())
 		{
-			m_fWalkerHipYawNet = m_fWalkerHipYawNet + yawDelta;
-			if (yawLimit >= 179.99)
-			{
-				if (m_fWalkerHipYawNet > 180) m_fWalkerHipYawNet -= 360;
-				if (m_fWalkerHipYawNet < -180) m_fWalkerHipYawNet += 360;
-			}
-			else m_fWalkerHipYawNet = Math.Clamp(m_fWalkerHipYawNet, -yawLimit, yawLimit);
+			m_fWalkerHipYawNet = nextHip;
 			int now = owner.GetWorld().GetWorldTime();
 			if (now >= m_iWalkerHipNextSend && Math.AbsFloat(m_fWalkerHipYawNet - m_fWalkerHipLastSent) > 0.05)
 			{
@@ -1270,13 +1332,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		}
 		else if (HasLocalPilot())
 		{
-			m_fWalkerHipYawLocal = m_fWalkerHipYawLocal + yawDelta;
-			if (yawLimit >= 179.99)
-			{
-				if (m_fWalkerHipYawLocal > 180) m_fWalkerHipYawLocal -= 360;
-				if (m_fWalkerHipYawLocal < -180) m_fWalkerHipYawLocal += 360;
-			}
-			else m_fWalkerHipYawLocal = Math.Clamp(m_fWalkerHipYawLocal, -yawLimit, yawLimit);
+			m_fWalkerHipYawLocal = nextHip;
 		}
 		ApplyIndependentHipPose(owner);
 	}
@@ -1464,7 +1520,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		vector angularVelocity = rb.GetAngularVelocity();
 		ApplyHullStabilizer(owner, angularVelocity, timeSlice);
 		if (UsesIndependentWalkerHip())
-			angularVelocity[1] = 0;
+			angularVelocity[1] = m_fAngularSpeed * m_fWalkerHipRootTurnInput;
 		else
 			angularVelocity[1] = m_fAngularSpeed * turnInput;
 		rb.SetAngularVelocity(angularVelocity);
