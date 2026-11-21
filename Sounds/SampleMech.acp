@@ -223,8 +223,6 @@ AudioClass {
      }
     }
    }
-   // VEH_Animations (bit 6): footsteps, leg servos, and chassis motion
-   // should follow vehicle animation mixing instead of generic SFX.
    pi {
     64 0
    }
