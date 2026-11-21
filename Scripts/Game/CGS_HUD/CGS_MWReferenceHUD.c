@@ -44,6 +44,7 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
 
     protected TextWidget m_wHeading;
     protected TextWidget m_wHipBearing;
+    protected TextWidget m_wHipDiagnostic;
     protected TextWidget m_wTargetReadout;
     protected TextWidget m_wRadarCaption;
     protected TextWidget m_wFrontLabel;
@@ -90,6 +91,7 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
 
         m_wHeading = Text(160, 28, 17, mint);
         m_wHipBearing = Text(420, 18, 12, mint);
+        m_wHipDiagnostic = Text(570, 18, 11, mint);
         m_wTopLine = Rect(MW_TAPE_WIDTH, 1, dim);
         for (int i = 0; i < MW_TAPE_TICKS; i++)
         {
@@ -187,6 +189,7 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
         m_aGunAimPips.Clear();
         m_aGunAimIds.Clear();
         m_wWeaponAimLegend = null;
+        m_wHipDiagnostic = null;
         m_pPartData = null;
         m_fLastWidth = -1;
         m_fLastHeight = -1;
@@ -263,16 +266,50 @@ class CGS_MWReferenceHUD : CGS_PilotHUD
         Show(m_wTwistMark, false);
         Show(m_wSpeedText, false);
 
-        float lowerYaw = WrapMWHeading(mech.GetYawPitchRoll()[0]);
+        // The root is the upper body/camera on a separate-hip-drive walker.
+        // Previous HIPS readout only showed ROOT yaw, making it appear that
+        // the lower-body command never changed even if hip yaw was active.
+        float rootYaw = WrapMWHeading(mech.GetYawPitchRoll()[0]);
+        float lowerYaw = rootYaw;
         CGS_TorsoTwistComponent torso = CGS_TorsoTwistComponent.Find(mech);
-        float upperYaw = lowerYaw;
+        float upperYaw = rootYaw;
         float twistYaw = 0;
         if (torso)
         {
             twistYaw = torso.GetTwist();
-            upperYaw = WrapMWHeading(lowerYaw + twistYaw);
+            upperYaw = WrapMWHeading(rootYaw + twistYaw);
         }
+        BFA_MechMovementComponent move = BFA_MechMovementComponent.Cast(mech.FindComponent(BFA_MechMovementComponent));
+        bool walker = move && move.GetLocomotionMode() == 0;
+        bool independentHip = move && move.UsesIndependentWalkerHip();
+        if (independentHip)
+            lowerYaw = WrapMWHeading(rootYaw + move.GetIndependentHipYaw());
         DrawCompass(screenW, screenH, lowerYaw, upperYaw, twistYaw);
+
+        // TEMP WORKBENCH DIAGNOSTIC: separate command from applied Hip-slot
+        // rotation. Visible even when the mode is OFF to identify an old
+        // prefab or inactive component. No velocity/aim/part writes here.
+        Show(m_wHipDiagnostic, walker);
+        if (walker && m_wHipDiagnostic)
+        {
+            string status = "HIP DRIVE OFF - CHECK PREFAB";
+            if (independentHip)
+            {
+                float slotYaw = -999;
+                SlotManagerComponent slots = SlotManagerComponent.Cast(mech.FindComponent(SlotManagerComponent));
+                if (slots)
+                {
+                    EntitySlotInfo hipSlot = slots.GetSlotByName("Hip");
+                    if (hipSlot && hipSlot.GetAttachedEntity())
+                        slotYaw = hipSlot.GetAttachedEntity().GetLocalYawPitchRoll()[0];
+                }
+                status = string.Format("HIP DRIVE ON  CMD %1  SLOT %2  TURN %3  SIDE %4",
+                    Math.Round(move.GetIndependentHipYaw()), Math.Round(slotYaw),
+                    move.GetTurnInput(), move.GetRightInput());
+            }
+            Place(m_wHipDiagnostic, Math.Max(6, (screenW - 570) * 0.5), 96);
+            m_wHipDiagnostic.SetText(status);
+        }
 
         if (screenW != m_fLastWidth || screenH != m_fLastHeight)
         {
