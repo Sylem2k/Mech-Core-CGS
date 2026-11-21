@@ -21,6 +21,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	bool m_bWalkerADSteering;
 	[Attribute("false", UIWidgets.CheckBox, "Independent walker hip steering: A/D turns only Hip and leg slots; W/S follows their forward heading. Diagnostic opt-in.", category: "Walker Steering")]
 	bool m_bWalkerHipDrive;
+
+	[Attribute("false", UIWidgets.CheckBox, "Log real A/D input, selected hip-drive mode, applied strafe, and hip yaw for debugging. Test only.", category: "Walker Steering")]
+	bool m_bDebugWalkerHipInput;
 	[Attribute("180", UIWidgets.Auto, "Independent hip yaw limit (degrees). Set 180 for unrestricted full-circle lower-body turning.", category: "Walker Steering")]
 	float m_fWalkerHipMaxYaw;
 
@@ -217,6 +220,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	protected bool m_bWalkerHipRestReady;
 	protected ref array<ref BFA_WalkerHipRestPose> m_aWalkerHipRest = {};
 	protected float m_fWalkerHipApplied = 9999;
+	protected int m_iWalkerHipDebugNextMs;
 	float m_fVerticalVelocity;
 	protected bool m_bSupportFilterInitialized;
 	protected float m_fFilteredSupportY;
@@ -1276,6 +1280,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		float forwardInput = GetEffectiveForwardInput();
 		float strafeInput = GetEffectiveStrafeInput();
 		float turnInput = GetEffectiveTurnInput();
+		float rawStrafeInput = strafeInput;
+		float rawTurnInput = turnInput;
 		if (m_iLocomotionMode == 1)
 		{
 			// Tank: A/D and Q/E turn the chassis. No sideways sliding.
@@ -1327,6 +1333,24 @@ class BFA_MechMovementComponent : ScriptGameComponent
 					}
 				}
 			}
+			}
+		}
+		// This is a diagnostic, not a new movement rule. With independent
+		// hip mode ON the existing code above must zero strafeInput.
+		// A sideways walk with hip mode OFF means the running prefab/config
+		// does not match the opted-in SampleMech in GitHub.
+		if (m_bDebugWalkerHipInput && HasLocalPilot() &&
+			(Math.AbsFloat(rawStrafeInput) > 0.05 || Math.AbsFloat(rawTurnInput) > 0.05))
+		{
+			int nowMs = owner.GetWorld().GetWorldTime();
+			if (nowMs >= m_iWalkerHipDebugNextMs)
+			{
+				m_iWalkerHipDebugNextMs = nowMs + 1000;
+				BFA_MechLog.Log(string.Format("[CGS HIP INPUT] entity=%1 mode=%2 hipEnabled=%3 ADrootSteer=%4 rawStrafe=%5 rawTurn=%6 appliedStrafe=%7 appliedTurn=%8 forward=%9",
+					owner, m_iLocomotionMode, m_bWalkerHipDrive, m_bWalkerADSteering,
+					rawStrafeInput, rawTurnInput, strafeInput, turnInput, forwardInput));
+				BFA_MechLog.Log(string.Format("[CGS HIP YAW] hipLocal=%1 hipServer=%2 rootYaw=%3",
+					m_fWalkerHipYawLocal, m_fWalkerHipYawNet, owner.GetYawPitchRoll()[0]));
 			}
 		}
 		BFA_MechExtension extension = BFA_MechExtension.Get();
@@ -2479,6 +2503,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		}
 
 		SetPilot(null);
+
+		if (m_bDebugWalkerHipInput)
+			BFA_MechLog.Log(string.Format("[CGS HIP INIT] entity=%1 locomotion=%2 hipDrive=%3 legacyRootSteer=%4", owner, m_iLocomotionMode, m_bWalkerHipDrive, m_bWalkerADSteering));
 
 		// Tracked hulls and hover mechs have no procedural leg rigs by design.
 		if (m_iLocomotionMode != 0)
