@@ -71,6 +71,8 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 
 	protected float m_fLocalForward;
 	protected float m_fLocalStrafe;
+	// Legacy CharacterRight input when A/D is used for independent hip yaw.
+	protected float m_fLocalHipTurn;
 	protected float m_fLocalTurn;
 	protected float m_fLocalHoverCollective;
 	protected float m_fTurnLeft;
@@ -134,11 +136,21 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 		OnMoveForward(Math.Clamp(forward, -1.0, 1.0));
 
 		float strafe = Math.Clamp(input.GetActionValue("MechStrafe") - input.GetActionValue("MechStrafeLeft"), -1.0, 1.0);
+		bool hipDrive = m_MovementComp && m_MovementComp.UsesIndependentWalkerHip();
+		// Only the opted-in hip-drive walker translates the old A/D strafe
+		// actions into yaw. Do not forward them as lateral drive or RPC input.
+		float hipTurn = 0;
+		if (hipDrive)
+		{
+			hipTurn = strafe;
+			strafe = 0;
+		}
 		m_fLocalStrafe = strafe;
 		if (m_MovementComp)
 			m_MovementComp.SetRightInput(strafe);
 
 		float turn = input.GetActionValue("MechTurn") - input.GetActionValue("MechTurnLeft");
+		turn = turn + hipTurn;
 		turn += input.GetActionValue("CharacterLeanAdjustRight") - input.GetActionValue("CharacterLeanAdjustLeft");
 		turn = Math.Clamp(turn, -1.0, 1.0);
 		OnTurnRight(Math.Max(turn, 0.0));
@@ -348,19 +360,19 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 			return;
 		}
 
-		m_fLocalStrafe =
-			Math.Clamp(
-				value,
-				-1.0,
-				1.0
-			);
-
-		if (m_MovementComp)
+		if (m_MovementComp && m_MovementComp.UsesIndependentWalkerHip())
 		{
-			m_MovementComp.SetRightInput(
-				m_fLocalStrafe
-			);
+			m_fLocalHipTurn = Math.Clamp(value, -1.0, 1.0);
+			m_fLocalStrafe = 0;
+			m_MovementComp.SetRightInput(0);
+			RebuildTurnInput();
+			return;
 		}
+
+		m_fLocalHipTurn = 0;
+		m_fLocalStrafe = Math.Clamp(value, -1.0, 1.0);
+		if (m_MovementComp)
+			m_MovementComp.SetRightInput(m_fLocalStrafe);
 
 		if (
 			!m_bLoggedStrafeInput
@@ -380,7 +392,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 	{
 		m_fLocalTurn =
 			Math.Clamp(
-				m_fTurnRight - m_fTurnLeft,
+				m_fTurnRight - m_fTurnLeft + m_fLocalHipTurn,
 				-1.0,
 				1.0
 			);
@@ -983,6 +995,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 
 		m_fLocalForward = 0;
 		m_fLocalStrafe = 0;
+		m_fLocalHipTurn = 0;
 		m_fLocalTurn = 0;
 		m_fLocalHoverCollective = 0;
 		m_fTurnLeft = 0;
@@ -1300,6 +1313,7 @@ class BFA_MechControllerComponent : VehicleControllerComponent
 
 		m_fLocalForward = 0;
 		m_fLocalStrafe = 0;
+		m_fLocalHipTurn = 0;
 		m_fLocalTurn = 0;
 		m_fLocalHoverCollective = 0;
 		m_fTurnLeft = 0;
