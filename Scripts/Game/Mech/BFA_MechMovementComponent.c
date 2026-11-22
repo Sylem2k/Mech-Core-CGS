@@ -22,6 +22,14 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	[Attribute("false", UIWidgets.CheckBox, "Independent walker hip steering: A/D turns only Hip and leg slots; W/S follows their forward heading. Diagnostic opt-in.", category: "Walker Steering")]
 	bool m_bWalkerHipDrive;
 
+	// Opt-in only for walkers whose unoccupied root is pushed by physics or spawn impulses.
+	// Park on the authoritative server without changing ground-follow height or occupied driving.
+	[Attribute("false", UIWidgets.CheckBox, "When the driver seat is empty, lock this walker's horizontal spawn position against sideways physics drift. On entering the driver seat normal movement is restored.", category: "Walker Steering")]
+	bool m_bParkWalkerWhenUnoccupied;
+
+	protected bool m_bParkWalkerAnchorValid;
+	protected vector m_vParkWalkerAnchor;
+
 	[Attribute("false", UIWidgets.CheckBox, "Log real A/D input, selected hip-drive mode, applied strafe, and hip yaw for debugging. Test only.", category: "Walker Steering")]
 	bool m_bDebugWalkerHipInput;
 	[Attribute("180", UIWidgets.Auto, "Independent hip yaw limit (degrees). Set 180 for unrestricted full-circle lower-body turning.", category: "Walker Steering")]
@@ -399,6 +407,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		// must not fall from a roof or descend unexpectedly on seat changes.
 
 		ResetReconciliation();
+
+		// Changing occupants must never preserve a stale parked coordinate.
+		m_bParkWalkerAnchorValid = false;
 
 		string role = "CLIENT";
 		if (Replication.IsServer())
@@ -2416,6 +2427,50 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		}
 	}
 
+
+	// This is an opt-in idle physics interlock, not steering logic. The pilot has
+	// full control as soon as someone enters; AI drivers also use an occupied seat.
+	// On empty spawn, remember the first physical root X/Z (not the leg mesh pose).
+	// Keep Y free for the existing terrain height follower.
+	protected void CGS_ApplyUnoccupiedWalkerPark(IEntity owner)
+	{
+		if (!m_bParkWalkerWhenUnoccupied || m_iLocomotionMode != 0 || !Replication.IsServer() || !owner)
+			return;
+
+		if (CGS_HasActiveMovementPilot())
+		{
+			m_bParkWalkerAnchorValid = false;
+			return;
+		}
+
+		vector pos = owner.GetOrigin();
+		if (!m_bParkWalkerAnchorValid)
+		{
+			m_vParkWalkerAnchor = pos;
+			m_bParkWalkerAnchorValid = true;
+		}
+
+		// GM teleport / scene reposition: allow a deliberate large position jump
+		// to become the new parked point, not a rubber-band to the old spawn.
+		vector offset = pos - m_vParkWalkerAnchor;
+		offset[1] = 0;
+		if (offset.LengthSq() > 64.0)
+			m_vParkWalkerAnchor = pos;
+
+		pos[0] = m_vParkWalkerAnchor[0];
+		pos[2] = m_vParkWalkerAnchor[2];
+		owner.SetOrigin(pos);
+
+		Physics rb = owner.GetPhysics();
+		if (rb && rb.IsDynamic())
+		{
+			vector velocity = rb.GetVelocity();
+			velocity[0] = 0;
+			velocity[2] = 0;
+			rb.SetVelocity(velocity);
+		}
+	}
+
 	//------------------------------------------------------------------------------------------------
 	void OnUpdate(float timeSlice)
 	{
@@ -2504,6 +2559,7 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		}
 
 		Move(timeSlice);
+		CGS_ApplyUnoccupiedWalkerPark(owner);
 		UpdateLocomotionSounds(owner);
 
 		if (localPrediction)
