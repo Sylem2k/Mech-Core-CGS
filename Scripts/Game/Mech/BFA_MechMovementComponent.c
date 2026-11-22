@@ -614,8 +614,18 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		return engine && !engine.IsRunning();
 	}
 
+	// Empty vehicles must never continue driving from stale input packets or
+	// from a previous controller's nonzero analog values. Keep AI drivers working:
+	// they are represented by an active pilot as well.
+	protected bool CGS_HasActiveMovementPilot()
+	{
+		return m_Pilot != null || HasLocalPilot();
+	}
+
 	protected float GetEffectiveForwardInput()
 	{
+		if (!CGS_HasActiveMovementPilot())
+			return 0;
 		if (CGS_IsEngineDriveLocked())
 			return 0;
 
@@ -628,6 +638,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	protected float GetEffectiveStrafeInput()
 	{
+		if (!CGS_HasActiveMovementPilot())
+			return 0;
 		if (CGS_IsEngineDriveLocked())
 			return 0;
 
@@ -640,6 +652,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	protected float GetEffectiveTurnInput()
 	{
+		if (!CGS_HasActiveMovementPilot())
+			return 0;
 		if (CGS_IsEngineDriveLocked())
 			return 0;
 
@@ -652,6 +666,8 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	//------------------------------------------------------------------------------------------------
 	protected bool GetEffectiveSprintInput()
 	{
+		if (!CGS_HasActiveMovementPilot())
+			return false;
 		if (CGS_IsEngineDriveLocked())
 			return false;
 
@@ -678,7 +694,9 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			m_iServerLastInputSeq = inputSeq;
 		}
 
-		if (CGS_IsEngineDriveLocked())
+		// A delayed unreliable packet must never re-start an unattended walker.
+		// AI input remains valid whenever the AI driver occupies the pilot seat.
+		if (!CGS_HasActiveMovementPilot() || CGS_IsEngineDriveLocked())
 		{
 			forward = 0;
 			strafe = 0;
