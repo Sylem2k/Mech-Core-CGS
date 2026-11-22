@@ -97,6 +97,33 @@ class BFA_MechLegPair
 		m_vLastRootPos = rootPos;
 		delta[1] = 0;
 
+		// On Cinder walkers the authoritative root can oscillate a few
+		// centimetres at rest (ground/collision/network correction). The
+		// gait must not interpret those position corrections as walking.
+		// This opt-in gate is purely visual: it does not alter root physics.
+		if (m_LeftLegComp.RequiresDriveInputForGait() && m_pGaitMovement)
+		{
+			float forwardWish = m_pGaitMovement.GetForwardInput();
+			float sideWish = m_pGaitMovement.GetRightInput();
+			float turnWish = m_pGaitMovement.GetTurnInput();
+			bool noDrive = Math.AbsFloat(forwardWish) < 0.03 && Math.AbsFloat(sideWish) < 0.03 && Math.AbsFloat(turnWish) < 0.03;
+			if (noDrive)
+			{
+				m_vMeasuredVelocity = vector.Zero;
+				m_fMeasuredSpeed = 0;
+				m_fSignedForwardSpeed = 0;
+				m_fYawRate = 0;
+				m_fGaitSpeed = 0;
+				m_fCadence = 0;
+				m_fPhase = 0.45;
+				m_bHadMotion = false;
+				// Next commanded turn starts with a fresh yaw baseline;
+				// no sudden stride from idle correction / steering history.
+				m_bHasLastYaw = false;
+				return;
+			}
+		}
+
 		vector rawVelocity = delta * (1.0 / dt);
 		float rawSpeed = rawVelocity.Length();
 

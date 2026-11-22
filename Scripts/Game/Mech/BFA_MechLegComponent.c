@@ -17,6 +17,11 @@ class BFA_MechLegComponent : ScriptComponent
 	[Attribute("0.3", UIWidgets.EditBox, "Ignore measured root motion below this speed")]
 	float m_fMotionDeadZone;
 
+	// Optional for walkers whose parked physics/replication correction makes
+	// measured root motion look like a real step. Other mech rigs unchanged.
+	[Attribute("false", UIWidgets.CheckBox, "Only animate steps when actual movement/turning input exists. Ignore physical root jitter at idle.", category: "Leg Rig")]
+	bool m_bRequireDriveInputForGait;
+
 	[Attribute("0.2", UIWidgets.EditBox, "Proxy root-motion smoothing window in seconds")]
 	float m_fProxySmoothTime;
 
@@ -177,6 +182,11 @@ class BFA_MechLegComponent : ScriptComponent
 	float GetMotionDeadZone()
 	{
 		return m_fMotionDeadZone;
+	}
+
+	bool RequiresDriveInputForGait()
+	{
+		return m_bRequireDriveInputForGait;
 	}
 
 	//------------------------------------------------------------------------------------------------
