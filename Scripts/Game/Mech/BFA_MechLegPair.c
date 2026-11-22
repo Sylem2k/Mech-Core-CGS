@@ -19,7 +19,6 @@ class BFA_MechLegPair
 	protected BFA_MechLegComponent m_LeftLegComp;
 	protected BFA_MechLegComponent m_RightLegComp;
 	protected IEntity m_BodyEntity;
-	protected BFA_MechMovementComponent m_pGaitMovement;
 	protected bool m_bInitialized;
 
 	// Shared gait state. Both legs read the same measured root motion and phase.
@@ -97,33 +96,6 @@ class BFA_MechLegPair
 		m_vLastRootPos = rootPos;
 		delta[1] = 0;
 
-		// On Cinder walkers the authoritative root can oscillate a few
-		// centimetres at rest (ground/collision/network correction). The
-		// gait must not interpret those position corrections as walking.
-		// This opt-in gate is purely visual: it does not alter root physics.
-		if (m_LeftLegComp.RequiresDriveInputForGait() && m_pGaitMovement)
-		{
-			float forwardWish = m_pGaitMovement.GetForwardInput();
-			float sideWish = m_pGaitMovement.GetRightInput();
-			float turnWish = m_pGaitMovement.GetTurnInput();
-			bool noDrive = Math.AbsFloat(forwardWish) < 0.03 && Math.AbsFloat(sideWish) < 0.03 && Math.AbsFloat(turnWish) < 0.03;
-			if (noDrive)
-			{
-				m_vMeasuredVelocity = vector.Zero;
-				m_fMeasuredSpeed = 0;
-				m_fSignedForwardSpeed = 0;
-				m_fYawRate = 0;
-				m_fGaitSpeed = 0;
-				m_fCadence = 0;
-				m_fPhase = 0.45;
-				m_bHadMotion = false;
-				// Next commanded turn starts with a fresh yaw baseline;
-				// no sudden stride from idle correction / steering history.
-				m_bHasLastYaw = false;
-				return;
-			}
-		}
-
 		vector rawVelocity = delta * (1.0 / dt);
 		float rawSpeed = rawVelocity.Length();
 
@@ -149,11 +121,6 @@ class BFA_MechLegPair
 		m_fMeasuredSpeed = m_vMeasuredVelocity.Length();
 
 		vector forward = m_BodyEntity.GetTransformAxis(2);
-		if (m_pGaitMovement && m_pGaitMovement.UsesIndependentWalkerHip())
-		{
-			float hipYaw = m_pGaitMovement.GetIndependentHipYaw() * Math.DEG2RAD;
-			forward = forward * Math.Cos(hipYaw) + m_BodyEntity.GetTransformAxis(0) * Math.Sin(hipYaw);
-		}
 		forward[1] = 0;
 		if (forward.LengthSq() > 0.0001)
 			forward.Normalize();
@@ -387,7 +354,6 @@ class BFA_MechLegPair
 		}
 
 		m_BodyEntity = bodyEntity;
-		m_pGaitMovement = BFA_MechMovementComponent.Cast(bodyEntity.FindComponent(BFA_MechMovementComponent));
 		m_vLastRootPos = bodyEntity.GetOrigin();
 		m_bHasLastRootPos = true;
 		m_iLastMotionUpdateMs = -1;
