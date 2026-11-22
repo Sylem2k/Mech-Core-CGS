@@ -662,7 +662,7 @@ AudioClass {
    "Pitch variance" 3
    Samples {
     AudioBankSampleClass Sample {
-     Filename "{410470B4A0B4DB57}Sounds/Mech/Stompie2.wav"
+     Filename "{93DB2BE14B6EE81A}Sounds/Mech/stomp.wav"
     }
    }
   }
