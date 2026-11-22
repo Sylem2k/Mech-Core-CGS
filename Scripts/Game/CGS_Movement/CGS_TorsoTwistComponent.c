@@ -397,7 +397,21 @@ class CGS_TorsoTwistComponent : ScriptComponent
 		else
 			HipResetHeadingHold();
 
-		yaw = Math.Clamp(yaw, -Math.Max(m_fMaxTwist, 0), Math.Max(m_fMaxTwist, 0));
+		// The camera can sweep through 180 degrees, but the physical waist cannot.
+		// Plain Clamp() maps a rearward view of +179 to +limit and -179
+		// to -limit: a one-degree camera change then drives a full 180-degree
+		// torso reversal. Hold the already reached side of the waist while
+		// the sight remains behind it. Only cross sides via the front arc.
+		float limit = Math.Max(m_fMaxTwist, 0);
+		if (limit > 0 && limit < 180 && Math.AbsFloat(yaw) > limit
+			&& Math.AbsFloat(m_fTwist) > limit * 0.5)
+		{
+			if (m_fTwist > 0)
+				yaw = limit;
+			else
+				yaw = -limit;
+		}
+		yaw = Math.Clamp(yaw, -limit, limit);
 		if (Math.AbsFloat(yaw - m_fTwist) < Math.Max(m_fDeadzone, 0))
 			return m_fTwist;
 		return yaw;
