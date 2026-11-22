@@ -357,6 +357,12 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	// copies report even though they never have a local pilot.
 	protected float m_fMpDiagAccumTime;
 
+	// Cinder root motion tracing. Opt-in via the already-enabled
+	// m_bDebugWalkerHipInput flag; NEVER moves/anchors a transform.
+	protected bool m_bCinderRootTraceReady;
+	protected vector m_vCinderRootLastEnd;
+	protected int m_iCinderRootTraceNextMs;
+
 	// Remote observers are driven from a bounded callqueue tick instead of depending on
 	// EOnFrame. Dedicated-server clients can receive only sparse frame events for vehicles
 	// they do not own, which was enough to defeat the old watchdog without actually
@@ -2493,6 +2499,13 @@ class BFA_MechMovementComponent : ScriptGameComponent
 			return;
 		}
 
+
+		vector traceFrameStart = owner.GetOrigin();
+		vector traceVelBefore = vector.Zero;
+		Physics tracePhysics = owner.GetPhysics();
+		if (tracePhysics)
+			traceVelBefore = tracePhysics.GetVelocity();
+
 		// Server and local driver prediction keep the established V20 gait ordering.
 		// Their leg rig observes the root produced by the previous physics frame, which is
 		// already the tested smooth singleplayer behavior.
@@ -2512,6 +2525,36 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		}
 
 		Move(timeSlice);
+
+		// Diagnostic only: root motion over the previous frame cannot be
+		// caused by procedural IK, which is visual. Contrast that delta with
+		// what Move() itself wrote this frame, the pre-Move physics velocity,
+		// and effective input. Runs once/second only on test walkers.
+		if (m_bDebugWalkerHipInput && m_iLocomotionMode == 0)
+		{
+			vector endPos = owner.GetOrigin();
+			if (!m_bCinderRootTraceReady)
+			{
+				m_bCinderRootTraceReady = true;
+				m_vCinderRootLastEnd = endPos;
+			}
+			int traceMs = owner.GetWorld().GetWorldTime();
+			if (traceMs >= m_iCinderRootTraceNextMs)
+			{
+				m_iCinderRootTraceNextMs = traceMs + 1000;
+				vector incomingDelta = traceFrameStart - m_vCinderRootLastEnd;
+				vector scriptDelta = endPos - traceFrameStart;
+				vector velAfter = vector.Zero;
+				if (tracePhysics)
+					velAfter = tracePhysics.GetVelocity();
+				BFA_MechLog.Log(string.Format("[CGS ROOT SOURCE] entity=%1 server=%2 localPilot=%3 pilot=%4 inFwd=%5 inSide=%6 inTurn=%7 start=%8 incomingDelta=%9 scriptDelta=%10 velBefore=%11 velAfter=%12 yaw=%13",
+					owner, isServer, HasLocalPilot(), CGS_HasActiveMovementPilot(),
+					GetEffectiveForwardInput(), GetEffectiveStrafeInput(), GetEffectiveTurnInput(),
+					traceFrameStart, incomingDelta, scriptDelta, traceVelBefore, velAfter, owner.GetYawPitchRoll()[0]));
+			}
+			m_vCinderRootLastEnd = endPos;
+		}
+
 		UpdateLocomotionSounds(owner);
 
 		if (localPrediction)
