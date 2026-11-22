@@ -22,11 +22,6 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	[Attribute("false", UIWidgets.CheckBox, "Independent walker hip steering: A/D turns only Hip and leg slots; W/S follows their forward heading. Diagnostic opt-in.", category: "Walker Steering")]
 	bool m_bWalkerHipDrive;
 
-	// Cinder opt-in. Stop persistent root drift when the walker has no movement
-	// command, including after the driver enters but releases all controls.
-	[Attribute("false", UIWidgets.CheckBox, "Park an empty walker at its placed position; requires the server to own physics.", category: "Walker Steering")]
-	bool m_bParkWalkerWhenUnoccupied;
-
 	[Attribute("false", UIWidgets.CheckBox, "On this walker, also hold horizontal position with a seated driver when all movement controls are neutral.", category: "Walker Steering")]
 	bool m_bParkWalkerAtNeutralInput;
 
@@ -411,7 +406,6 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		// must not fall from a roof or descend unexpectedly on seat changes.
 
 		ResetReconciliation();
-		m_bParkWalkerAnchorValid = false;
 
 		string role = "CLIENT";
 		if (Replication.IsServer())
@@ -2430,74 +2424,6 @@ class BFA_MechMovementComponent : ScriptGameComponent
 	}
 
 
-	// Opt-in root drift containment. Physics/slot collisions can displace a
-	// Cinder even with zero authored drive speed. Never park against active W/S
-	// or A/D input. Server owns the authoritative root; client prediction may
-	// still run without an anchor, so remote sync must carry this stable root.
-	protected void CGS_ApplyWalkerNeutralPark(IEntity owner)
-	{
-		if (!owner || !Replication.IsServer() || m_iLocomotionMode != 0)
-			return;
-
-		bool occupied = CGS_HasActiveMovementPilot();
-		if (occupied && !m_bParkWalkerAtNeutralInput)
-		{
-			m_bParkWalkerAnchorValid = false;
-			return;
-		}
-		if (!occupied && !m_bParkWalkerWhenUnoccupied)
-		{
-			m_bParkWalkerAnchorValid = false;
-			return;
-		}
-
-		// Stationary means no DRIVE wish; turning in place is intentionally
-		// allowed, with horizontal position held to prevent sideways crawling.
-		float forward = GetEffectiveForwardInput();
-		float strafe = GetEffectiveStrafeInput();
-		if (Math.AbsFloat(forward) > 0.02 || Math.AbsFloat(strafe) > 0.02 || m_bAirborne)
-		{
-			m_bParkWalkerAnchorValid = false;
-			return;
-		}
-
-		vector position = owner.GetOrigin();
-		if (!m_bParkWalkerAnchorValid)
-		{
-			m_vParkWalkerAnchor = position;
-			m_bParkWalkerAnchorValid = true;
-		}
-
-		vector delta = position - m_vParkWalkerAnchor;
-		delta[1] = 0;
-		// Explicit GM relocation / teleport: accept the new placement.
-		if (delta.LengthSq() > 64.0)
-			m_vParkWalkerAnchor = position;
-
-		position[0] = m_vParkWalkerAnchor[0];
-		position[2] = m_vParkWalkerAnchor[2];
-		owner.SetOrigin(position);
-
-		Physics physics = owner.GetPhysics();
-		if (physics && physics.IsDynamic())
-		{
-			vector velocity = physics.GetVelocity();
-			velocity[0] = 0;
-			velocity[2] = 0;
-			physics.SetVelocity(velocity);
-		}
-
-		if (m_bDebugWalkerHipInput)
-		{
-			int now = owner.GetWorld().GetWorldTime();
-			if (now >= m_iParkWalkerDiagNextMs)
-			{
-				m_iParkWalkerDiagNextMs = now + 2000;
-				BFA_MechLog.Log(string.Format("[CGS WALKER PARK] occupied=%1 rawInput=%2,%3,%4 correctedXZ=%5", occupied, GetEffectiveForwardInput(), GetEffectiveStrafeInput(), GetEffectiveTurnInput(), delta));
-			}
-		}
-	}
-
 	//------------------------------------------------------------------------------------------------
 	void OnUpdate(float timeSlice)
 	{
@@ -2586,7 +2512,6 @@ class BFA_MechMovementComponent : ScriptGameComponent
 		}
 
 		Move(timeSlice);
-		CGS_ApplyWalkerNeutralPark(owner);
 		UpdateLocomotionSounds(owner);
 
 		if (localPrediction)
