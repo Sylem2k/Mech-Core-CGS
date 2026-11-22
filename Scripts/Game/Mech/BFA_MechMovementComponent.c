@@ -2547,10 +2547,12 @@ class BFA_MechMovementComponent : ScriptGameComponent
 				vector velAfter = vector.Zero;
 				if (tracePhysics)
 					velAfter = tracePhysics.GetVelocity();
-				BFA_MechLog.Log(string.Format("[CGS ROOT SOURCE] entity=%1 server=%2 localPilot=%3 pilot=%4 inFwd=%5 inSide=%6 inTurn=%7 start=%8 incomingDelta=%9 scriptDelta=%10 velBefore=%11 velAfter=%12 yaw=%13",
-					owner, isServer, HasLocalPilot(), CGS_HasActiveMovementPilot(),
-					GetEffectiveForwardInput(), GetEffectiveStrafeInput(), GetEffectiveTurnInput(),
-					traceFrameStart, incomingDelta, scriptDelta, traceVelBefore, velAfter, owner.GetYawPitchRoll()[0]));
+				BFA_MechLog.Log(string.Format("[CGS ROOT SOURCE] entity=%1 server=%2 localPilot=%3 pilot=%4 yaw=%5",
+					owner, isServer, HasLocalPilot(), CGS_HasActiveMovementPilot(), owner.GetYawPitchRoll()[0]));
+				BFA_MechLog.Log(string.Format("[CGS ROOT INPUT] forward=%1 strafe=%2 turn=%3 start=%4",
+					GetEffectiveForwardInput(), GetEffectiveStrafeInput(), GetEffectiveTurnInput(), traceFrameStart));
+				BFA_MechLog.Log(string.Format("[CGS ROOT DELTA] incoming=%1 scripted=%2 physicsBefore=%3 physicsAfter=%4",
+					incomingDelta, scriptDelta, traceVelBefore, velAfter));
 			}
 			m_vCinderRootLastEnd = endPos;
 		}
